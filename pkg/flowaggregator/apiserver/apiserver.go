@@ -16,8 +16,10 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path"
 
@@ -26,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	basecompatibility "k8s.io/component-base/compatibility"
 
@@ -74,6 +77,36 @@ func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggre
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 }
 
+// installHealthChecks registers checks reflecting FlowStreamService's state:
+//   - "flowstreamservice-live" on healthz, livez and readyz (AddHealthChecks). It fails only once
+//     FlowStreamService has failed, i.e. could not start or stopped serving on its own. Nothing
+//     retries a failed FlowStreamService until the next certificate update, so restarting the
+//     whole container, collectors included, is the intended recovery rather than a side effect.
+//     It is also on readyz, as a Pod that needs a restart cannot be ready.
+//   - "flowstreamservice-ready" on readyz only (AddReadyzChecks). It fails whenever
+//     FlowStreamService is not serving, including while starting and while draining for a
+//     certificate update, neither of which a restart would help: livez must not fail for those.
+//
+// This must run before GenericAPIServer.PrepareRun installs the actual endpoint handlers (called
+// from flowAggregatorAPIServer.Run), which New's own caller does separately and later, so
+// registering here, inside New, is always in time.
+func installHealthChecks(s *genericapiserver.GenericAPIServer, faq querier.FlowAggregatorQuerier) error {
+	if err := s.AddHealthChecks(healthz.NamedCheck("flowstreamservice-live", func(_ *http.Request) error {
+		if !faq.FlowStreamServiceLive() {
+			return errors.New("FlowStreamService has failed")
+		}
+		return nil
+	})); err != nil {
+		return err
+	}
+	return s.AddReadyzChecks(healthz.NamedCheck("flowstreamservice-ready", func(_ *http.Request) error {
+		if !faq.FlowStreamServiceReady() {
+			return errors.New("FlowStreamService is not serving")
+		}
+		return nil
+	}))
+}
+
 // New creates an APIServer for running in flow aggregator.
 func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16, tlsMinVersion uint16) (*flowAggregatorAPIServer, error) {
 	cfg, err := newConfig(bindPort)
@@ -87,6 +120,9 @@ func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16,
 	s.SecureServingInfo.CipherSuites = cipherSuites
 	s.SecureServingInfo.MinTLSVersion = tlsMinVersion
 	installHandlers(s, faq)
+	if err := installHealthChecks(s, faq); err != nil {
+		return nil, err
+	}
 	return &flowAggregatorAPIServer{GenericAPIServer: s}, nil
 }
 

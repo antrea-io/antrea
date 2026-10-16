@@ -16,9 +16,14 @@ package flowstreamservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/netip"
+	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -36,6 +41,7 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
+	"antrea.io/antrea/v2/pkg/util/tlstest"
 )
 
 // fakeStream implements flowpb.FlowStreamService_GetFlowsServer.
@@ -1561,4 +1567,169 @@ func TestNewFlowStreamService_MaxStreamsPerConn(t *testing.T) {
 	// shipped default rather than to grpc-go's math.MaxUint32.
 	assert.Equal(t, uint32(flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams),
 		newFlowStreamServiceWithoutAuthentication(buf, nil).maxStreamsPerConn)
+}
+
+// stateRecorder records every State Run reports, in call order. Safe for concurrent use: Run calls
+// it both from its own top-level flow and from the goroutine running Serve.
+type stateRecorder struct {
+	mu     sync.Mutex
+	states []State
+	// onState, if set, runs from within the call for every State reported.
+	onState func(State)
+}
+
+func (r *stateRecorder) set(state State) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.states = append(r.states, state)
+	if r.onState != nil {
+		r.onState(state)
+	}
+}
+
+func (r *stateRecorder) snapshot() []State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.states)
+}
+
+// fakeListener is an in-memory net.Listener, so that Run can be exercised without a real socket
+// (which cannot be used inside a synctest bubble, and would tie the tests to a free port on the
+// host). Accept blocks until Close, or returns acceptErr right away if it is set.
+type fakeListener struct {
+	closeCh   chan struct{}
+	closeOnce sync.Once
+	closed    atomic.Bool
+	acceptErr error
+}
+
+func newFakeListener() *fakeListener { return &fakeListener{closeCh: make(chan struct{})} }
+
+func (l *fakeListener) Accept() (net.Conn, error) {
+	if l.acceptErr != nil {
+		return nil, l.acceptErr
+	}
+	<-l.closeCh
+	return nil, net.ErrClosed
+}
+
+func (l *fakeListener) Close() error {
+	l.closeOnce.Do(func() {
+		l.closed.Store(true)
+		close(l.closeCh)
+	})
+	return nil
+}
+
+func (l *fakeListener) Addr() net.Addr { return &net.TCPAddr{IP: net.IPv4zero, Port: flowStreamPort} }
+
+func newTestCert(t *testing.T) (certPEM, keyPEM []byte) {
+	certPEM, keyPEM, err := tlstest.GenerateCert([]string{"127.0.0.1"}, time.Now(), time.Hour, true, false, 0, "P256", false)
+	require.NoError(t, err)
+	return certPEM, keyPEM
+}
+
+// TestRun_StateTransitionsAndShutdown covers the normal lifecycle: Serving once the server is up,
+// then Stopping, which must be reported before the graceful stop starts. GracefulStop closes the
+// listener first thing and then waits for every connection to drain, so a Stopping reported only
+// after it returned would leave a server that already refuses connections reported as serving for
+// as long as a client keeps a stream open.
+func TestRun_StateTransitionsAndShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certPEM, keyPEM := newTestCert(t)
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+		svc := newTestService(buf)
+
+		lis := newFakeListener()
+		rec := &stateRecorder{}
+		rec.onState = func(state State) {
+			if state == StateStopping {
+				assert.False(t, lis.closed.Load(), "Stopping must be reported before the graceful stop closes the listener")
+			}
+		}
+		stopCh := make(chan struct{})
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.Run(lis, certPEM, keyPEM, stopCh, rec.set) }()
+
+		synctest.Wait()
+		assert.Equal(t, []State{StateServing}, rec.snapshot())
+		select {
+		case err := <-errCh:
+			t.Fatalf("Run returned before stopCh was closed: %v", err)
+		default:
+		}
+
+		close(stopCh)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+		assert.Equal(t, []State{StateServing, StateStopping}, rec.snapshot())
+		assert.True(t, lis.closed.Load(), "the listener must be closed once Run returns")
+	})
+}
+
+// TestRun_ServeFailure covers a server that stops serving on its own: the failure must be
+// reported, and must not be overwritten by the Stopping reported when the stop request eventually
+// arrives, since only a restart recovers from it.
+func TestRun_ServeFailure(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certPEM, keyPEM := newTestCert(t)
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+		svc := newTestService(buf)
+
+		lis := newFakeListener()
+		lis.acceptErr = errors.New("accept failed")
+		rec := &stateRecorder{}
+		stopCh := make(chan struct{})
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.Run(lis, certPEM, keyPEM, stopCh, rec.set) }()
+
+		synctest.Wait()
+		assert.Equal(t, []State{StateServing, StateFailed}, rec.snapshot())
+
+		close(stopCh)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+		assert.Equal(t, []State{StateServing, StateFailed}, rec.snapshot(), "a stop must not overwrite a failure")
+	})
+}
+
+// TestRun_StopBeforeServe covers a stop that is requested before the Serve goroutine got to run,
+// which happens when stopCh is already closed on entry (e.g. a second certificate update arrived
+// while the previous server was draining, so runFlowStreamService stops the new server right
+// away). The graceful stop then runs first and Serve returns grpc.ErrServerStopped. That is a stop,
+// not a failure: it must not be reported as StateFailed, which would also make /livez fail.
+func TestRun_StopBeforeServe(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certPEM, keyPEM := newTestCert(t)
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+		svc := newTestService(buf)
+
+		lis := newFakeListener()
+		rec := &stateRecorder{}
+		stopCh := make(chan struct{})
+		close(stopCh)
+		require.NoError(t, svc.Run(lis, certPEM, keyPEM, stopCh, rec.set))
+
+		assert.Equal(t, []State{StateServing, StateStopping}, rec.snapshot())
+		assert.True(t, lis.closed.Load(), "the listener must be closed once Run returns")
+	})
+}
+
+// TestRun_InvalidCert covers Run's earliest error path (bad TLS key pair): the failure is
+// reported, Serving never is, and the listener Run took ownership of is released.
+func TestRun_InvalidCert(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+	svc := newTestService(buf)
+
+	lis := newFakeListener()
+	rec := &stateRecorder{}
+	err := svc.Run(lis, []byte("not a cert"), []byte("not a key"), make(chan struct{}), rec.set)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse server TLS key pair")
+	assert.Equal(t, []State{StateFailed}, rec.snapshot())
+	assert.True(t, lis.closed.Load())
 }

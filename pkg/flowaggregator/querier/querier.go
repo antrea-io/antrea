@@ -33,6 +33,15 @@ type Metrics struct {
 type FlowAggregatorQuerier interface {
 	GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]interface{}
 	GetRecordMetrics() Metrics
+	// FlowStreamServiceReady reports whether FlowStreamService is currently serving, for the Flow
+	// Aggregator's own apiserver to expose via readyz. It reports true when the feature is
+	// disabled entirely, not just when the (enabled) service happens to be up.
+	FlowStreamServiceReady() bool
+	// FlowStreamServiceLive reports whether FlowStreamService is free of a failure that only a
+	// restart can recover from (it could not start, or stopped serving on its own), for the Flow
+	// Aggregator's own apiserver to expose via livez. Not serving yet, or draining, is not a
+	// failure. It reports true when the feature is disabled entirely.
+	FlowStreamServiceLive() bool
 }
 
 type ExternalFlowCollectorAddr struct {

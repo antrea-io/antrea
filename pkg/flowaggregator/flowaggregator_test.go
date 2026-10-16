@@ -17,6 +17,8 @@ package flowaggregator
 import (
 	"bytes"
 	"context"
+	"errors"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -49,6 +51,7 @@ import (
 	collectortesting "antrea.io/antrea/v2/pkg/flowaggregator/collector/testing"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/v2/pkg/flowaggregator/exporter/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowstreamservice"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	intermediatetesting "antrea.io/antrea/v2/pkg/flowaggregator/intermediate/testing"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
@@ -969,6 +972,38 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestFlowAggregator_FlowStreamServiceReadyAndLive(t *testing.T) {
+	tests := []struct {
+		name      string
+		enabled   bool
+		state     flowstreamservice.State
+		wantReady bool
+		wantLive  bool
+	}{
+		// With the feature disabled the chart still installs the probes, so both must pass whatever
+		// the never-consulted state happens to be.
+		{name: "disabled, starting", enabled: false, state: flowstreamservice.StateStarting, wantReady: true, wantLive: true},
+		{name: "disabled, failed", enabled: false, state: flowstreamservice.StateFailed, wantReady: true, wantLive: true},
+		// Not serving yet is neither ready nor a failure a restart could fix.
+		{name: "enabled, starting", enabled: true, state: flowstreamservice.StateStarting, wantReady: false, wantLive: true},
+		{name: "enabled, serving", enabled: true, state: flowstreamservice.StateServing, wantReady: true, wantLive: true},
+		// Draining for a certificate update is not ready either, but must not get the container restarted.
+		{name: "enabled, stopping", enabled: true, state: flowstreamservice.StateStopping, wantReady: false, wantLive: true},
+		{name: "enabled, failed", enabled: true, state: flowstreamservice.StateFailed, wantReady: false, wantLive: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fa := &flowAggregator{}
+			if tc.enabled {
+				fa.flowStreamService = &fakeFlowStreamService{}
+			}
+			fa.setFlowStreamServiceState(tc.state)
+			assert.Equal(t, tc.wantReady, fa.FlowStreamServiceReady())
+			assert.Equal(t, tc.wantLive, fa.FlowStreamServiceLive())
+		})
+	}
+}
+
 func TestFlowAggregator_InitCollectors(t *testing.T) {
 	tests := []struct {
 		name                        string
@@ -1254,11 +1289,19 @@ func TestFillServiceUID(t *testing.T) {
 // Run blocks until stopCh is closed.
 type fakeFlowStreamService struct {
 	runCount atomic.Int64
+	// listenErr, if set, is returned by Listen.
+	listenErr error
 }
 
-func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}) error {
+func (f *fakeFlowStreamService) Listen() (net.Listener, error) {
+	return nil, f.listenErr
+}
+
+func (f *fakeFlowStreamService) Run(_ net.Listener, _, _ []byte, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error {
 	f.runCount.Add(1)
+	setState(flowstreamservice.StateServing)
 	<-stopCh
+	setState(flowstreamservice.StateStopping)
 	return nil
 }
 
@@ -1325,6 +1368,43 @@ func TestFlowAggregator_runFlowStreamService(t *testing.T) {
 		fssCh <- struct{}{}
 		synctest.Wait()
 		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "Run should start after cert update signal")
+		// Confirms the real wiring, not just the fake: runFlowStreamService must pass
+		// fa.setFlowStreamServiceState itself as Run's setState callback.
+		assert.True(t, fa.FlowStreamServiceReady(), "FlowStreamServiceReady should reflect the running fake server")
+	})
+}
+
+// TestFlowAggregator_runFlowStreamService_ListenFailure verifies that a failure to bind the
+// listener is reported as a failure (so the liveness probe gets the container restarted) without
+// Run being entered, and that a later certificate update retries and recovers from it.
+func TestFlowAggregator_runFlowStreamService_ListenFailure(t *testing.T) {
+	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
+	synctest.Test(t, func(t *testing.T) {
+		fakeRunner := &fakeFlowStreamService{listenErr: errors.New("address already in use")}
+		fssCh := make(chan struct{}, 1)
+		fa := &flowAggregator{
+			flowStreamService:     fakeRunner,
+			flowStreamSvcUpdateCh: fssCh,
+			certificateProvider:   certProvider,
+		}
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go fa.runFlowStreamService(stopCh)
+
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(0), fakeRunner.runCount.Load(), "Run must not be entered without a listener")
+		assert.False(t, fa.FlowStreamServiceLive(), "a failed bind must fail the liveness check")
+		assert.False(t, fa.FlowStreamServiceReady())
+
+		// A later certificate update retries, and a successful attempt clears the failure.
+		fakeRunner.listenErr = nil
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load())
+		assert.True(t, fa.FlowStreamServiceLive())
+		assert.True(t, fa.FlowStreamServiceReady())
 	})
 }
 
