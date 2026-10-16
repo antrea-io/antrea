@@ -40,10 +40,12 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/component-base/metrics/testutil"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 	multicasttest "antrea.io/antrea/v2/pkg/agent/multicast/testing"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -1607,4 +1609,355 @@ func mockIgmpMaxResponseTime(t *testing.T) {
 	t.Cleanup(func() {
 		igmpMaxResponseTime = originalMaxResponseTime
 	})
+}
+
+func TestMulticastGroupLimits(t *testing.T) {
+	metrics.InitializeMulticastMetrics()
+
+	t.Run("PodGroupLimit", func(t *testing.T) {
+		origMaxPod := maxGroupsPerPod
+		origMaxNode := maxGroupsPerNode
+		maxGroupsPerPod = 2
+		maxGroupsPerNode = 10
+		t.Cleanup(func() {
+			maxGroupsPerPod = origMaxPod
+			maxGroupsPerNode = origMaxNode
+		})
+
+		testController := newTestMulticastController(t, false, false)
+		testController.mockIfaceStore.EXPECT().GetInterfaceByName(gomock.Any()).Return(if1, true).AnyTimes()
+		testController.mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		podIface := if1
+
+		initialPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+
+		// 1st group join: succeeds
+		g1 := net.ParseIP("224.1.1.1")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 1, len(testController.groupCache.ListKeys()))
+
+		// 2nd group join: succeeds
+		g2 := net.ParseIP("224.1.1.2")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g2, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+
+		// 3rd group join for a new group: rejected due to pod limit
+		g3 := net.ParseIP("224.1.1.3")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		newPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, initialPodDrops+1, newPodDrops)
+
+		// Re-join 1st group (refresh): succeeds without incrementing metric
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		refreshedPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newPodDrops, refreshedPodDrops)
+
+		// Create group g4 joined by another pod (if2)
+		g4 := net.ParseIP("224.1.1.4")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: if2})
+		assert.Equal(t, 3, len(testController.groupCache.ListKeys()))
+
+		// podIface (which already has 2 groups) tries to join existing group g4: rejected
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		joinedPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newPodDrops+1, joinedPodDrops)
+
+		// podIface leaves g1: g1 enters pending teardown with lastLocalMember=podIface,
+		// so podIface continues to be charged for g1 until teardown completes.
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: podIface})
+
+		// podIface tries to join existing group g4 while g1 is pending teardown: rejected
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		pendingTeardownPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, joinedPodDrops+1, pendingTeardownPodDrops)
+
+		// Remote report arrives for g1: must NOT clear lastLocalMember or release podIface's reservation prematurely.
+		tunnelIface := createTunnelInterface(1, nodeIf1IP)
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: tunnelIface, srcNode: net.ParseIP("192.168.1.10")})
+		objPending, foundPending, err := testController.groupCache.GetByKey(g1.String())
+		require.NoError(t, err)
+		require.True(t, foundPending)
+		assert.Equal(t, podIface.InterfaceName, objPending.(*GroupMemberStatus).lastLocalMember)
+		assert.Equal(t, 2, testController.getPodGroupCount(podIface.InterfaceName))
+
+		// podIface tries to join existing group g4 again: still rejected because g1 reservation was preserved
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		remotePreservedPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, pendingTeardownPodDrops+1, remotePreservedPodDrops)
+
+		// podIface can re-join g1 while pending teardown
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: podIface})
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: podIface})
+
+		// Teardown completes via syncGroup: lastLocalMember is cleared
+		testController.addInstalledGroup(g1.String())
+		testController.addInstalledLocalGroup(g1.String())
+		testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		require.NoError(t, testController.syncGroup(g1.String()))
+		obj, found, err := testController.groupCache.GetByKey(g1.String())
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, "", obj.(*GroupMemberStatus).lastLocalMember)
+		assert.Equal(t, 1, testController.getPodGroupCount(podIface.InterfaceName))
+
+		// podIface joins existing group g4: now succeeds since g1 was cleared by teardown
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		afterLeavePodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, remotePreservedPodDrops, afterLeavePodDrops)
+	})
+
+	t.Run("NodeGroupLimit", func(t *testing.T) {
+		origMaxPod := maxGroupsPerPod
+		origMaxNode := maxGroupsPerNode
+		maxGroupsPerPod = 10
+		maxGroupsPerNode = 2
+		t.Cleanup(func() {
+			maxGroupsPerPod = origMaxPod
+			maxGroupsPerNode = origMaxNode
+		})
+
+		testController := newTestMulticastController(t, false, false)
+		testController.mockIfaceStore.EXPECT().GetInterfaceByName(gomock.Any()).Return(if1, true).AnyTimes()
+		testController.mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		initialNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+
+		// 1st group join: succeeds
+		g1 := net.ParseIP("224.2.2.1")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 1, testController.getLocalGroupCount())
+		assert.Equal(t, 1, len(testController.groupCache.ListKeys()))
+
+		// 2nd group join: succeeds
+		g2 := net.ParseIP("224.2.2.2")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g2, eType: groupJoin, time: time.Now(), iface: if2})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+
+		// 3rd local group join: rejected due to node limit
+		g3 := net.ParseIP("224.2.2.3")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		newNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, initialNodeDrops+1, newNodeDrops)
+
+		// Remote join from tunnel interface should not be rejected by maxGroupsPerNode
+		g4 := net.ParseIP("224.2.2.4")
+		tunnelIface := createTunnelInterface(1, nodeIf1IP)
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: tunnelIface, srcNode: net.ParseIP("192.168.1.10")})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		assert.Equal(t, 3, len(testController.groupCache.ListKeys()))
+		remoteNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newNodeDrops, remoteNodeDrops)
+
+		// Local pod trying to join g4 (currently remote-only) is rejected when local group limit is reached
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		joinedRemoteNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newNodeDrops+1, joinedRemoteNodeDrops)
+
+		// if2 joins existing local group g1: succeeds without exceeding node limit
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if2})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+
+		// if1 leaves g1: g1 still has local member if2, so getLocalGroupCount remains 2
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+
+		// if2 leaves g1: g1 now has no local members, but remains charged during teardown
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: if2})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+
+		// Remote join arrives for g1: must NOT clear lastLocalMember or release local group count prematurely.
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: tunnelIface, srcNode: net.ParseIP("192.168.1.11")})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+
+		// if1 trying to join g3 while g1 is pending teardown: rejected due to node limit
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		pendingTeardownNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, joinedRemoteNodeDrops+1, pendingTeardownNodeDrops)
+
+		// Teardown completes via syncGroup: lastLocalMember is cleared
+		testController.addInstalledGroup(g1.String())
+		testController.addInstalledLocalGroup(g1.String())
+		testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		require.NoError(t, testController.syncGroup(g1.String()))
+		assert.Equal(t, 1, testController.getLocalGroupCount())
+
+		// Now if1 can join g3 as local group slot was freed
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, testController.getLocalGroupCount())
+		afterFreedDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, pendingTeardownNodeDrops, afterFreedDrops)
+	})
+}
+
+func TestSyncGroupConcurrentJoinDuringTeardownWithRemoteMembers(t *testing.T) {
+	testController := newTestMulticastController(t, true, false)
+	testController.initialize(t)
+	testController.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
+	}
+	g1 := net.ParseIP("224.5.5.5")
+	tunnelIface := createTunnelInterface(1, nodeIf1IP)
+	remoteNodeIP := net.ParseIP("192.168.1.10")
+
+	// 1. Initial state: if1 (local) and remoteNode (remote) join g1.
+	testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if1})
+	testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: tunnelIface, srcNode: remoteNodeIP})
+
+	testController.mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true).AnyTimes()
+	testController.mockIfaceStore.EXPECT().GetInterfaceByName(if2.InterfaceName).Return(if2, true).AnyTimes()
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(g1.To4(), nodeIf1IP.To4(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastFlows(g1, gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	// Drain initial queue events
+	for testController.queue.Len() > 0 {
+		key, _ := testController.queue.Get()
+		testController.queue.Forget(key)
+		testController.queue.Done(key)
+	}
+	require.NoError(t, testController.syncGroup(g1.String()))
+	assert.True(t, testController.localGroupHasInstalled(g1.String()))
+	assert.True(t, testController.groupHasInstalled(g1.String()))
+
+	// 2. if1 leaves g1: g1 now has no local members, but has remote member.
+	testController.mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: if1})
+
+	// Drain queue from leave
+	for testController.queue.Len() > 0 {
+		key, _ := testController.queue.Get()
+		testController.queue.Forget(key)
+		testController.queue.Done(key)
+	}
+
+	// 3. syncGroup runs teardown of local group.
+	// During deleteLocalMulticastGroup (specifically MulticastInterfaceLeaveMgroup), simulate if2 joining g1 concurrently.
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(g1.To4(), gomock.Any(), gomock.Any()).Do(func(any1, any2, any3 interface{}) {
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if2})
+	}).Times(1)
+	testController.mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	// syncGroup should finish deleteLocalMulticastGroup, detect if2 under synchronization, and requeue g1 without overwriting if2.
+	require.NoError(t, testController.syncGroup(g1.String()))
+
+	// Check that if2 is still in localMembers in groupCache.
+	obj, exists, err := testController.groupCache.GetByKey(g1.String())
+	require.NoError(t, err)
+	require.True(t, exists)
+	status := obj.(*GroupMemberStatus)
+	assert.Contains(t, status.localMembers, if2.InterfaceName)
+
+	// Check that g1 was requeued.
+	assert.Equal(t, 1, testController.queue.Len())
+	requeuedKey, _ := testController.queue.Get()
+	assert.Equal(t, g1.String(), requeuedKey)
+	testController.queue.Forget(requeuedKey)
+	testController.queue.Done(requeuedKey)
+
+	// 4. The requeued syncGroup executes: it should reinstall local multicast group and update OpenFlow group with if2's port.
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(g1.To4(), nodeIf1IP.To4(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ofGroupID any, localReceivers []uint32, remoteReceivers []net.IP) {
+		assert.Contains(t, localReceivers, uint32(if2.OFPort))
+		assert.Contains(t, remoteReceivers, remoteNodeIP)
+	}).Times(1)
+	require.NoError(t, testController.syncGroup(g1.String()))
+	assert.True(t, testController.localGroupHasInstalled(g1.String()))
+}
+
+func TestSyncGroupConcurrentJoinDuringFullOVSRemoval(t *testing.T) {
+	testController := newTestMulticastController(t, false, false)
+	testController.initialize(t)
+	testController.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
+	}
+	g1 := net.ParseIP("224.6.6.6")
+
+	// 1. Initial state: if1 joins g1 (no remote members).
+	testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if1})
+	testController.mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true).AnyTimes()
+	testController.mockIfaceStore.EXPECT().GetInterfaceByName(if2.InterfaceName).Return(if2, true).AnyTimes()
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(g1.To4(), nodeIf1IP.To4(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastFlows(g1, gomock.Any()).Times(1)
+
+	for testController.queue.Len() > 0 {
+		key, _ := testController.queue.Get()
+		testController.queue.Forget(key)
+		testController.queue.Done(key)
+	}
+	require.NoError(t, testController.syncGroup(g1.String()))
+	assert.True(t, testController.groupHasInstalled(g1.String()))
+	assert.True(t, testController.localGroupHasInstalled(g1.String()))
+
+	objInitial, existsInitial, err := testController.groupCache.GetByKey(g1.String())
+	require.NoError(t, err)
+	require.True(t, existsInitial)
+	initialGroupID := objInitial.(*GroupMemberStatus).ofGroupID
+
+	// 2. if1 leaves g1: no local or remote members left.
+	testController.mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: if1})
+
+	for testController.queue.Len() > 0 {
+		key, _ := testController.queue.Get()
+		testController.queue.Forget(key)
+		testController.queue.Done(key)
+	}
+
+	// 3. syncGroup runs full teardown: route removal, UninstallMulticastFlows, UninstallMulticastGroup.
+	// During UninstallMulticastGroup, simulate if2 joining g1 concurrently.
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(g1.To4(), gomock.Any(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().UninstallMulticastFlows(g1).Times(1)
+	testController.mockOFClient.EXPECT().UninstallMulticastGroup(initialGroupID).Do(func(ofGroupID any) {
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if2})
+	}).Times(1)
+
+	// syncGroup finishes UninstallMulticastGroup, detects membership change, requeues g1 without deleting cache entry or releasing group ID.
+	require.NoError(t, testController.syncGroup(g1.String()))
+
+	// Assert cache entry and group ID remain valid.
+	obj, exists, err := testController.groupCache.GetByKey(g1.String())
+	require.NoError(t, err)
+	require.True(t, exists, "cache entry should be preserved")
+	status := obj.(*GroupMemberStatus)
+	assert.Equal(t, initialGroupID, status.ofGroupID, "group ID should remain valid and unchanged")
+	assert.Contains(t, status.localMembers, if2.InterfaceName)
+
+	// Assert g1 was requeued.
+	assert.Equal(t, 1, testController.queue.Len())
+	requeuedKey, _ := testController.queue.Get()
+	assert.Equal(t, g1.String(), requeuedKey)
+	testController.queue.Forget(requeuedKey)
+	testController.queue.Done(requeuedKey)
+
+	// 4. The requeued syncGroup runs: it should reinstall OpenFlow group (with initialGroupID) and flows.
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(g1.To4(), nodeIf1IP.To4(), gomock.Any()).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastGroup(initialGroupID, gomock.Any(), gomock.Any()).Do(func(ofGroupID any, localReceivers []uint32, remoteReceivers []net.IP) {
+		assert.Contains(t, localReceivers, uint32(if2.OFPort))
+	}).Times(1)
+	testController.mockOFClient.EXPECT().InstallMulticastFlows(g1, initialGroupID).Times(1)
+	require.NoError(t, testController.syncGroup(g1.String()))
+	assert.True(t, testController.groupHasInstalled(g1.String()))
+	assert.True(t, testController.localGroupHasInstalled(g1.String()))
 }

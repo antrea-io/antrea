@@ -33,6 +33,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -49,6 +50,9 @@ const (
 	groupLeave
 
 	podInterfaceIndex = "podInterface"
+	leavingPodIndex   = "leavingPod"
+	localGroupIndex   = "localGroup"
+	localGroupKey     = "local"
 
 	// How long to wait before retrying the processing of a multicast group change.
 	minRetryDelay = 5 * time.Second
@@ -60,9 +64,23 @@ const (
 	// nodeUpdateKey is a key to trigger the Node list operation and update the OpenFlow group buckets to report
 	// the local multicast groups to other Nodes.
 	nodeUpdateKey = "nodeUpdate"
+
+	// defaultMaxGroupsPerPod bounds the number of multicast groups a local Pod can join.
+	defaultMaxGroupsPerPod = 32
+	// defaultMaxGroupsPerNode bounds the total number of multicast groups with local members on this Node.
+	// It is set to 128 to help keep the number of local groups within a single IGMPv3 report packet under
+	// a standard 1500 MTU (even with tunnel encapsulation overhead) until sender-side batching lands.
+	// Note that groups whose last member has left may temporarily remain in installedLocalGroups until
+	// teardown completes.
+	defaultMaxGroupsPerNode = 128
 )
 
-var workerCount uint8 = 2
+var (
+	workerCount uint8 = 2
+
+	maxGroupsPerPod  = defaultMaxGroupsPerPod
+	maxGroupsPerNode = defaultMaxGroupsPerNode
+)
 
 type mcastGroupEvent struct {
 	group net.IP
@@ -82,6 +100,9 @@ type GroupMemberStatus struct {
 	// added in the set.
 	remoteMembers sets.Set[string]
 	ofGroupID     binding.GroupIDType
+	// lastLocalMember records the interface name of the last local Pod member that left the group.
+	// It retains the group's reservation under maxGroupsPerPod and maxGroupsPerNode until teardown completes.
+	lastLocalMember string
 }
 
 // eventHandler process the multicast Group membership report or leave messages.
@@ -122,10 +143,11 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent) {
 	status := obj.(*GroupMemberStatus)
 	newStatus := &GroupMemberStatus{
-		group:         status.group,
-		localMembers:  make(map[string]time.Time),
-		remoteMembers: status.remoteMembers.Union(nil),
-		ofGroupID:     status.ofGroupID,
+		group:           status.group,
+		localMembers:    make(map[string]time.Time),
+		remoteMembers:   status.remoteMembers.Union(nil),
+		ofGroupID:       status.ofGroupID,
+		lastLocalMember: status.lastLocalMember,
 	}
 	for m, t := range status.localMembers {
 		newStatus.localMembers[m] = t
@@ -133,6 +155,9 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 	exist := memberExists(status, e)
 	switch e.eType {
 	case groupJoin:
+		if e.iface.Type == interfacestore.ContainerInterface {
+			newStatus.lastLocalMember = ""
+		}
 		newStatus = addGroupMember(newStatus, e)
 		c.groupCache.Update(newStatus)
 		if !exist {
@@ -142,6 +167,9 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 	case groupLeave:
 		if exist {
 			newStatus = deleteGroupMember(newStatus, e)
+			if e.iface.Type == interfacestore.ContainerInterface && len(status.localMembers) > 0 && len(newStatus.localMembers) == 0 {
+				newStatus.lastLocalMember = e.iface.InterfaceName
+			}
 			c.groupCache.Update(newStatus)
 			if e.iface.Type == interfacestore.ContainerInterface {
 				_, found := c.ifaceStore.GetInterfaceByName(e.iface.InterfaceName)
@@ -237,6 +265,7 @@ type Controller struct {
 	igmpSnooper      *IGMPSnooper
 	groupEventCh     chan *mcastGroupEvent
 	groupCache       cache.Indexer
+	membershipMutex  sync.Mutex
 	queue            workqueue.TypedRateLimitingInterface[string]
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
@@ -270,6 +299,22 @@ type Controller struct {
 	// ipv6Enabled is the flag that if it is running on IPv6 cluster.
 	// TODO: remove this flag after IPv6 is supported in Multicast.
 	ipv6Enabled bool
+	logger      *rateLimitedLogger
+}
+
+func (c *Controller) logRateLimited(err error, msg string, keysAndValues ...interface{}) {
+	c.logger.log(err, msg, keysAndValues...)
+}
+
+func (c *Controller) getLocalGroupCount() int {
+	keys, _ := c.groupCache.IndexKeys(localGroupIndex, localGroupKey)
+	return len(keys)
+}
+
+func (c *Controller) getPodGroupCount(podInterface string) int {
+	activeGroups := c.getGroupMemberStatusesByPod(podInterface)
+	leavingKeys, _ := c.groupCache.IndexKeys(leavingPodIndex, podInterface)
+	return len(activeGroups) + len(leavingKeys)
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -288,9 +333,12 @@ func NewMulticastController(ofClient openflow.Client,
 	ipv4Enabled bool,
 	ipv6Enabled bool) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
-	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
+	logger := newRateLimitedLogger(igmpLogRateLimiterInterval, igmpLogRateLimiterBurst)
+	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap, logger)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
+		leavingPodIndex:   leavingPodIndexFunc,
+		localGroupIndex:   localGroupIndexFunc,
 	})
 	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces, enableFlexibleIPAM)
 	c := &Controller{
@@ -317,6 +365,7 @@ func NewMulticastController(ofClient openflow.Client,
 		flexibleIPAMEnabled: enableFlexibleIPAM,
 		ipv4Enabled:         ipv4Enabled,
 		ipv6Enabled:         ipv6Enabled,
+		logger:              logger,
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -538,12 +587,43 @@ func (c *Controller) syncGroup(groupKey string) error {
 					klog.ErrorS(err, "Failed to uninstall multicast group", "group", groupKey)
 					return err
 				}
+				// Before deleting from cache, check under synchronization if membership changed since teardown started.
+				c.membershipMutex.Lock()
+				curObj, curExists, _ := c.groupCache.GetByKey(groupKey)
+				if !curExists || curObj != status {
+					c.delInstalledGroup(groupKey)
+					c.membershipMutex.Unlock()
+					klog.InfoS("Multicast group membership changed while uninstalling, requeuing", "group", groupKey)
+					c.queue.Add(groupKey)
+					return nil
+				}
 				c.v4GroupAllocator.Release(status.ofGroupID)
 				c.delInstalledGroup(groupKey)
 				c.groupCache.Delete(status)
+				c.membershipMutex.Unlock()
 				klog.InfoS("Removed multicast group from cache after all members left", "group", groupKey)
 				return nil
 			}
+			// When remote members remain, clear the pending local reservation under synchronization
+			// so any concurrent join by a local Pod is not overwritten.
+			c.membershipMutex.Lock()
+			curObj, curExists, _ := c.groupCache.GetByKey(groupKey)
+			if !curExists || curObj != status {
+				c.membershipMutex.Unlock()
+				klog.InfoS("Multicast group membership changed while tearing down local group, requeuing", "group", groupKey)
+				c.queue.Add(groupKey)
+				return nil
+			}
+			if status.lastLocalMember != "" {
+				newStatus := &GroupMemberStatus{
+					group:         status.group,
+					localMembers:  status.localMembers,
+					remoteMembers: status.remoteMembers.Union(nil),
+					ofGroupID:     status.ofGroupID,
+				}
+				c.groupCache.Update(newStatus)
+			}
+			c.membershipMutex.Unlock()
 		} else if !c.localGroupHasInstalled(groupKey) {
 			// Install multicast flows and routing entries for the multicast group that local Pods join.
 			if err := installLocalMulticastGroup(); err != nil {
@@ -615,10 +695,57 @@ func (c *Controller) delInstalledLocalGroup(groupKey string) {
 	c.installedLocalGroupsMutex.Unlock()
 }
 
+func (c *Controller) shouldRejectJoin(e *mcastGroupEvent, status *GroupMemberStatus) bool {
+	if e.iface.Type != interfacestore.ContainerInterface {
+		return false
+	}
+	// Check Node group limit if this join would add a new local group.
+	// A new local group is added if the group does not exist in cache yet, or exists only with remote members.
+	// If the group already has local members or has a pending teardown (lastLocalMember != ""),
+	// it is already accounted for in the local group count.
+	isNewLocalGroup := status == nil || (len(status.localMembers) == 0 && status.lastLocalMember == "")
+	if isNewLocalGroup && c.getLocalGroupCount() >= maxGroupsPerNode {
+		c.logRateLimited(nil, "Dropped multicast group join: Node group limit reached",
+			"group", e.group.String(), "limit", maxGroupsPerNode)
+		metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit).Inc()
+		return true
+	}
+
+	// Check Pod group limit if this Pod is not already a member of this group.
+	// If status != nil, check whether the Pod is already in localMembers or was the lastLocalMember.
+	alreadyMember := false
+	if status != nil {
+		if _, exist := status.localMembers[e.iface.InterfaceName]; exist {
+			alreadyMember = true
+		} else if status.lastLocalMember == e.iface.InterfaceName {
+			alreadyMember = true
+		}
+	}
+	if !alreadyMember {
+		if c.getPodGroupCount(e.iface.InterfaceName) >= maxGroupsPerPod {
+			c.logRateLimited(nil, "Dropped multicast group join: Pod group limit reached",
+				"pod", e.iface.InterfaceName, "group", e.group.String(), "limit", maxGroupsPerPod)
+			metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit).Inc()
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
+	c.membershipMutex.Lock()
+	defer c.membershipMutex.Unlock()
+
 	obj, ok, _ := c.groupCache.GetByKey(e.group.String())
+	var status *GroupMemberStatus
+	if ok {
+		status = obj.(*GroupMemberStatus)
+	}
 	switch e.eType {
 	case groupJoin:
+		if c.shouldRejectJoin(e, status) {
+			return
+		}
 		if !ok {
 			c.addGroupMemberStatus(e)
 		} else {
@@ -759,6 +886,22 @@ func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 		podInterfaces = append(podInterfaces, podInterface)
 	}
 	return podInterfaces, nil
+}
+
+func leavingPodIndexFunc(obj interface{}) ([]string, error) {
+	groupState := obj.(*GroupMemberStatus)
+	if len(groupState.localMembers) == 0 && groupState.lastLocalMember != "" {
+		return []string{groupState.lastLocalMember}, nil
+	}
+	return nil, nil
+}
+
+func localGroupIndexFunc(obj interface{}) ([]string, error) {
+	groupState := obj.(*GroupMemberStatus)
+	if len(groupState.localMembers) > 0 || groupState.lastLocalMember != "" {
+		return []string{localGroupKey}, nil
+	}
+	return nil, nil
 }
 
 func getGroupEventKey(obj interface{}) (string, error) {
