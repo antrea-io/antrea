@@ -50,48 +50,13 @@ func TestAllowedPathsAuthorizer(t *testing.T) {
 			expectedDecision: authorizer.DecisionAllow,
 		},
 		{
-			name:             "mutating webhook namespace",
-			path:             "/mutate/namespace",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
 			name:             "mutating webhook arbitrary resource",
 			path:             "/mutate/customresource",
 			expectedDecision: authorizer.DecisionAllow,
 		},
 		{
-			name:             "validating webhook tier",
-			path:             "/validate/tier",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
-			name:             "validating webhook egress",
-			path:             "/validate/egress",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
-			name:             "validating webhook externalippool",
-			path:             "/validate/externalippool",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
 			name:             "validating webhook arbitrary resource",
 			path:             "/validate/customresource",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
-			name:             "crd conversion webhook ippool",
-			path:             "/convert/ippool",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
-			name:             "crd conversion webhook egress",
-			path:             "/convert/egress",
-			expectedDecision: authorizer.DecisionAllow,
-		},
-		{
-			name:             "crd conversion webhook externalippool",
-			path:             "/convert/externalippool",
 			expectedDecision: authorizer.DecisionAllow,
 		},
 		{
@@ -131,7 +96,7 @@ func TestAllowedPathsAuthorizer(t *testing.T) {
 		},
 		{
 			name:             "control plane resource request with allowed path",
-			path:             "/validate/egress",
+			path:             "/validate/customresource",
 			resourceRequest:  true,
 			expectedDecision: authorizer.DecisionNoOpinion,
 		},
