@@ -638,9 +638,18 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		interfacesConfigured++
 	}
 
-	if savedErr != nil && interfacesConfigured == 0 {
-		// As we do not support secondary network update, do not return error to
-		// retry, if at least one secondary network is configured.
+	if savedErr != nil {
+		if interfacesConfigured > 0 {
+			// Roll back any partially configured secondary interfaces so that the Pod
+			// does not end up running with missing interfaces and can be cleanly reconciled
+			// on retry.
+			klog.InfoS("Rolling back partially configured secondary interfaces due to configuration failure",
+				"Pod", klog.KObj(pod), "interfacesConfigured", interfacesConfigured)
+			storedInterfaces := pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
+			if err := pc.removeInterfaces(storedInterfaces); err != nil {
+				klog.ErrorS(err, "Failed to remove partially configured secondary interfaces", "Pod", klog.KObj(pod))
+			}
+		}
 		return nil, savedErr
 	}
 
