@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -57,7 +58,13 @@ func NewGRPCCollector(recordCh chan *flowpb.Flow, caCert, serverKey, serverCert 
 	service := &grpcService{
 		recordCh: recordCh,
 	}
-	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+	// grpc_recovery ensures that a panic while handling one stream (e.g. triggered by
+	// a malformed Flow message) is recovered into a gRPC error for that stream only,
+	// instead of taking down the whole flow-aggregator process.
+	server := grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(tlsConfig)),
+		grpc.ChainStreamInterceptor(recovery.StreamServerInterceptor()),
+	)
 	flowpb.RegisterFlowExportServiceServer(server, service)
 	return &grpcCollector{
 		service: service,
@@ -132,10 +139,44 @@ func (s *grpcService) Export(stream flowpb.FlowExportService_ExportServer) error
 
 		for _, record := range req.Flows {
 			s.numRecordsReceived.Add(1)
+			if err := validateFlow(record); err != nil {
+				klog.ErrorS(err, "Ignoring invalid Flow record", "exportAddress", exportAddress)
+				continue
+			}
 			record.Ipfix.ExporterIp = exportAddress
 			s.recordCh <- record
 		}
 	}
 
 	return stream.SendAndClose(&flowpb.ExportResponse{})
+}
+
+// validateFlow checks that the sub-messages of a Flow record which are unconditionally
+// dereferenced by downstream flow-aggregator processing (K8s metadata enrichment,
+// aggregation and exporters) are present. A client-supplied Flow with any of these
+// sub-messages omitted would otherwise cause a nil pointer dereference panic once the
+// record leaves the gRPC collector.
+// Aggregation is intentionally not checked here: it is always populated internally by
+// the aggregation process itself, not expected from the client. App is deprecated and
+// unused.
+func validateFlow(record *flowpb.Flow) error {
+	switch {
+	case record.Ipfix == nil:
+		return fmt.Errorf("flow record is missing the ipfix field")
+	case record.StartTs == nil:
+		return fmt.Errorf("flow record is missing the start_ts field")
+	case record.EndTs == nil:
+		return fmt.Errorf("flow record is missing the end_ts field")
+	case record.Ip == nil:
+		return fmt.Errorf("flow record is missing the ip field")
+	case record.Transport == nil:
+		return fmt.Errorf("flow record is missing the transport field")
+	case record.K8S == nil:
+		return fmt.Errorf("flow record is missing the k8s field")
+	case record.Stats == nil:
+		return fmt.Errorf("flow record is missing the stats field")
+	case record.ReverseStats == nil:
+		return fmt.Errorf("flow record is missing the reverse_stats field")
+	}
+	return nil
 }
