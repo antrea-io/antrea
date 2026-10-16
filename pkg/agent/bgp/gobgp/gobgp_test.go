@@ -154,7 +154,98 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(179), peer.GetTransport().GetRemotePort())
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
+	assert.True(t, peer.GetGracefulRestart().GetEnabled())
+	// No timer is configured, so the BGP process is left to apply its own defaults.
+	assert.Nil(t, peer.GetTimers())
+}
 
+func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
+	tests := []struct {
+		name           string
+		peer           *v1alpha1.BGPPeer
+		expectedTimers *gobgpapi.TimersConfig
+	}{
+		{
+			name: "no timer configured",
+			peer: &v1alpha1.BGPPeer{Address: "192.168.0.1", ASN: 65000},
+		},
+		{
+			name: "all timers configured",
+			peer: &v1alpha1.BGPPeer{
+				Address:                       "192.168.0.1",
+				ASN:                           65000,
+				HoldTimeSeconds:               ptr.To(int32(30)),
+				KeepaliveIntervalSeconds:      ptr.To(int32(10)),
+				ConnectRetrySeconds:           ptr.To(int32(15)),
+				IdleHoldTimeAfterResetSeconds: ptr.To(int32(20)),
+			},
+			expectedTimers: &gobgpapi.TimersConfig{
+				HoldTime:               30,
+				KeepaliveInterval:      10,
+				ConnectRetry:           15,
+				IdleHoldTimeAfterReset: 20,
+			},
+		},
+		{
+			name: "only the hold time configured",
+			peer: &v1alpha1.BGPPeer{
+				Address:         "192.168.0.1",
+				ASN:             65000,
+				HoldTimeSeconds: ptr.To(int32(30)),
+			},
+			// The keepalive interval is left unset so that the BGP process derives it from the hold time.
+			expectedTimers: &gobgpapi.TimersConfig{HoldTime: 30},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peer, err := convertPeerConfigToGoBGPPeer(bgp.PeerConfig{BGPPeer: tt.peer})
+			require.NoError(t, err)
+			if tt.expectedTimers == nil {
+				assert.Nil(t, peer.GetTimers())
+				return
+			}
+			require.NotNil(t, peer.GetTimers())
+			assert.Equal(t, tt.expectedTimers.GetHoldTime(), peer.GetTimers().GetConfig().GetHoldTime())
+			assert.Equal(t, tt.expectedTimers.GetKeepaliveInterval(), peer.GetTimers().GetConfig().GetKeepaliveInterval())
+			assert.Equal(t, tt.expectedTimers.GetConnectRetry(), peer.GetTimers().GetConfig().GetConnectRetry())
+			assert.Equal(t, tt.expectedTimers.GetIdleHoldTimeAfterReset(), peer.GetTimers().GetConfig().GetIdleHoldTimeAfterReset())
+		})
+	}
+}
+
+func TestConvertPeerConfigToGoBGPPeerGracefulRestart(t *testing.T) {
+	tests := []struct {
+		name                string
+		peer                *v1alpha1.BGPPeer
+		expectedEnabled     bool
+		expectedRestartTime uint32
+	}{
+		{
+			name:                "enabled by default",
+			peer:                &v1alpha1.BGPPeer{Address: "192.168.0.1", ASN: 65000, GracefulRestartTimeSeconds: ptr.To(int32(120))},
+			expectedEnabled:     true,
+			expectedRestartTime: 120,
+		},
+		{
+			name:                "explicitly enabled",
+			peer:                &v1alpha1.BGPPeer{Address: "192.168.0.1", ASN: 65000, GracefulRestartEnabled: ptr.To(true), GracefulRestartTimeSeconds: ptr.To(int32(180))},
+			expectedEnabled:     true,
+			expectedRestartTime: 180,
+		},
+		{
+			name: "disabled, so the restart time is ignored",
+			peer: &v1alpha1.BGPPeer{Address: "192.168.0.1", ASN: 65000, GracefulRestartEnabled: ptr.To(false), GracefulRestartTimeSeconds: ptr.To(int32(120))},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peer, err := convertPeerConfigToGoBGPPeer(bgp.PeerConfig{BGPPeer: tt.peer})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedEnabled, peer.GetGracefulRestart().GetEnabled())
+			assert.Equal(t, tt.expectedRestartTime, peer.GetGracefulRestart().GetRestartTime())
+		})
+	}
 }
 
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {

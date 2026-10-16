@@ -341,9 +341,44 @@ type BGPPeer struct {
 	// and the default value is 1.
 	MultihopTTL *int32 `json:"multihopTTL,omitempty"`
 
+	// GracefulRestartEnabled specifies whether to advertise the BGP graceful restart capability to the BGP peer. When
+	// it is disabled, gracefulRestartTimeSeconds has no effect. The default value is true.
+	GracefulRestartEnabled *bool `json:"gracefulRestartEnabled,omitempty"`
+
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// HoldTimeSeconds specifies the hold time proposed to the BGP peer when the BGP session is established, i.e. how
+	// long the peer should wait without receiving a KEEPALIVE or an UPDATE message from this Node before tearing the
+	// session down. The effective hold time is the smaller of the two values proposed by the two BGP speakers. It
+	// must be greater than keepaliveIntervalSeconds. The range of the value is from 3 to 65535, and the default
+	// value is 90.
+	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
+
+	// KeepaliveIntervalSeconds specifies the interval at which KEEPALIVE messages are sent to the BGP peer. It must
+	// be less than holdTimeSeconds, otherwise the peer's hold timer can never be refreshed in time. RFC 4271
+	// suggests one third of the hold time, which is not enforced: a thinner ratio leaves less room for a burst of
+	// lost messages, but still works. The range of the value is from 1 to 65534.
+	//
+	// Unlike the other timers, this field has no default value. When it is unset, the BGP process derives the
+	// interval from one third of holdTimeSeconds, so that lowering only the hold time also speeds up the
+	// KEEPALIVEs. A fixed default would also be rejected by the validation rule as soon as holdTimeSeconds was
+	// lowered below it. The hold time is negotiated but the keepalive interval is not: when the peer proposes a
+	// smaller hold time than this Node, the BGP process recomputes the interval as one third of the negotiated
+	// hold time, discarding this field even when it is set.
+	KeepaliveIntervalSeconds *int32 `json:"keepaliveIntervalSeconds,omitempty"`
+
+	// ConnectRetrySeconds specifies how long to wait before retrying to connect to the BGP peer after a failed
+	// connection attempt. The range of the value is from 2 to 65535, and the default value is 120.
+	ConnectRetrySeconds *int32 `json:"connectRetrySeconds,omitempty"`
+
+	// IdleHoldTimeAfterResetSeconds specifies how long the BGP session stays in the Idle state before a new
+	// connection to the BGP peer is attempted, after the antrea-agent itself resets the session. It does not apply
+	// to a session that is lost because the hold timer expired or because the peer closed it, and the antrea-agent
+	// currently never resets a session on its own. The range of the value is from 1 to 3600, and the default value
+	// is 30.
+	IdleHoldTimeAfterResetSeconds *int32 `json:"idleHoldTimeAfterResetSeconds,omitempty"`
 }
 
 type PodReference struct {

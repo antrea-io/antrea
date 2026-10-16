@@ -315,13 +315,47 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			MultihopTtl: uint32(*peerConfig.MultihopTTL),
 		}
 	}
-	if peerConfig.GracefulRestartTimeSeconds != nil {
-		peer.GracefulRestart = &gobgpapi.GracefulRestart{
-			Enabled:     true,
-			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
+	// Graceful restart is enabled unless it is explicitly disabled. The MpGracefulRestart capability configured for
+	// the address family above is only advertised when graceful restart is enabled for the peer, so disabling it
+	// here is enough to stop advertising the capability altogether.
+	if peerConfig.GracefulRestartEnabled == nil || *peerConfig.GracefulRestartEnabled {
+		peer.GracefulRestart = &gobgpapi.GracefulRestart{Enabled: true}
+		if peerConfig.GracefulRestartTimeSeconds != nil {
+			peer.GracefulRestart.RestartTime = uint32(*peerConfig.GracefulRestartTimeSeconds)
 		}
 	}
+	if timers := convertPeerConfigToGoBGPTimersConfig(peerConfig); timers != nil {
+		peer.Timers = &gobgpapi.Timers{Config: timers}
+	}
 	return peer, nil
+}
+
+// convertPeerConfigToGoBGPTimersConfig returns the goBGP timers configuration for the peer, or nil when no timer is
+// configured. Timers that are left unset are omitted so that the BGP process applies its own defaults: in particular,
+// an unset keepalive interval is derived from one third of the hold time rather than from a fixed value.
+func convertPeerConfigToGoBGPTimersConfig(peerConfig bgp.PeerConfig) *gobgpapi.TimersConfig {
+	timers := &gobgpapi.TimersConfig{}
+	configured := false
+	if peerConfig.HoldTimeSeconds != nil {
+		timers.HoldTime = uint64(*peerConfig.HoldTimeSeconds)
+		configured = true
+	}
+	if peerConfig.KeepaliveIntervalSeconds != nil {
+		timers.KeepaliveInterval = uint64(*peerConfig.KeepaliveIntervalSeconds)
+		configured = true
+	}
+	if peerConfig.ConnectRetrySeconds != nil {
+		timers.ConnectRetry = uint64(*peerConfig.ConnectRetrySeconds)
+		configured = true
+	}
+	if peerConfig.IdleHoldTimeAfterResetSeconds != nil {
+		timers.IdleHoldTimeAfterReset = uint64(*peerConfig.IdleHoldTimeAfterResetSeconds)
+		configured = true
+	}
+	if !configured {
+		return nil
+	}
+	return timers
 }
 
 func convertGoBGPSessionStateToSessionState(s gobgpapi.PeerState_SessionState) bgp.SessionState {
