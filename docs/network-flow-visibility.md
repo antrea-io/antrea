@@ -642,7 +642,7 @@ client asked to follow. It is alpha, and enabled by default in `Aggregate` mode.
 It is not supported in `Proxy` mode: records are not correlated in that mode, so
 a record only carries the policy information of the Node which exported it,
 while the redaction described in
-[What a client sees of each endpoint](#what-a-client-sees-of-each-endpoint)
+[What a client sees of a flow](#what-a-client-sees-of-a-flow)
 relies on records describing the whole connection. It can be disabled with:
 
 ```yaml
@@ -977,9 +977,11 @@ full or rejected, never narrowed.
   identity is.** A subject granted `watch flows` in a Namespace sees Pod names
   and labels for it even without `get pods` there — `flows` and object read
   access are separate grants. `flows/identity` is the exception:
-  `antrea-flow-identity-viewer` is aggregated to `view`, so anyone bound to the
-  built-in `view`, `edit` or `admin` Role in a Namespace already holds it there,
-  with no `antrea-flow-*` binding to show up in the audit command above.
+  `antrea-flow-identity-viewer` is aggregated to the `view` ClusterRole, so a
+  RoleBinding in a Namespace to `view`, `edit` or `admin` (which inherit it
+  through `view`) already grants it there, and a ClusterRoleBinding grants it in
+  every Namespace, with no `antrea-flow-*` binding to show up in the audit
+  command above.
 - **Identity changes mid-stream are invisible.** The credential is resolved when
   the stream opens, so a token revoked or a group membership changed afterwards
   takes effect on the next connection, not on the current one.
