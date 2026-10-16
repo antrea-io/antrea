@@ -4465,6 +4465,10 @@ data:
     # Allow users to specify the load balancer mode as DSR (Direct Server Return).
     #  LoadBalancerModeDSR: false
 
+    # Allow the ingress Node to send the traffic of DSR Services to the MAC address of the Node hosting the selected
+    # Endpoint, without encapsulation, in noEncap and hybrid modes.
+    #  DSRDispatchL2: false
+
     # Enable Egress traffic shaping.
     #  EgressTrafficShaping: false
 
@@ -4809,6 +4813,19 @@ data:
       #                  can reply to clients directly, bypassing the ingress Node.
       # A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
       defaultLoadBalancerMode: "nat"
+      # Settings for the DSR load balancer mode.
+      dsr:
+        # Determines how the ingress Node sends the traffic of a DSR Service to the Node hosting the selected Endpoint by
+        # default. It has the following options:
+        # - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. In noEncap mode, the
+        #                     tunnel interface is created for it, and the Pod MTU is reduced by the encapsulation overhead.
+        # - l2:               The traffic is sent unmodified to the MAC address of the Node hosting the selected Endpoint.
+        #                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. It is not
+        #                     supported with hostNetworkMode nftables or with enableBridgingMode. The Nodes must be in
+        #                     one L2 segment. Traffic to Nodes in other subnets uses the tunnel in hybrid mode, and is
+        #                     dropped in noEncap mode unless the tunnel interface exists.
+        # A Service's dispatch can be overridden by annotating it with `service.antrea.io/dsr-dispatch`.
+        dispatch: "tunnel"
       # Disables the health check server run by Antrea Proxy, which provides health information about
       # Services of type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is
       # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
@@ -5949,7 +5966,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 78c64d68589a745303e1738ef7c0a29dd7f4c83c3e04d263df4eb5b6344f06b3
+        checksum/config: 430ab48198a4a80b5e4374ac1ac7521d3aa875c40c1d361e09af35c6bc966e05
       labels:
         app: antrea
         component: antrea-agent
@@ -6198,7 +6215,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 78c64d68589a745303e1738ef7c0a29dd7f4c83c3e04d263df4eb5b6344f06b3
+        checksum/config: 430ab48198a4a80b5e4374ac1ac7521d3aa875c40c1d361e09af35c6bc966e05
       labels:
         app: antrea
         component: antrea-controller

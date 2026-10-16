@@ -156,6 +156,11 @@ const (
 	// Allow users to specify the load balancer mode as DSR (Direct Server Return).
 	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
 
+	// alpha: v2.8
+	// Allow the ingress Node to send the traffic of DSR Services to the MAC address of the Node hosting the selected
+	// Endpoint, without encapsulation, in noEncap and hybrid modes.
+	DSRDispatchL2 featuregate.Feature = "DSRDispatchL2"
+
 	// alpha: v1.13
 	// deprecated: v2.7
 	// The upstream v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs are deprecated.
@@ -243,6 +248,7 @@ var (
 		SupportBundleCollection:       {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:               {Default: false, PreRelease: featuregate.Alpha},
 		LoadBalancerModeDSR:           {Default: false, PreRelease: featuregate.Alpha},
+		DSRDispatchL2:                 {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Deprecated},
 		ClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
@@ -261,6 +267,7 @@ var (
 		AntreaProxy,
 		BGPPolicy,
 		CleanupStaleUDPSvcConntrack,
+		DSRDispatchL2,
 		Egress,
 		EndpointSlice,
 		ExternalNode,
@@ -333,6 +340,7 @@ var (
 		Multicluster:                {},
 		L7NetworkPolicy:             {},
 		LoadBalancerModeDSR:         {},
+		DSRDispatchL2:               {},
 		CleanupStaleUDPSvcConntrack: {},
 		EgressTrafficShaping:        {},
 		EgressSeparateSubnet:        {},

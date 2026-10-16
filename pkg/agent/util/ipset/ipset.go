@@ -30,6 +30,8 @@ const (
 	HashNet    SetType = "hash:net"
 	HashIP     SetType = "hash:ip"
 	HashIPPort SetType = "hash:ip,port"
+	// The hash:mac set type uses a hash to store MAC addresses. It has no address family.
+	HashMAC SetType = "hash:mac"
 )
 
 // memberPattern is used to match the members part of ipset list result.
