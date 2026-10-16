@@ -308,25 +308,6 @@ function wait_for_antrea_windows_pods_ready {
     check_dhcp_status
 }
 
-function wait_for_antrea_windows_processes_ready {
-    kubectl apply -f "${WORKDIR}/antrea.yml"
-    kubectl rollout restart deployment/coredns -n kube-system
-    kubectl rollout status deployment/coredns -n kube-system
-    kubectl rollout status deployment.apps/antrea-controller -n kube-system
-    kubectl rollout status daemonset/antrea-agent -n kube-system
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
-        echo "===== Run script to startup Antrea agent ====="
-        ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start-AntreaAgent.ps1 && powershell 'c:\k\antrea\Start-AntreaAgent.ps1 -AntreaVersion ${ANTREA_VERSION}'"
-        for i in `seq 5`; do
-            sleep 5
-            timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
-        done
-        sleep 10
-    done
-    check_dhcp_status
-}
-
 function clean_ns {
     ns=$1
     matching_ns=$(kubectl get ns | awk -v ns="${ns}" '$1 ~ ns {print $1}')
@@ -486,7 +467,6 @@ function deliver_antrea_windows {
     gzip -f antrea-windows.tar
 
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
-    sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
         revert_snapshot_windows ${WORKER_NAME}
         k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.10.1")
@@ -763,14 +743,8 @@ function run_conformance_windows {
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
-    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
-        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
-        wait_for_antrea_windows_processes_ready
-    else
-        # Antrea Windows agent Pods are deployed for Windows Conformance test
-        clean_for_windows_install_cni
-        wait_for_antrea_windows_pods_ready
-    fi
+    clean_for_windows_install_cni
+    wait_for_antrea_windows_pods_ready
 
     echo "====== Run test with conformance test ======"
     export KUBE_TEST_REPO_LIST=${WORKDIR}/repo_list

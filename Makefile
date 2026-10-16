@@ -152,11 +152,6 @@ antrea-cni:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-cni
 
-.PHONY: antrea-cni
-antrea-cni-release:
-	@mkdir -p $(BINDIR)
-	$(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-cni
-
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)

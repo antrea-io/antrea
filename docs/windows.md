@@ -18,8 +18,6 @@
       - [4. Prepare Node environment needed by antrea-agent](#4-prepare-node-environment-needed-by-antrea-agent)
       - [5. Run kubeadm to join the Node](#5-run-kubeadm-to-join-the-node)
       - [Verify your installation](#verify-your-installation)
-  - [Installation as a Service](#installation-as-a-service)
-  - [Manually run antrea-agent on Windows worker Nodes](#manually-run-antrea-agent-on-windows-worker-nodes)
 - [Known issues](#known-issues)
 <!-- /toc -->
 
@@ -52,15 +50,13 @@ The following components should be configured and run on the Windows Node.
 * OVS daemons
 * antrea-agent
 
-antrea-agent and the OVS daemons can either run as Pods (containerized) or as
-Windows services, and the following configurations are supported:
+antrea-agent runs as a Pod (containerized) on Windows Nodes. The OVS daemons can
+either run as a Pod (containerized) or as Windows services:
 
 | OVS daemons      | antrea-agent     | Supported         | Refer to |
 | ---------------- | ---------------- | ----------------- | -------- |
 | Containerized    | Containerized    | Yes (recommended) | [Installation as a Pod](#installation-as-a-pod) |
-| Containerized    | Windows Service  | No                | N/A |
 | Windows Services | Containerized    | Yes               | [Installation as a Pod](#installation-as-a-pod) |
-| Windows Services | Windows Services | Yes               | [Installation as a Service](#installation-as-a-service) |
 
 ### Antrea Windows demo
 
@@ -72,12 +68,9 @@ the Windows Nodes in the demo.
 
 ## Deploying Antrea on Windows worker Nodes
 
-Running Antrea on Windows Nodes requires the containerd container runtime. The
-recommended installation method is [Installation as a
-Pod](#installation-as-a-pod), and it requires containerd 1.6 or higher. If you
-prefer running the Antrea Agent as a Windows service, or if you are using
-containerd 1.5, you can use the [Installation as a
-Service](#installation-as-a-service) method.
+Running Antrea on Windows Nodes requires the containerd container runtime (version
+1.6 or higher). Antrea is deployed using [Installation as a
+Pod](#installation-as-a-pod).
 
 Starting from v2.1, Antrea Windows image is built on Linux host with docker buildx
 and uses [hpc](https://github.com/microsoft/windows-host-process-containers-base-image)
@@ -325,76 +318,6 @@ win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.2
 kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 ```
-
-### Installation as a Service
-
-Install Antrea as usual. The following command deploys Antrea with the version
-specified by `<TAG>`:
-
-```bash
-kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
-```
-
-When running the Antrea Agent as a Windows service, no DaemonSet is created for
-Windows worker Nodes. You will need to ensure that [nssm](https://nssm.cc/) is
-installed on all your Windows Nodes. `nssm` is a handy tool to manage services
-on Windows.
-
-To prepare your Windows worker Nodes, follow the steps in [Join Windows worker Nodes](#join-windows-worker-nodes).
-With this installation method, OVS daemons are always run as services (not
-containerized), and you will need to run `Install-OVS.ps1` to install them.
-
-When your Nodes are ready, run the following scripts to install the antrea-agent
-service. NOTE: `<KubernetesVersion>`, `<KubeconfigPath>` and
-`<KubeletKubeconfigPath>` should be set by you. For example:
-
-```powershell
-$KubernetesVersion="v1.29.0"
-$KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
-$KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
-```
-
-```powershell
-$TAG="v2.0.0"
-$KubernetesVersion="<KubernetesVersion>"
-$KubeConfig="<KubeconfigPath>"
-$KubeletKubeconfigPath="<KubeletKubeconfigPath>"
-$KubernetesHome="c:/k"
-$AntreaHome="c:/k/antrea"
-
-curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
-Import-Module ./Helper.psm1
-
-Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
-
-New-DirectoryIfNotExist "${AntreaHome}/logs"
-nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
-
-nssm set antrea-agent DependOnService ovs-vswitchd
-nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
-
-Start-Service antrea-agent
-```
-
-### Manually run antrea-agent on Windows worker Nodes
-
-Antrea also provides powershell scripts which help install and run the Antrea
-Agent manually, please complete the steps in
-[Installation](#installation-as-a-pod) section, and skip the
-[Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset) step.
-Then run the following commands in powershell:
-
-```powershell
-mkdir c:\k\antrea
-cd c:\k\antrea
-curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start-AntreaAgent.ps1
-# Run antrea-agent
-# $KubeConfigPath is the path of kubeconfig file
-./Start-AntreaAgent.ps1 -kubeconfig $KubeConfigPath
-```
-
-> Note: Some features such as supportbundle collection are not supported in this
-> way. It's recommended to run antrea-agent as a Pod.
 
 ## Known issues
 
