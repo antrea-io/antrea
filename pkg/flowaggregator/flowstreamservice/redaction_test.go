@@ -138,10 +138,13 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 		name        string
 		source      disclosureTier
 		destination disclosureTier
-		// denied makes the record show a dropped connection, which withholds the Namespace of an
-		// unidentified endpoint on top of everything else.
-		denied bool
-		want   []string
+		// denied makes the record show a connection dropped by an egress policy, and deniedInbound one
+		// dropped by an ingress policy. Either withholds the Namespace of an unidentified destination
+		// on top of everything else; an unidentified source's Namespace is never withheld (see
+		// TestRedactFlow_PeerNamespace).
+		denied        bool
+		deniedInbound bool
+		want          []string
 	}{
 		{
 			name:        "identity on both endpoints",
@@ -151,26 +154,6 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 				[]string{"source_disclosure", "destination_disclosure"}),
 		},
 		{
-			name:        "neither endpoint identified, connection allowed",
-			source:      tierFlow,
-			destination: tierFlow,
-			want: concat(flowTier,
-				// A Namespace is disclosed for an allowed connection: it is already discoverable
-				// through CoreDNS, and an inbound connection has no other answer to "who called
-				// my service?".
-				[]string{"source_pod_namespace", "destination_pod_namespace"},
-				[]string{"source_disclosure", "destination_disclosure"}),
-		},
-		{
-			name:        "neither endpoint identified, connection denied",
-			source:      tierFlow,
-			destination: tierFlow,
-			denied:      true,
-			// A denied connection reveals neither where it came from nor where it was going, which
-			// is what closes the Pod-CIDR-to-Namespace enumeration oracle.
-			want: concat(flowTier, []string{"source_disclosure", "destination_disclosure"}),
-		},
-		{
 			name:        "the client's own endpoint is disclosed in full",
 			source:      tierFull,
 			destination: tierFlow,
@@ -178,6 +161,15 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			// the zero value, which proto reflection does not report as populated.
 			want: concat(flowTier, sourceIdentity, sourceFull,
 				[]string{"destination_pod_namespace", "destination_disclosure"}),
+		},
+		{
+			name:        "the client's own connection to an unidentified destination, denied",
+			source:      tierFull,
+			destination: tierFlow,
+			denied:      true,
+			// A denied connection does not reveal where it was going, which is what closes the
+			// Pod-CIDR-to-Namespace enumeration oracle.
+			want: concat(flowTier, sourceIdentity, sourceFull, []string{"destination_disclosure"}),
 		},
 		{
 			name:        "an identifiable peer of the client's own endpoint",
@@ -193,15 +185,28 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			want: concat(flowTier, destinationIdentity, destinationFull,
 				[]string{"source_pod_namespace", "source_disclosure"}),
 		},
+		{
+			name:          "an inbound flow from an unidentified source, connection denied",
+			source:        tierFlow,
+			destination:   tierFull,
+			deniedInbound: true,
+			// The peer initiated the connection, so its Namespace is disclosed: see
+			// TestRedactFlow_PeerNamespace.
+			want: concat(flowTier, destinationIdentity, destinationFull,
+				[]string{"source_pod_namespace", "source_disclosure"}),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := fullFlow()
 			if tt.denied {
+				f.K8S.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+			}
+			if tt.deniedInbound {
 				f.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
 			}
 
-			redacted := redactFlow(f, tt.source, tt.destination)
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
 
 			assert.ElementsMatch(t, tt.want, populatedFields(redacted.GetK8S()))
 			assert.Equal(t, tt.source.disclosure(), redacted.GetK8S().GetSourceDisclosure())
@@ -252,7 +257,7 @@ var (
 func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	f := fullFlow()
 
-	redacted := redactFlow(f, tierFull, tierIdentity)
+	redacted := redactFlow(f, tierFull, tierIdentity, tierFlow)
 
 	assert.ElementsMatch(t, recordFieldsDisclosed, populatedFields(redacted))
 	// Spot-check that a disclosed field carries the original value rather than merely being set.
@@ -260,6 +265,19 @@ func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	assert.Equal(t, f.GetStats(), redacted.GetStats())
 	assert.Equal(t, f.GetAggregation(), redacted.GetAggregation())
 	assert.Equal(t, f.GetProxySnatIp(), redacted.GetProxySnatIp())
+}
+
+// TestRedactFlow_IpfixWithEndpointsInFull pins down that withholding only the identity of a
+// cluster-scoped policy does not cost the record its exporter IP: ipfix follows the endpoints, not
+// the cluster segment.
+func TestRedactFlow_IpfixWithEndpointsInFull(t *testing.T) {
+	f := fullFlow()
+	f.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+
+	redacted := redactFlow(f, tierFull, tierFull, tierFlow)
+
+	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
+	assert.Equal(t, f.GetIpfix(), redacted.GetIpfix())
 }
 
 // TestRedactFlow_RecordLevelFieldsAreClassified fails if a field is added to the Flow message
@@ -301,58 +319,86 @@ func flowFieldNames() []string {
 	return names
 }
 
-// TestRedactFlow_ClusterScopedPolicy covers the case the disclosure marker exists for: a
-// cluster-scoped policy has no Namespace to begin with, so a client must be able to tell that empty
-// field apart from one that was withheld.
+// TestRedactFlow_ClusterScopedPolicy covers the cluster segment: a cluster-scoped policy belongs to
+// neither endpoint's Namespace, so its identity follows what the client holds cluster-wide, whichever
+// side of the connection it was evaluated on and however much the client may see of either endpoint.
+// The empty policy Namespace of a cluster-scoped policy is also what the disclosure marker exists to
+// disambiguate from a withheld one.
 func TestRedactFlow_ClusterScopedPolicy(t *testing.T) {
 	f := fullFlow()
 	f.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
 	f.K8S.IngressNetworkPolicyNamespace = ""
 	f.K8S.IngressNetworkPolicyName = "cluster-deny"
 	f.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	f.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8SCNP
+	f.K8S.EgressNetworkPolicyNamespace = ""
+	f.K8S.EgressNetworkPolicyName = "cluster-egress"
 
-	// The policy ran on the destination's side, so the destination's tier decides.
-	redacted := redactFlow(f, tierFull, tierFlow)
+	tests := []struct {
+		name        string
+		source      disclosureTier
+		destination disclosureTier
+		cluster     disclosureTier
+		wantNamed   bool
+	}{
+		{name: "nothing held cluster-wide, endpoints in full", source: tierFull, destination: tierFull, cluster: tierFlow},
+		{name: "nothing held cluster-wide, endpoints identified", source: tierIdentity, destination: tierIdentity, cluster: tierFlow},
+		{name: "identity held cluster-wide, endpoints unidentified", source: tierFlow, destination: tierFlow, cluster: tierIdentity, wantNamed: true},
+		{name: "flows held cluster-wide, endpoints unidentified", source: tierFlow, destination: tierFlow, cluster: tierFull, wantNamed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			redacted := redactFlow(f, tt.source, tt.destination, tt.cluster)
 
-	// The action and type stay: the client learns that a cluster-scoped policy dropped its
-	// connection, so it knows to escalate to the platform team rather than to the peer.
-	assert.Equal(t, flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP, redacted.GetK8S().GetIngressNetworkPolicyType())
-	assert.Equal(t, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, redacted.GetK8S().GetIngressNetworkPolicyRuleAction())
-	// The identity does not, and the marker says the difference is a redaction.
-	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
-	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyNamespace())
-	assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, redacted.GetK8S().GetDestinationDisclosure())
-
-	// The same policy evaluated on the client's own side is disclosed in full.
-	redacted = redactFlow(f, tierFull, tierFull)
-	assert.Equal(t, "cluster-deny", redacted.GetK8S().GetIngressNetworkPolicyName())
+			// The action and type stay: the client learns that a cluster-scoped policy dropped its
+			// connection, so it knows to escalate to the platform team rather than to the peer.
+			assert.Equal(t, flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP, redacted.GetK8S().GetIngressNetworkPolicyType())
+			assert.Equal(t, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, redacted.GetK8S().GetIngressNetworkPolicyRuleAction())
+			assert.Equal(t, flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8SCNP, redacted.GetK8S().GetEgressNetworkPolicyType())
+			if tt.wantNamed {
+				assert.Equal(t, "cluster-deny", redacted.GetK8S().GetIngressNetworkPolicyName())
+				assert.Equal(t, "cluster-egress", redacted.GetK8S().GetEgressNetworkPolicyName())
+			} else {
+				assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
+				assert.Empty(t, redacted.GetK8S().GetEgressNetworkPolicyName())
+				assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyUid())
+				assert.Empty(t, redacted.GetK8S().GetEgressNetworkPolicyRuleName())
+			}
+			// The cluster segment does not change what is disclosed about the endpoints.
+			assert.Equal(t, tt.source.disclosure(), redacted.GetK8S().GetSourceDisclosure())
+			assert.Equal(t, tt.destination.disclosure(), redacted.GetK8S().GetDestinationDisclosure())
+		})
+	}
 }
 
-// TestRedactFlow_EgressPolicyFollowsTheSource pins down that a policy's fields are gated by the
-// endpoint whose side it was evaluated on, not by where the policy object lives.
-func TestRedactFlow_EgressPolicyFollowsTheSource(t *testing.T) {
+// TestRedactFlow_NamespacedPolicyFollowsItsEndpoint pins down that a namespaced policy's identity is
+// gated by the tier of the Namespace segment it is enforced in, which for an egress policy is the
+// source's and for an ingress policy the destination's, and not by anything the client holds
+// cluster-wide.
+func TestRedactFlow_NamespacedPolicyFollowsItsEndpoint(t *testing.T) {
 	f := fullFlow()
 
-	// The source is disclosed, the destination is not: the egress policy, evaluated at the source,
-	// survives; the ingress policy, evaluated at the destination, does not.
-	redacted := redactFlow(f, tierFull, tierFlow)
+	// The source is disclosed, the destination is not: the egress policy, enforced in the source's
+	// Namespace, survives; the ingress policy, enforced in the destination's, does not.
+	redacted := redactFlow(f, tierFull, tierFlow, tierFull)
 	assert.Equal(t, "allow-destination", redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
 
 	// And the other way around.
-	redacted = redactFlow(f, tierFlow, tierFull)
+	redacted = redactFlow(f, tierFlow, tierFull, tierFull)
 	assert.Empty(t, redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
 }
 
 // TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity pins down where the boundary sits: naming
-// the policy that governed a connection is what "get flows/identity" in the peer's Namespace buys,
-// so that "which of your policies dropped my traffic" is answerable once that Namespace has
-// consented to being identified. Placement is not part of that bargain.
+// the namespaced policy that governed a connection is what "get flows/identity" in the peer's
+// Namespace buys, so that "which of your policies dropped my traffic" is answerable once that
+// Namespace has consented to being identified. It does not buy the names of cluster-scoped
+// policies: those are the cluster segment's to grant. Placement is not part of that bargain.
 func TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity(t *testing.T) {
 	f := fullFlow()
 
-	redacted := redactFlow(f, tierIdentity, tierIdentity)
+	redacted := redactFlow(f, tierIdentity, tierIdentity, tierFlow)
 
 	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
 	assert.Equal(t, "ingress-rule", redacted.GetK8S().GetIngressNetworkPolicyRuleName())
@@ -386,7 +432,7 @@ func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			redacted := redactFlow(f, tt.source, tt.destination)
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
 
 			assert.Equal(t, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, redacted.GetK8S().GetFlowType())
 			// Which Node is what stays withheld.
@@ -394,6 +440,88 @@ func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
 			assert.Empty(t, redacted.GetK8S().GetDestinationNodeUid())
 		})
 	}
+}
+
+// TestRedactFlow_PeerNamespace covers when the Namespace of an unidentified endpoint survives: always
+// for the source, which is the peer that initiated the connection, and for the destination only if the
+// connection was allowed, since a denied one would otherwise let the client read the Namespace of any
+// address it chose to probe.
+func TestRedactFlow_PeerNamespace(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	reject := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	tests := []struct {
+		name        string
+		source      disclosureTier
+		destination disclosureTier
+		modify      func(k *flowpb.Kubernetes)
+		wantSource  string
+		wantDest    string
+	}{
+		{
+			name:        "inbound allowed",
+			source:      tierFlow,
+			destination: tierFull,
+			modify:      func(k *flowpb.Kubernetes) {},
+			wantSource:  "ns-a",
+			wantDest:    "ns-b",
+		},
+		{
+			name:        "inbound denied by the destination's policy",
+			source:      tierFlow,
+			destination: tierFull,
+			modify:      func(k *flowpb.Kubernetes) { k.IngressNetworkPolicyRuleAction = drop },
+			wantSource:  "ns-a",
+			wantDest:    "ns-b",
+		},
+		{
+			name:        "outbound allowed",
+			source:      tierFull,
+			destination: tierFlow,
+			modify:      func(k *flowpb.Kubernetes) {},
+			wantSource:  "ns-a",
+			wantDest:    "ns-b",
+		},
+		{
+			name:        "outbound denied by the source's own policy",
+			source:      tierFull,
+			destination: tierFlow,
+			modify:      func(k *flowpb.Kubernetes) { k.EgressNetworkPolicyRuleAction = drop },
+			wantSource:  "ns-a",
+		},
+		{
+			name:        "outbound rejected by the peer's policy",
+			source:      tierFull,
+			destination: tierFlow,
+			modify:      func(k *flowpb.Kubernetes) { k.IngressNetworkPolicyRuleAction = reject },
+			wantSource:  "ns-a",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := fullFlow()
+			tt.modify(f.K8S)
+
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
+
+			assert.Equal(t, tt.wantSource, redacted.GetK8S().GetSourcePodNamespace())
+			assert.Equal(t, tt.wantDest, redacted.GetK8S().GetDestinationPodNamespace())
+			if tt.source == tierFlow {
+				// Only the Namespace is disclosed: the source's identity stays withheld.
+				assert.Empty(t, redacted.GetK8S().GetSourcePodName())
+				assert.Empty(t, redacted.GetK8S().GetSourcePodLabels())
+			}
+		})
+	}
+}
+
+func TestClusterScopedPolicy(t *testing.T) {
+	assert.False(t, clusterScopedPolicy(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_UNSPECIFIED))
+	assert.False(t, clusterScopedPolicy(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S))
+	assert.False(t, clusterScopedPolicy(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP))
+	assert.True(t, clusterScopedPolicy(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP))
+	assert.True(t, clusterScopedPolicy(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8SCNP))
+	// A type this build does not know fails closed.
+	assert.True(t, clusterScopedPolicy(flowpb.NetworkPolicyType(1000)))
 }
 
 func TestConnectionAllowed(t *testing.T) {
