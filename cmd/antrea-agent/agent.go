@@ -162,6 +162,9 @@ func run(o *Options) error {
 	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
 	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
+		if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
+			metrics.InitializeBGPMetrics()
+		}
 	}
 	// Create ovsdb and openflow clients.
 	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
