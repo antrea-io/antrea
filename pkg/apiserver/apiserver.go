@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/webhook"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/egressaddressgroup"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/egressgroup"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/supportbundlecollection"
@@ -112,6 +113,7 @@ type ExtraConfig struct {
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
 	egressGroupStore              storage.Interface
+	egressAddressGroupStore       storage.Interface
 	bundleCollectionStore         storage.Interface
 	podInformer                   coreinformers.PodInformer
 	nodeInformer                  coreinformers.NodeInformer
@@ -159,7 +161,8 @@ type completedConfig struct {
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	k8sClient kubernetes.Interface,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, egressGroupStore, supportBundleCollectionStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, egressGroupStore, egressAddressGroupStore,
+	supportBundleCollectionStore storage.Interface,
 	podInformer coreinformers.PodInformer,
 	nodeInformer coreinformers.NodeInformer,
 	eeInformer crdv1a2informers.ExternalEntityInformer,
@@ -182,6 +185,7 @@ func NewConfig(
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
 			egressGroupStore:              egressGroupStore,
+			egressAddressGroupStore:       egressAddressGroupStore,
 			bundleCollectionStore:         supportBundleCollectionStore,
 			podInformer:                   podInformer,
 			nodeInformer:                  nodeInformer,
@@ -217,6 +221,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	ipGroupAssociationStorage := ipgroupassociation.NewREST(c.extraConfig.podInformer, c.extraConfig.nodeInformer, c.extraConfig.eeInformer, c.extraConfig.networkPolicyController, c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
+	egressAddressGroupStorage := egressaddressgroup.NewREST(c.extraConfig.egressAddressGroupStore)
 	bundleCollectionStorage := supportbundlecollection.NewREST(c.extraConfig.bundleCollectionStore)
 	bundleCollectionStatusStorage := supportbundlecollection.NewStatusREST(c.extraConfig.bundleCollectionController)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, parameterCodec, Codecs)
@@ -232,6 +237,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	cpv1beta2Storage["groupmembers"] = groupMembershipStorage
 	cpv1beta2Storage["egressgroups"] = egressGroupStorage
+	cpv1beta2Storage["egressaddressgroups"] = egressAddressGroupStorage
 	cpv1beta2Storage["supportbundlecollections"] = bundleCollectionStorage
 	cpv1beta2Storage["supportbundlecollections/status"] = bundleCollectionStatusStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage

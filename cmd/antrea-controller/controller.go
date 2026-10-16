@@ -181,6 +181,7 @@ func run(o *Options) error {
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	egressGroupStore := egressstore.NewEgressGroupStore()
+	egressAddressGroupStore := egressstore.NewEgressAddressGroupStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
@@ -257,7 +258,8 @@ func run(o *Options) error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolController, egressGroupStore)
+		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolController, egressGroupStore,
+			egressAddressGroupStore)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
@@ -301,6 +303,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		egressGroupStore,
+		egressAddressGroupStore,
 		bundleCollectionStore,
 		podInformer,
 		nodeInformer,
@@ -504,6 +507,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	egressGroupStore storage.Interface,
+	egressAddressGroupStore storage.Interface,
 	supportBundleCollectionStore storage.Interface,
 	podInformer coreinformers.PodInformer,
 	nodeInformer coreinformers.NodeInformer,
@@ -578,6 +582,7 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		egressGroupStore,
+		egressAddressGroupStore,
 		supportBundleCollectionStore,
 		podInformer,
 		nodeInformer,

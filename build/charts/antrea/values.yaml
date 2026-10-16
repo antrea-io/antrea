@@ -133,6 +133,12 @@ egress:
   # inheriting the parent interface’s MAC. Useful in cloud environments that require
   # unique MAC addresses per interface.
   uniqueMACForSubInterfaces: true
+  # -- How the Node of a Pod sends the Pod's Egress traffic to the Egress Node,
+  # when the Egress IP is on another Node, in noEncap mode. "tunnel" encapsulates
+  # the traffic. "l2" sends it unchanged to the MAC address of the Egress Node;
+  # it requires the EgressDispatchL2 feature gate, and all Nodes in one L2
+  # segment. It is not supported with enableBridgingMode.
+  dispatch: tunnel
 
 nodePortLocal:
   # -- Enable the NodePortLocal feature.

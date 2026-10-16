@@ -23,6 +23,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 var (
@@ -56,11 +57,18 @@ type Interface interface {
 	// if linkName is nil, it should remove the routes.
 	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
 
-	// AddSNATRule should add rule to SNAT outgoing traffic with the mark, using the provided SNAT IP.
+	// AddSNATRule should add rule to SNAT outgoing traffic with the mark, using the provided SNAT IP. With the Egress
+	// l2 dispatch, it also creates the ipset of the SNAT IP, see SetEgressRemotePodIPs.
 	AddSNATRule(snatIP net.IP, mark uint32) error
 
-	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
+	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark, and the ipset of the SNAT IP.
 	DeleteSNATRule(mark uint32) error
+
+	// SetEgressRemotePodIPs sets the IPs of the Pods on other Nodes which use the local Egress IP with the mark. It
+	// is used by the Egress l2 dispatch, which delivers their packets from the transport interface without a tunnel:
+	// the packets from these IPs get the mark, so that the SNAT rule of the Egress IP applies to them. AddSNATRule must
+	// have been called for the mark.
+	SetEgressRemotePodIPs(mark uint32, podIPs sets.Set[string]) error
 
 	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egresses to the cache.
 	RestoreEgressRoutesAndRules(minTableID, maxTableID int) error
@@ -76,6 +84,20 @@ type Interface interface {
 
 	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
 	DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error
+
+	// AddL2DispatchPeerRoutes installs the policy routing which sends the packets marked for the peer Node with the
+	// given index by the l2 dispatch to the transport IPs of the peer Node, through the transport interface. It
+	// replaces the routing of the index if it exists.
+	AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *utilip.DualStackIPs) error
+
+	// DeleteL2DispatchPeerRoutes deletes the policy routing of the peer Node with the given index. It does nothing
+	// if the routing does not exist.
+	DeleteL2DispatchPeerRoutes(peerIndex uint32) error
+
+	// ListL2DispatchPeers returns the indices of the peer Nodes whose l2 dispatch routing exists on the Node, with
+	// the transport IPs which the routing sends packets to. The IPs are empty for an index which has rules but no
+	// routes. It lets the indices survive an agent restart.
+	ListL2DispatchPeers() (map[uint32]*utilip.DualStackIPs, error)
 
 	// AddNodePortConfigs adds routing configurations for redirecting traffic to OVS when a NodePort Service is created.
 	AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
