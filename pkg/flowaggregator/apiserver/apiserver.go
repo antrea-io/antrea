@@ -79,13 +79,13 @@ func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggre
 
 // installHealthChecks registers checks reflecting FlowStreamService's state:
 //   - "flowstreamservice-live" on healthz, livez and readyz (AddHealthChecks). It fails only once
-//     FlowStreamService has failed, i.e. could not start or stopped serving on its own. Nothing
-//     retries a failed FlowStreamService until the next certificate update, so restarting the
-//     whole container, collectors included, is the intended recovery rather than a side effect.
+//     FlowStreamService has failed, i.e. could not start, stopped serving on its own, or could not
+//     update its certificate. Restarting the whole container, collectors included, is the
+//     intended recovery rather than a side effect.
 //     It is also on readyz, as a Pod that needs a restart cannot be ready.
 //   - "flowstreamservice-ready" on readyz only (AddReadyzChecks). It fails whenever
-//     FlowStreamService is not serving, including while starting and while draining for a
-//     certificate update, neither of which a restart would help: livez must not fail for those.
+//     FlowStreamService is not serving, including while starting and while stopping, neither of
+//     which a restart would help: livez must not fail for those.
 //
 // This must run before GenericAPIServer.PrepareRun installs the actual endpoint handlers (called
 // from flowAggregatorAPIServer.Run), which New's own caller does separately and later, so
