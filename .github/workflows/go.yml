@@ -87,6 +87,27 @@ jobs:
           name: codecov-unit-test
           fail_ci_if_error: ${{ github.event_name == 'push' }}
 
+  test-unit-ovs-32bit:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    name: OVSDB unit test (linux/386)
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Check-out code
+      uses: actions/checkout@v7
+      with:
+        show-progress: false
+    - name: Set up Go using version from .go-version
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: '.go-version'
+    # Exercise 32-bit integer handling without requiring an Arm runner.
+    - name: Run OVSDB unit tests on a 32-bit architecture
+      env:
+        GOARCH: '386'
+        CGO_ENABLED: '0'
+      run: go test -mod=readonly ./pkg/ovs/ovsconfig -count=1
+
   test-integration:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
