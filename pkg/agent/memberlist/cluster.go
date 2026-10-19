@@ -558,7 +558,12 @@ func (c *Cluster) filterEIPsFromNodeLabels(node *corev1.Node) sets.Set[string] {
 	pools := sets.New[string]()
 	eips, _ := c.externalIPPoolLister.List(labels.Everything())
 	for _, eip := range eips {
-		nodeSelector, _ := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
+		nodeSelector, err := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
+		if err != nil {
+			// Historical resources may not have passed current admission validation.
+			klog.ErrorS(err, "Failed to parse ExternalIPPool NodeSelector", "ExternalIPPool", eip.Name)
+			continue
+		}
 		if nodeSelector.Matches(labels.Set(node.GetLabels())) {
 			pools.Insert(eip.Name)
 		}

@@ -42,6 +42,7 @@ import (
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	crdlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/ip"
 )
 
@@ -1067,4 +1068,57 @@ func TestCluster_RejoinNodes(t *testing.T) {
 		mockMemberlist.EXPECT().Join([]string{"10.0.0.2"}).Return(1, nil)
 		fakeCluster.cluster.RejoinNodes()
 	})
+}
+
+func TestFilterEIPsFromNodeLabelsInvalidSelector(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector metav1.LabelSelector
+	}{
+		{
+			name: "In without values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpIn},
+			}},
+		},
+		{
+			name: "Exists with values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpExists, Values: []string{"worker"}},
+			}},
+		},
+		{
+			name:     "invalid key",
+			selector: metav1.LabelSelector{MatchLabels: map[string]string{"invalid/key/name": "worker"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+			for name, selector := range map[string]metav1.LabelSelector{
+				"invalid":     tt.selector,
+				"all":         {},
+				"matching":    {MatchLabels: map[string]string{"role": "worker"}},
+				"nonmatching": {MatchLabels: map[string]string{"role": "control-plane"}},
+			} {
+				require.NoError(t, indexer.Add(&crdv1b1.ExternalIPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: name},
+					Spec:       crdv1b1.ExternalIPPoolSpec{NodeSelector: selector},
+				}))
+			}
+			c := &Cluster{externalIPPoolLister: crdlister.NewExternalIPPoolLister(indexer)}
+			node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}}}
+			// A historical invalid pool must not interrupt processing of other pools on Node events.
+			assert.ElementsMatch(t, []string{"all", "matching"}, c.filterEIPsFromNodeLabels(node).UnsortedList())
+
+			// Correcting the selector makes the pool eligible again.
+			require.NoError(t, indexer.Update(&crdv1b1.ExternalIPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "invalid"},
+				Spec: crdv1b1.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"role": "worker"},
+				}},
+			}))
+			assert.ElementsMatch(t, []string{"all", "matching", "invalid"}, c.filterEIPsFromNodeLabels(node).UnsortedList())
+		})
+	}
 }
