@@ -20,8 +20,10 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -45,6 +47,16 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		if err := json.Unmarshal(review.Request.OldObject.Raw, &oldObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing old ExternalIPPool")
 			return newAdmissionResponseForErr(err)
+		}
+	}
+
+	if review.Request.Operation == admv1.Create || review.Request.Operation == admv1.Update {
+		// Validate only the incoming selector so historical invalid selectors can be corrected.
+		errs := metav1validation.ValidateLabelSelector(&newObj.Spec.NodeSelector,
+			metav1validation.LabelSelectorValidationOptions{},
+			field.NewPath("spec", "nodeSelector"))
+		if len(errs) > 0 {
+			return newAdmissionResponseForErr(errs.ToAggregate())
 		}
 	}
 

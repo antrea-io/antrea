@@ -1863,6 +1863,9 @@ spec:
                         properties:
                           key:
                             type: string
+                            pattern: '^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$'
+                            allOf:
+                              - pattern: '^([^/]{1,253}/)?[^/]+$'
                           operator:
                             enum:
                               - In
@@ -1873,13 +1876,35 @@ spec:
                           values:
                             items:
                               type: string
+                              maxLength: 63
                               pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                             type: array
                         type: object
+                        required:
+                          - key
+                          - operator
+                        oneOf:
+                          - properties:
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                              values:
+                                minItems: 1
+                            required:
+                              - values
+                          - properties:
+                              operator:
+                                enum:
+                                  - Exists
+                                  - DoesNotExist
+                              values:
+                                maxItems: 0
                       type: array
                     matchLabels:
                       additionalProperties:
                         type: string
+                        maxLength: 63
                         pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                       type: object
             status:

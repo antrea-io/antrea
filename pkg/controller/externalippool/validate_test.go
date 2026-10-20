@@ -367,3 +367,160 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateExternalIPPoolNodeSelector(t *testing.T) {
+	tests := []struct {
+		name         string
+		selector     metav1.LabelSelector
+		expectedPath string
+	}{
+		{
+			name: "empty selector",
+		},
+		{
+			name:     "valid matchLabels",
+			selector: metav1.LabelSelector{MatchLabels: map[string]string{"example.com/role": "worker"}},
+		},
+		{
+			name: "valid In",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpIn, Values: []string{"worker"}},
+			}},
+		},
+		{
+			name: "valid NotIn",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpNotIn, Values: []string{"control-plane"}},
+			}},
+		},
+		{
+			name: "valid Exists",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpExists},
+			}},
+		},
+		{
+			name: "valid DoesNotExist",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpDoesNotExist},
+			}},
+		},
+		{
+			name: "In without values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpIn},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].values",
+		},
+		{
+			name: "NotIn without values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpNotIn},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].values",
+		},
+		{
+			name: "Exists with values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpExists, Values: []string{"worker"}},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].values",
+		},
+		{
+			name: "DoesNotExist with values",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpDoesNotExist, Values: []string{"worker"}},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].values",
+		},
+		{
+			name:         "invalid matchLabels key",
+			selector:     metav1.LabelSelector{MatchLabels: map[string]string{"invalid/key/name": "worker"}},
+			expectedPath: "spec.nodeSelector.matchLabels",
+		},
+		{
+			name: "invalid expression key",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "invalid/key/name", Operator: metav1.LabelSelectorOpExists},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].key",
+		},
+		{
+			name: "missing expression key",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Operator: metav1.LabelSelectorOpExists},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].key",
+		},
+		{
+			name: "unknown operator",
+			selector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: "invalid"},
+			}},
+			expectedPath: "spec.nodeSelector.matchExpressions[0].operator",
+		},
+		{
+			name:         "invalid matchLabels value",
+			selector:     metav1.LabelSelector{MatchLabels: map[string]string{"role": "invalid/value"}},
+			expectedPath: "spec.nodeSelector.matchLabels",
+		},
+	}
+	for _, tt := range tests {
+		for _, operation := range []admv1.Operation{admv1.Create, admv1.Update} {
+			t.Run(tt.name+"/"+string(operation), func(t *testing.T) {
+				c := newController(nil)
+				pool := newExternalIPPool("pool", "192.0.2.0/24", "", "")
+				oldPool := pool.DeepCopy()
+				pool.Spec.NodeSelector = tt.selector
+				request := &admv1.AdmissionRequest{
+					Operation: operation,
+					Object:    runtime.RawExtension{Raw: marshal(pool)},
+				}
+				if operation == admv1.Update {
+					request.OldObject.Raw = marshal(oldPool)
+				}
+				response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: request})
+				if tt.expectedPath == "" {
+					assert.True(t, response.Allowed)
+					assert.Nil(t, response.Result)
+				} else {
+					assert.False(t, response.Allowed)
+					require.NotNil(t, response.Result)
+					assert.Contains(t, response.Result.Message, tt.expectedPath)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateExternalIPPoolRepairNodeSelector(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector metav1.LabelSelector
+	}{
+		{name: "empty selector"},
+		{
+			name:     "valid matchLabels",
+			selector: metav1.LabelSelector{MatchLabels: map[string]string{"role": "worker"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newController(nil)
+			oldPool := newExternalIPPool("pool", "192.0.2.0/24", "", "")
+			oldPool.Spec.NodeSelector.MatchExpressions = []metav1.LabelSelectorRequirement{
+				{Key: "role", Operator: metav1.LabelSelectorOpIn},
+			}
+			require.NoError(t, c.crdInformerFactory.Crd().V1beta1().ExternalIPPools().Informer().GetIndexer().Add(oldPool))
+			pool := oldPool.DeepCopy()
+			pool.Spec.NodeSelector = tt.selector
+			response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Update,
+				OldObject: runtime.RawExtension{Raw: marshal(oldPool)},
+				Object:    runtime.RawExtension{Raw: marshal(pool)},
+			}})
+			assert.True(t, response.Allowed, "repairing a historical invalid selector must be allowed")
+			assert.Nil(t, response.Result)
+		})
+	}
+}
