@@ -182,8 +182,8 @@ func newFullConjMatchFlowContext(featureNetworkPolicy *featureNetworkPolicy, mat
 
 // TestConjMatchFlowContextActionCap verifies that once a conjunctive match flow already holds the maximum number of
 // conjunctive actions, adding one more is rejected with an error instead of silently building an oversized FlowMod.
-// This guards against antrea.io/antrea/issues (large numbers of NetworkPolicy rules sharing the same match condition
-// overflowing the OpenFlow message size limit).
+// This guards against large numbers of NetworkPolicy rules sharing the same match condition overflowing the OpenFlow
+// message size limit.
 func TestConjMatchFlowContextActionCap(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	preparePipelines()
@@ -231,6 +231,107 @@ func TestAddActionToConjunctiveMatchCap(t *testing.T) {
 	assert.Len(t, context.actions, maxActionsPerConjMatchFlow)
 	_, found := clause.matches[matcherKey]
 	assert.False(t, found, "clause must not record the match as added when the cap is exceeded")
+}
+
+// TestMaxConjMatchFlowActionsFitInOpenFlowMessage verifies that a conjunctive match flow with the largest match
+// condition and maxActionsPerConjMatchFlow conjunctive actions still fits in a single BundleAdd message, i.e. the
+// 16-bit OpenFlow message length doesn't wrap around.
+func TestMaxConjMatchFlowActionsFitInOpenFlowMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	c := newFakeClient(opstest.NewMockOFEntryOperations(ctrl), true, true, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+
+	_, ipNet, _ := net.ParseCIDR("fd00:1234:5678:9abc::/64")
+	matchPairs := []matchPair{{matchKey: MatchCTSrcIPNetv6, matchValue: *ipNet}}
+	actions := make([]*conjunctiveAction, 0, maxActionsPerConjMatchFlow)
+	for i := uint32(0); i < maxActionsPerConjMatchFlow; i++ {
+		actions = append(actions, &conjunctiveAction{conjID: i, clauseID: 1, nClause: 2})
+	}
+	flowMod := getFlowModMessage(c.featureNetworkPolicy.conjunctiveMatchFlow(EgressRuleTable.GetID(), matchPairs, nil, actions), binding.AddMessage)
+	bundleAdd := openflow15.NewBndleAdd(1, 0)
+	bundleAdd.Message = flowMod
+
+	var data []byte
+	require.NotPanics(t, func() {
+		var err error
+		data, err = bundleAdd.MarshalBinary()
+		require.NoError(t, err)
+	})
+	gotBundleAdd := new(openflow15.BndleAdd)
+	require.NoError(t, gotBundleAdd.UnmarshalBinary(data))
+	gotFlowMod, ok := gotBundleAdd.Message.(*openflow15.FlowMod)
+	require.True(t, ok)
+	require.Len(t, gotFlowMod.Instructions, 1)
+	gotInstruction, ok := gotFlowMod.Instructions[0].(*openflow15.InstrActions)
+	require.True(t, ok)
+	assert.Len(t, gotInstruction.Actions, maxActionsPerConjMatchFlow)
+}
+
+// TestPolicyRuleFlowsActionCap verifies that InstallPolicyRuleFlows and AddPolicyRuleAddress reject a rule whose
+// conjunctive match flow would exceed the action cap, identify the NetworkPolicy in the error, and leave existing
+// conjunctive match flow contexts unchanged.
+func TestPolicyRuleFlowsActionCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	c := newFakeClient(opstest.NewMockOFEntryOperations(ctrl), true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+	c.featureNetworkPolicy.egressTables = map[uint8]struct{}{EgressRuleTable.GetID(): {}, EgressDefaultTable.GetID(): {}}
+	c.featureNetworkPolicy.globalConjMatchFlowCache = make(map[string]*conjMatchFlowContext)
+	c.featureNetworkPolicy.policyCache = cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc})
+
+	fullAddr := parseAddresses([]string{"192.168.1.40"})
+	otherAddr := parseAddresses([]string{"192.168.1.41"})
+	fullMatch := generateAddressConjMatch(EgressRuleTable.GetID(), fullAddr[0], types.SrcAddress, nil)
+	otherMatch := generateAddressConjMatch(EgressRuleTable.GetID(), otherAddr[0], types.SrcAddress, nil)
+	fullCtx := newFullConjMatchFlowContext(c.featureNetworkPolicy, fullMatch)
+	otherCtx := &conjMatchFlowContext{
+		conjunctiveMatch:     otherMatch,
+		actions:              map[uint32]*conjunctiveAction{1: {conjID: 1, clauseID: 1, nClause: 2}},
+		featureNetworkPolicy: c.featureNetworkPolicy,
+	}
+	c.featureNetworkPolicy.globalConjMatchFlowCache[fullMatch.generateGlobalMapKey()] = fullCtx
+	c.featureNetworkPolicy.globalConjMatchFlowCache[otherMatch.generateGlobalMapKey()] = otherCtx
+
+	newRule := func(id uint32, from []types.Address) *types.PolicyRule {
+		return &types.PolicyRule{
+			Direction:     v1beta2.DirectionOut,
+			From:          from,
+			To:            parseAddresses([]string{"0.0.0.0/0"}),
+			FlowID:        id,
+			TableID:       EgressRuleTable.GetID(),
+			EnableLogging: true,
+			PolicyRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.K8sNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "np1",
+				UID:       "id1",
+			},
+		}
+	}
+	checkContextsUnchanged := func(t *testing.T) {
+		assert.Len(t, fullCtx.actions, maxActionsPerConjMatchFlow)
+		assert.Len(t, otherCtx.actions, 1)
+		assert.False(t, fullCtx.dropFlowEnableLogging)
+		assert.False(t, otherCtx.dropFlowEnableLogging, "logging of a context must not change when the rule fails to be added")
+	}
+
+	t.Run("InstallPolicyRuleFlows", func(t *testing.T) {
+		ruleID := uint32(maxActionsPerConjMatchFlow + 1)
+		err := c.InstallPolicyRuleFlows(newRule(ruleID, append(otherAddr, fullAddr...)))
+		require.ErrorContains(t, err, "K8sNetworkPolicy:ns1/np1")
+		require.ErrorContains(t, err, fmt.Sprintf("exceeds the limit of %d actions per flow", maxActionsPerConjMatchFlow))
+		assert.Nil(t, c.featureNetworkPolicy.getPolicyRuleConjunction(ruleID))
+		checkContextsUnchanged(t)
+	})
+
+	t.Run("AddPolicyRuleAddress", func(t *testing.T) {
+		ruleID := uint32(maxActionsPerConjMatchFlow + 2)
+		rule := newRule(ruleID, parseAddresses([]string{"192.168.1.42"}))
+		c.featureNetworkPolicy.policyCache.Add(c.featureNetworkPolicy.calculateActionFlowChangesForRule(rule))
+		err := c.AddPolicyRuleAddress(ruleID, types.SrcAddress, append(otherAddr, fullAddr...), nil, true, false)
+		require.ErrorContains(t, err, "K8sNetworkPolicy:ns1/np1")
+		require.ErrorContains(t, err, fmt.Sprintf("exceeds the limit of %d actions per flow", maxActionsPerConjMatchFlow))
+		checkContextsUnchanged(t)
+	})
 }
 
 func TestInstallPolicyRuleFlows(t *testing.T) {

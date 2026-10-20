@@ -447,9 +447,12 @@ type conjunctiveAction struct {
 // match condition) can be packed into a single conjunctive match flow entry. OpenFlow has no mechanism to
 // incrementally append actions to an existing flow: every FlowMod that touches a flow's action list must carry the
 // complete list in one message, and OpenFlow messages are capped at 65535 bytes by their 16-bit header length field.
-// A conjunction action encodes to 16 bytes, so a single conjunctive match flow tops out around 4090 actions (fewer
-// for larger match conditions); this limit stays well under that hard ceiling.
-const maxActionsPerConjMatchFlow = 1000
+// The largest conjunctive match condition (ct_state, eth_type and a masked ct_ipv6_src) takes 136 bytes before any
+// conjunction action: 16 bytes of BundleAdd header, 112 bytes of FlowMod and 8 bytes of apply-actions instruction
+// header. Each conjunction action adds 16 bytes, so a single conjunctive match flow can hold at most
+// (65535-136)/16 = 4087 actions. Like MaxBucketsPerMessage for group buckets, the limit leaves some headroom below
+// that ceiling.
+const maxActionsPerConjMatchFlow = 4000
 
 // conjMatchFlowContext generates conjunctive match flow entries for conjunctions share the same match conditions.
 // One conjMatchFlowContext is responsible for one specific conjunctive match flow entry. As the match condition
@@ -549,7 +552,7 @@ func (ctx *conjMatchFlowContext) addAction(action *conjunctiveAction) (*flowChan
 }
 
 func newConjMatchFlowCapError(conjID uint32, matcherKey string) error {
-	return fmt.Errorf("cannot add conjunctive action for rule %d on OpenFlow match (%s): exceeds the limit of %d actions per flow", conjID, matcherKey, maxActionsPerConjMatchFlow)
+	return fmt.Errorf("cannot add conjunctive action for conjunction %d on OpenFlow match (%s): exceeds the limit of %d actions per flow", conjID, matcherKey, maxActionsPerConjMatchFlow)
 }
 
 func (ctx *conjMatchFlowContext) addDenyAllRule(ruleID uint32) {
@@ -595,6 +598,9 @@ type conjMatchFlowContextChange struct {
 	// actChange is the changed conjunctive action. It is used to update the conjMatchFlowContext's actions. actChange
 	// is not nil.
 	actChange *actionChange
+	// dropFlowEnableLogging is the changed logging requirement of the conjMatchFlowContext's dropFlow. It is used to
+	// update conjMatchFlowContext.dropFlowEnableLogging. It is nil if the logging requirement is not changed.
+	dropFlowEnableLogging *bool
 }
 
 // updateContextStatus changes conjMatchFlowContext's status, including,
@@ -657,6 +663,9 @@ func (c *conjMatchFlowContextChange) updateContextStatus() {
 			c.context.dropFlow = nil
 		}
 	}
+	if c.dropFlowEnableLogging != nil {
+		c.context.dropFlowEnableLogging = *c.dropFlowEnableLogging
+	}
 
 	// Update globalConjMatchFlowCache. Add the conjMatchFlowContext into the globalConjMatchFlowCache if the ctxChangeType
 	// is "insertion", or delete from the globalConjMatchFlowCache if the ctxChangeType is "deletion".
@@ -697,6 +706,18 @@ type policyRuleConjunction struct {
 	ruleName     string
 	ruleTableID  uint8
 	ruleLogLabel string
+}
+
+// policyRuleString describes the NetworkPolicy rule which the policyRuleConjunction is built for, to be used in error
+// messages.
+func (c *policyRuleConjunction) policyRuleString() string {
+	if c.npRef == nil {
+		return fmt.Sprintf("conjunction %d", c.id)
+	}
+	if c.ruleName == "" {
+		return fmt.Sprintf("rule of %s", c.npRef.ToString())
+	}
+	return fmt.Sprintf("rule %s of %s", c.ruleName, c.npRef.ToString())
 }
 
 // clause groups conjunctive match flows. Matches in a clause represent source addresses(for fromClause), or destination
@@ -829,6 +850,7 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 	var context *conjMatchFlowContext
 	ctxType := modification
 	var dropFlow *flowChange
+	var dropFlowEnableLogging *bool
 	// Get conjMatchFlowContext from globalConjMatchFlowCache. If it doesn't exist, create a new one and add into the cache.
 	context, found = featureNetworkPolicy.globalConjMatchFlowCache[matcherKey]
 	if !found {
@@ -855,8 +877,9 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 			}
 		}
 	} else if context.dropFlowEnableLogging != enableLogging {
-		// Logging requirement of the rule has changed, modify default drop flow accordingly.
-		context.dropFlowEnableLogging = enableLogging
+		// Logging requirement of the rule has changed, modify default drop flow accordingly. The context is updated
+		// only after the change is realized, so that it stays unchanged if the rule fails to be added.
+		dropFlowEnableLogging = &enableLogging
 		if c.dropTable != nil && context.dropFlow != nil {
 			dropFlow = &flowChange{
 				flow:       getFlowModMessage(context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging), binding.AddMessage),
@@ -873,7 +896,8 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 		actChange: &actionChange{
 			changeType: insertion,
 		},
-		dropFlow: dropFlow,
+		dropFlow:              dropFlow,
+		dropFlowEnableLogging: dropFlowEnableLogging,
 	}
 	if c.action.nClause > 1 {
 		// Append the conjunction to conjunctiveFlowContext's actions, and add the changed flow into the conjMatchFlowContextChange.
@@ -1206,7 +1230,7 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
 	ctxChanges, err := c.featureNetworkPolicy.calculateMatchFlowChangesForRule(conj, rule)
 	if err != nil {
-		return err
+		return fmt.Errorf("error calculating conjunctive match flows for %s: %w", conj.policyRuleString(), err)
 	}
 
 	var flowMessages []*openflow15.FlowMod
@@ -1369,7 +1393,7 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 		if err := c.featureNetworkPolicy.addRuleToConjunctiveMatch(conj, rule); err != nil {
 			// Reset the global conjunctive match flow cache since it may have been partially updated.
 			c.featureNetworkPolicy.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
-			return err
+			return fmt.Errorf("error calculating conjunctive match flows for %s: %w", conj.policyRuleString(), err)
 		}
 		allFlowMessages = append(allFlowMessages, append(conj.actionFlows, conj.metricFlows...)...)
 		conjunctions = append(conjunctions, conj)
@@ -1742,7 +1766,7 @@ func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType,
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
 	flowChanges, err := clause.addAddrFlows(c.featureNetworkPolicy, addrType, addresses, priority, enableLogging, isMCNPRule)
 	if err != nil {
-		return err
+		return fmt.Errorf("error calculating conjunctive match flows for %s: %w", conj.policyRuleString(), err)
 	}
 	return c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges)
 }
