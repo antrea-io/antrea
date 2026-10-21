@@ -115,17 +115,17 @@ spec:
           - name: api
             containerPort: {{ .Values.apiServer.apiPort }}
             protocol: TCP
-        # All three probes are served by the Flow Aggregator's own apiserver, which reflects
+        # Both probes are served by the Flow Aggregator's own apiserver, which reflects
         # FlowStreamService's state (see pkg/flowaggregator/apiserver), not by a check on the
         # FlowStreamService port itself.
         # They are always present, even when flowStreamService.enable is false: the checks
         # themselves report healthy when the feature is disabled, so there is nothing to gate on.
         #
         # /readyz fails whenever FlowStreamService is not serving: while it is starting, while it
-        # is restarting for a certificate update, and when it has failed.
-        # /livez fails only once FlowStreamService has failed (it could not start or stopped
-        # serving on its own). Nothing retries it before the next certificate update, so
-        # restarting the container is the intended recovery.
+        # is stopping, and when it has failed. A certificate update does not restart it.
+        # /livez fails only once FlowStreamService has failed (it could not start, stopped serving
+        # on its own, or could not update its certificate). Restarting the container is the
+        # intended recovery.
         #
         # No "host" override here (unlike antrea-agent/antrea-controller's own probes): those
         # always run with hostNetwork true, so "localhost" resolves to the same network

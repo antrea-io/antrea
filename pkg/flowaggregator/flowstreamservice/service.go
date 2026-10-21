@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"uuid"
 
@@ -62,12 +63,12 @@ const (
 	StateStarting State = iota
 	// StateServing means the listener is bound and the gRPC server is serving on it.
 	StateServing
-	// StateStopping means the server was asked to stop and is draining its connections, which can
-	// last as long as a client keeps a stream open. The listener is already closed or about to be,
-	// so the server is not ready, but this is a deliberate stop and not a failure.
+	// StateStopping means the server was asked to stop, which only happens when the Flow Aggregator
+	// stops, and is draining its connections. The listener is already closed or about to be, so the
+	// server is not ready, but this is a deliberate stop and not a failure.
 	StateStopping
-	// StateFailed means the server could not start or stopped serving on its own. Nothing retries
-	// it until the next certificate update, so the only recovery is a restart of the process.
+	// StateFailed means the server could not start, stopped serving on its own, or its certificate
+	// could not be updated. Only a restart of the process is sure to recover from it.
 	StateFailed
 )
 
@@ -112,6 +113,11 @@ type FlowStreamService struct {
 	// sequence numbers naming positions in it, both start over from zero then, so a sequence_number
 	// from a previous epoch could otherwise silently name a different flow than the one it was issued for.
 	streamEpoch string
+	// serverCert is the certificate the server presents in TLS handshakes. UpdateCertificate swaps it
+	// in place when the Flow Aggregator's certificate is rotated, so that a rotation only affects new
+	// handshakes. Restarting the server instead would have to wait for every open follow stream to
+	// end, and refuse every new connection in the meantime.
+	serverCert atomic.Pointer[tls.Certificate]
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer. authenticator
@@ -163,9 +169,29 @@ func (s *FlowStreamService) Listen() (net.Listener, error) {
 	return lis, nil
 }
 
+// UpdateCertificate sets the server certificate and private key, PEM-encoded, that the server
+// presents from the next TLS handshake on. Connections already established, and the streams they
+// carry, are left alone. On error, the certificate in use is left unchanged.
+func (s *FlowStreamService) UpdateCertificate(serverCertPEM, serverKeyPEM []byte) error {
+	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+	if err != nil {
+		return fmt.Errorf("failed to parse server TLS key pair: %w", err)
+	}
+	s.serverCert.Store(&cert)
+	return nil
+}
+
+func (s *FlowStreamService) getCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	cert := s.serverCert.Load()
+	if cert == nil {
+		return nil, fmt.Errorf("no server certificate available")
+	}
+	return cert, nil
+}
+
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on lis, which it takes
-// ownership of (it is closed when Run returns). serverCertPEM and serverKeyPEM are the PEM-encoded
-// server certificate and private key.
+// ownership of (it is closed when Run returns). The server presents the certificate set by
+// UpdateCertificate, which must have been called first.
 // When the service was constructed with a non-nil authenticator, clients must present a valid
 // Kubernetes bearer token or client certificate, or the call is rejected before GetFlows runs.
 // Run blocks until stopCh is closed.
@@ -177,11 +203,11 @@ func (s *FlowStreamService) Listen() (net.Listener, error) {
 //   - StateServing once the server is about to serve on the already-bound listener.
 //   - StateStopping as soon as stopCh is closed, before the graceful stop starts. The graceful
 //     stop closes the listener at its start but only returns once every connection has drained,
-//     which is as long as a client keeps a stream open, so waiting for it would leave the server
-//     reported as serving long after it refuses new connections.
-//   - StateFailed if the key pair cannot be used, or if Serve returns an error. Once reported,
+//     so waiting for it would leave the server reported as serving after it refuses new
+//     connections.
+//   - StateFailed if no certificate was set, or if Serve returns an error. Once reported,
 //     StateFailed is final for this call: a later stop does not overwrite it.
-func (s *FlowStreamService) Run(lis net.Listener, serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setState func(State)) error {
+func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setState func(State)) error {
 	var mu sync.Mutex
 	failed := false
 	transition := func(state State) {
@@ -194,15 +220,16 @@ func (s *FlowStreamService) Run(lis net.Listener, serverCertPEM, serverKeyPEM []
 		setState(state)
 	}
 
-	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
-	if err != nil {
+	if s.serverCert.Load() == nil {
 		lis.Close()
 		transition(StateFailed)
-		return fmt.Errorf("failed to parse server TLS key pair: %w", err)
+		return fmt.Errorf("no server certificate set, UpdateCertificate must be called before Run")
 	}
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
+		// The certificate is looked up on every handshake rather than fixed here, so that a
+		// certificate rotation does not require restarting the server.
+		GetCertificate: s.getCertificate,
+		MinVersion:     tls.VersionTLS12,
 		// RequestClientCert asks every client for a certificate without requiring one: a client
 		// authenticating with a bearer token simply presents none and the handshake still succeeds.
 		// Verification is deliberately left to the authenticator rather than to the TLS stack
@@ -246,10 +273,11 @@ func (s *FlowStreamService) Run(lis net.Listener, serverCertPEM, serverKeyPEM []
 	}()
 	<-stopCh
 	transition(StateStopping)
-	// GracefulStop waits for all active GetFlows RPCs to return before shutting
-	// down. Active streams will drain naturally because the ring buffer shutdown
-	// (triggered by the flow aggregator) causes every consumer's ConsumeMultiple
-	// to return shutdown=true, which triggers GetFlows to return nil promptly.
+	// GracefulStop waits for all active GetFlows RPCs to return before shutting down. stopCh is
+	// only closed when the Flow Aggregator stops, as a certificate rotation does not restart the
+	// server, and active streams then drain because the Flow Aggregator also shuts down the ring
+	// buffer, which causes every consumer's ConsumeMultiple to return shutdown=true and GetFlows to
+	// return promptly. A follow stream would otherwise only end when its client goes away.
 	server.GracefulStop()
 	wg.Wait()
 	return nil

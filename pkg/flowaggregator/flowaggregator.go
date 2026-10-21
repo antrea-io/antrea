@@ -70,10 +70,11 @@ var (
 )
 
 // flowStreamProvider is the interface used by flowAggregator to start and stop
-// the FlowStreamService.
+// the FlowStreamService, and to update its server certificate.
 type flowStreamProvider interface {
+	UpdateCertificate(serverCertPEM, serverKeyPEM []byte) error
 	Listen() (net.Listener, error)
-	Run(lis net.Listener, serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error
+	Run(lis net.Listener, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error
 }
 
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
@@ -345,56 +346,66 @@ func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
 	}
 }
 
-// runFlowStreamService runs the FlowStreamService with server-side TLS, restarting
-// it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors:
-// on the first iteration the loop blocks until the certificate provider signals readiness;
-// on subsequent iterations (cert rotation) it restarts the server immediately.
+// runFlowStreamService runs the FlowStreamService with server-side TLS. The server is started once
+// the certificate provider first signals readiness. On subsequent signals (cert rotation), only the
+// server certificate is updated: the server keeps running, so that new connections are not refused
+// while waiting for open follow streams to end, and those streams are not interrupted.
 func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
-	var svcWg sync.WaitGroup
-	svcStopCh := make(chan struct{})
+	// Wait for the first certificate before starting the server. A failure to start is reported as
+	// such, which fails the liveness probe and gets the container restarted, rather than leaving the
+	// Flow Aggregator running with a FlowStreamService that does not serve. It is retried on the next
+	// certificate update.
+	var lis net.Listener
 	for {
 		select {
 		case <-stopCh:
-			close(svcStopCh)
-			svcWg.Wait()
 			return
 		case <-fa.flowStreamSvcUpdateCh:
-			close(svcStopCh)
-			svcWg.Wait()
 		}
-		// The previous svcStopCh was closed to stop the old server (or was
-		// never used on the first iteration). Create a fresh one for the
-		// next server instance.
-		svcStopCh = make(chan struct{})
-
-		// Shrink the window in which stopCh may close between here and the
-		// Run() call: if both stopCh and the update channel were ready in
-		// the select above, we avoid starting a server that would be torn
-		// down almost immediately on the next iteration.
-		select {
-		case <-stopCh:
-			return
-		default:
+		if !fa.updateFlowStreamServiceCertificate() {
+			continue
 		}
-
-		_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
-		lis, err := fa.flowStreamService.Listen()
-		if err != nil {
-			// Nothing retries this until the next certificate update, so report it as a failure,
-			// which fails the liveness probe and gets the container restarted, rather than leaving
-			// the Flow Aggregator running with a FlowStreamService that is never going to serve.
+		var err error
+		if lis, err = fa.flowStreamService.Listen(); err != nil {
 			klog.ErrorS(err, "FlowStreamService failed to start")
 			fa.setFlowStreamServiceState(flowstreamservice.StateFailed)
 			continue
 		}
-		svcWg.Add(1)
-		go func() {
-			defer svcWg.Done()
-			if err := fa.flowStreamService.Run(lis, serverCert, serverKey, svcStopCh, fa.setFlowStreamServiceState); err != nil {
-				klog.ErrorS(err, "FlowStreamService failed to start")
-			}
-		}()
+		break
 	}
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		if err := fa.flowStreamService.Run(lis, stopCh, fa.setFlowStreamServiceState); err != nil {
+			klog.ErrorS(err, "FlowStreamService failed to start, it will not be available until the Flow Aggregator restarts")
+		}
+	}()
+	// Swap the certificate on every rotation until Run returns, either because stopCh was closed,
+	// once the server has stopped gracefully, or because the server failed to start.
+	for {
+		select {
+		case <-doneCh:
+			return
+		case <-fa.flowStreamSvcUpdateCh:
+			if fa.updateFlowStreamServiceCertificate() {
+				klog.InfoS("Updated FlowStreamService server certificate")
+			}
+		}
+	}
+}
+
+// updateFlowStreamServiceCertificate sets the FlowStreamService server certificate to the one held
+// by the certificate provider, and returns whether it succeeded. A failure is reported as
+// StateFailed: on a rotation, the server would otherwise keep presenting a certificate that the
+// CA published to clients no longer verifies.
+func (fa *flowAggregator) updateFlowStreamServiceCertificate() bool {
+	_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
+	if err := fa.flowStreamService.UpdateCertificate(serverCert, serverKey); err != nil {
+		klog.ErrorS(err, "Failed to update FlowStreamService server certificate")
+		fa.setFlowStreamServiceState(flowstreamservice.StateFailed)
+		return false
+	}
+	return true
 }
 
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
@@ -878,10 +889,10 @@ func (fa *flowAggregator) FlowStreamServiceReady() bool {
 }
 
 // FlowStreamServiceLive reports whether FlowStreamService is in a state a restart could not
-// improve on. It is false only once FlowStreamService has failed, i.e. it could not start or
-// stopped serving on its own, which nothing retries before the next certificate update: restarting
-// the process is then the only recovery. Not serving yet (still starting, or draining after a
-// certificate update) is not a failure. As for FlowStreamServiceReady, it reports true when the
+// improve on. It is false only once FlowStreamService has failed, i.e. it could not start, stopped
+// serving on its own, or its certificate could not be updated: restarting the process is then the
+// only recovery that is sure to work. Not serving yet (still starting, or stopping) is not a
+// failure. As for FlowStreamServiceReady, it reports true when the
 // feature is disabled entirely.
 func (fa *flowAggregator) FlowStreamServiceLive() bool {
 	if fa.flowStreamService == nil {

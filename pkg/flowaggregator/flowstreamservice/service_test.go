@@ -16,6 +16,8 @@ package flowstreamservice
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"math"
@@ -30,7 +32,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -1640,6 +1644,7 @@ func TestRun_StateTransitionsAndShutdown(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 		t.Cleanup(func() { buf.Shutdown() })
 		svc := newTestService(buf)
+		require.NoError(t, svc.UpdateCertificate(certPEM, keyPEM))
 
 		lis := newFakeListener()
 		rec := &stateRecorder{}
@@ -1650,7 +1655,7 @@ func TestRun_StateTransitionsAndShutdown(t *testing.T) {
 		}
 		stopCh := make(chan struct{})
 		errCh := make(chan error, 1)
-		go func() { errCh <- svc.Run(lis, certPEM, keyPEM, stopCh, rec.set) }()
+		go func() { errCh <- svc.Run(lis, stopCh, rec.set) }()
 
 		synctest.Wait()
 		assert.Equal(t, []State{StateServing}, rec.snapshot())
@@ -1677,13 +1682,14 @@ func TestRun_ServeFailure(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 		t.Cleanup(func() { buf.Shutdown() })
 		svc := newTestService(buf)
+		require.NoError(t, svc.UpdateCertificate(certPEM, keyPEM))
 
 		lis := newFakeListener()
 		lis.acceptErr = errors.New("accept failed")
 		rec := &stateRecorder{}
 		stopCh := make(chan struct{})
 		errCh := make(chan error, 1)
-		go func() { errCh <- svc.Run(lis, certPEM, keyPEM, stopCh, rec.set) }()
+		go func() { errCh <- svc.Run(lis, stopCh, rec.set) }()
 
 		synctest.Wait()
 		assert.Equal(t, []State{StateServing, StateFailed}, rec.snapshot())
@@ -1695,41 +1701,143 @@ func TestRun_ServeFailure(t *testing.T) {
 	})
 }
 
-// TestRun_StopBeforeServe covers a stop that is requested before the Serve goroutine got to run,
-// which happens when stopCh is already closed on entry (e.g. a second certificate update arrived
-// while the previous server was draining, so runFlowStreamService stops the new server right
-// away). The graceful stop then runs first and Serve returns grpc.ErrServerStopped. That is a stop,
-// not a failure: it must not be reported as StateFailed, which would also make /livez fail.
+// TestRun_StopBeforeServe covers a stop that is requested before Run is called, with stopCh already
+// closed on entry (e.g. the Flow Aggregator was stopped right as the server was being started).
+// The graceful stop normally runs first and Serve returns grpc.ErrServerStopped. If Serve runs
+// first, it returns nil when the graceful stop closes the listener, with the same outcome.
+// Either way, this is a stop, not a failure: it must not be reported as StateFailed, which would
+// also make /livez fail.
 func TestRun_StopBeforeServe(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certPEM, keyPEM := newTestCert(t)
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 		t.Cleanup(func() { buf.Shutdown() })
 		svc := newTestService(buf)
+		require.NoError(t, svc.UpdateCertificate(certPEM, keyPEM))
 
 		lis := newFakeListener()
 		rec := &stateRecorder{}
 		stopCh := make(chan struct{})
 		close(stopCh)
-		require.NoError(t, svc.Run(lis, certPEM, keyPEM, stopCh, rec.set))
+		require.NoError(t, svc.Run(lis, stopCh, rec.set))
 
 		assert.Equal(t, []State{StateServing, StateStopping}, rec.snapshot())
 		assert.True(t, lis.closed.Load(), "the listener must be closed once Run returns")
 	})
 }
 
-// TestRun_InvalidCert covers Run's earliest error path (bad TLS key pair): the failure is
+// TestRun_NoCertificate covers Run's earliest error path (no certificate set): the failure is
 // reported, Serving never is, and the listener Run took ownership of is released.
-func TestRun_InvalidCert(t *testing.T) {
+func TestRun_NoCertificate(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 	t.Cleanup(func() { buf.Shutdown() })
 	svc := newTestService(buf)
 
 	lis := newFakeListener()
 	rec := &stateRecorder{}
-	err := svc.Run(lis, []byte("not a cert"), []byte("not a key"), make(chan struct{}), rec.set)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse server TLS key pair")
+	err := svc.Run(lis, make(chan struct{}), rec.set)
+	assert.ErrorContains(t, err, "no server certificate set")
 	assert.Equal(t, []State{StateFailed}, rec.snapshot())
 	assert.True(t, lis.closed.Load())
+}
+
+func TestUpdateCertificate_InvalidKeyPairKeepsCurrentCertificate(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
+	t.Cleanup(func() { buf.Shutdown() })
+	svc := newTestService(buf)
+	certPEM, keyPEM := newTestCert(t)
+	require.NoError(t, svc.UpdateCertificate(certPEM, keyPEM))
+	want := svc.serverCert.Load()
+
+	assert.ErrorContains(t, svc.UpdateCertificate(certPEM, []byte("not a key")), "failed to parse server TLS key pair")
+	assert.Same(t, want, svc.serverCert.Load())
+}
+
+// TestRun_CertificateRotation verifies that a certificate rotation takes effect for new
+// connections while a follow stream opened before it stays open and keeps receiving records. A
+// server restarted on rotation instead refuses new connections until every follow stream ends.
+// It uses a real socket, as it is the TLS handshakes that it checks.
+func TestRun_CertificateRotation(t *testing.T) {
+	newCertificate := func() (certPEM, keyPEM []byte, roots *x509.CertPool) {
+		// Every call returns a distinct self-signed certificate, i.e. a distinct CA.
+		certPEM, keyPEM = newTestCert(t)
+		roots = x509.NewCertPool()
+		require.True(t, roots.AppendCertsFromPEM(certPEM))
+		return certPEM, keyPEM, roots
+	}
+	oldCertPEM, oldKeyPEM, oldRoots := newCertificate()
+	newCertPEM, newKeyPEM, newRoots := newCertificate()
+
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	svc := newTestService(buf)
+	require.NoError(t, svc.UpdateCertificate(oldCertPEM, oldKeyPEM))
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	rec := &stateRecorder{}
+	stopCh := make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Run(lis, stopCh, rec.set) }()
+	defer func() {
+		// Shutting down the buffer ends the follow stream, as when the Flow Aggregator stops,
+		// which lets Run's GracefulStop return.
+		buf.Shutdown()
+		close(stopCh)
+		select {
+		case err := <-errCh:
+			assert.NoError(t, err)
+		case <-time.After(10 * time.Second):
+			t.Error("Run did not return after stopCh was closed")
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	newClient := func(roots *x509.CertPool) flowpb.FlowStreamServiceClient {
+		conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			RootCAs:    roots,
+			ServerName: "127.0.0.1",
+		})))
+		require.NoError(t, err)
+		t.Cleanup(func() { conn.Close() })
+		return flowpb.NewFlowStreamServiceClient(conn)
+	}
+	// recvFlow receives from stream until a record with the given ID arrives, skipping the
+	// responses that carry only a resume token.
+	recvFlow := func(stream grpc.ServerStreamingClient[flowpb.GetFlowsResponse], id string) {
+		for {
+			resp, err := stream.Recv()
+			require.NoError(t, err)
+			for _, f := range resp.GetFlows() {
+				if f.GetId() == id {
+					return
+				}
+			}
+		}
+	}
+
+	followStream, err := newClient(oldRoots).GetFlows(ctx, &flowpb.GetFlowsRequest{Follow: true})
+	require.NoError(t, err)
+	buf.Produce(newFlow("before-rotation", &flowpb.Kubernetes{}))
+	recvFlow(followStream, "before-rotation")
+
+	require.NoError(t, svc.UpdateCertificate(newCertPEM, newKeyPEM))
+
+	// A new client trusting the new CA connects and is served.
+	stream, err := newClient(newRoots).GetFlows(ctx, &flowpb.GetFlowsRequest{MaxCount: 1})
+	require.NoError(t, err)
+	recvFlow(stream, "before-rotation")
+
+	// A new client that only trusts the old CA is now presented the new certificate.
+	stream, err = newClient(oldRoots).GetFlows(ctx, &flowpb.GetFlowsRequest{MaxCount: 1})
+	if err == nil {
+		_, err = stream.Recv()
+	}
+	assert.Equal(t, codes.Unavailable, status.Code(err))
+	assert.ErrorContains(t, err, "certificate signed by unknown authority")
+
+	// The follow stream opened before the rotation is still open, and the server was never
+	// reported as anything but serving.
+	buf.Produce(newFlow("after-rotation", &flowpb.Kubernetes{}))
+	recvFlow(followStream, "after-rotation")
+	assert.Equal(t, []State{StateServing}, rec.snapshot())
 }

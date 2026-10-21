@@ -987,7 +987,7 @@ func TestFlowAggregator_FlowStreamServiceReadyAndLive(t *testing.T) {
 		// Not serving yet is neither ready nor a failure a restart could fix.
 		{name: "enabled, starting", enabled: true, state: flowstreamservice.StateStarting, wantReady: false, wantLive: true},
 		{name: "enabled, serving", enabled: true, state: flowstreamservice.StateServing, wantReady: true, wantLive: true},
-		// Draining for a certificate update is not ready either, but must not get the container restarted.
+		// Draining during shutdown is not ready either, but must not get the container restarted.
 		{name: "enabled, stopping", enabled: true, state: flowstreamservice.StateStopping, wantReady: false, wantLive: true},
 		{name: "enabled, failed", enabled: true, state: flowstreamservice.StateFailed, wantReady: false, wantLive: false},
 	}
@@ -1288,20 +1288,33 @@ func TestFillServiceUID(t *testing.T) {
 // fakeFlowStreamService is a test implementation of flowStreamProvider.
 // Run blocks until stopCh is closed.
 type fakeFlowStreamService struct {
-	runCount atomic.Int64
+	runCount    atomic.Int64
+	stopCount   atomic.Int64
+	updateCount atomic.Int64
 	// listenErr, if set, is returned by Listen.
 	listenErr error
+	// updateErr, if set, is returned by UpdateCertificate.
+	updateErr error
+}
+
+func (f *fakeFlowStreamService) UpdateCertificate(_, _ []byte) error {
+	if f.updateErr != nil {
+		return f.updateErr
+	}
+	f.updateCount.Add(1)
+	return nil
 }
 
 func (f *fakeFlowStreamService) Listen() (net.Listener, error) {
 	return nil, f.listenErr
 }
 
-func (f *fakeFlowStreamService) Run(_ net.Listener, _, _ []byte, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error {
+func (f *fakeFlowStreamService) Run(_ net.Listener, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error {
 	f.runCount.Add(1)
 	setState(flowstreamservice.StateServing)
 	<-stopCh
 	setState(flowstreamservice.StateStopping)
+	f.stopCount.Add(1)
 	return nil
 }
 
@@ -1367,6 +1380,7 @@ func TestFlowAggregator_runFlowStreamService(t *testing.T) {
 		// Send the cert-ready signal.
 		fssCh <- struct{}{}
 		synctest.Wait()
+		assert.Equal(t, int64(1), fakeRunner.updateCount.Load(), "certificate should be set before Run")
 		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "Run should start after cert update signal")
 		// Confirms the real wiring, not just the fake: runFlowStreamService must pass
 		// fa.setFlowStreamServiceState itself as Run's setState callback.
@@ -1432,8 +1446,48 @@ func TestFlowAggregator_runFlowStreamService_StopBeforeCert(t *testing.T) {
 	})
 }
 
-// TestFlowAggregator_runFlowStreamService_CertRotation verifies that a second cert
-// update stops the running server and restarts it with new cert material.
+// TestFlowAggregator_runFlowStreamService_CertificateUpdateFailure verifies that a certificate that
+// cannot be used is reported as a failure, both on the first update, where the server must not be
+// started and a later update retries, and on a rotation, where the server would keep presenting a
+// certificate that the published CA no longer verifies.
+func TestFlowAggregator_runFlowStreamService_CertificateUpdateFailure(t *testing.T) {
+	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
+	synctest.Test(t, func(t *testing.T) {
+		fakeRunner := &fakeFlowStreamService{updateErr: errors.New("invalid key pair")}
+		fssCh := make(chan struct{}, 1)
+		fa := &flowAggregator{
+			flowStreamService:     fakeRunner,
+			flowStreamSvcUpdateCh: fssCh,
+			certificateProvider:   certProvider,
+		}
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go fa.runFlowStreamService(stopCh)
+
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(0), fakeRunner.runCount.Load(), "Run must not be entered without a certificate")
+		assert.False(t, fa.FlowStreamServiceLive(), "an unusable certificate must fail the liveness check")
+
+		fakeRunner.updateErr = nil
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load())
+		assert.True(t, fa.FlowStreamServiceLive())
+		assert.True(t, fa.FlowStreamServiceReady())
+
+		fakeRunner.updateErr = errors.New("invalid key pair")
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.False(t, fa.FlowStreamServiceLive(), "a failed rotation must fail the liveness check")
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load())
+	})
+}
+
+// TestFlowAggregator_runFlowStreamService_CertRotation verifies that a cert rotation updates the
+// certificate of the running server instead of restarting it, as a restart would have to wait for
+// every open follow stream to end, and that the server stays ready throughout.
 func TestFlowAggregator_runFlowStreamService_CertRotation(t *testing.T) {
 	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
 	synctest.Test(t, func(t *testing.T) {
@@ -1446,7 +1500,6 @@ func TestFlowAggregator_runFlowStreamService_CertRotation(t *testing.T) {
 		}
 
 		stopCh := make(chan struct{})
-		defer close(stopCh)
 		go fa.runFlowStreamService(stopCh)
 
 		// Trigger first start.
@@ -1454,10 +1507,19 @@ func TestFlowAggregator_runFlowStreamService_CertRotation(t *testing.T) {
 		synctest.Wait()
 		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "first Run should have started")
 
-		// Send a cert-rotation signal — this should stop the first server
-		// and restart with the new certs.
-		fssCh <- struct{}{}
+		// Send cert-rotation signals: each one should update the certificate, without stopping
+		// or restarting the server.
+		for i := 2; i <= 3; i++ {
+			fssCh <- struct{}{}
+			synctest.Wait()
+			assert.Equal(t, int64(i), fakeRunner.updateCount.Load(), "certificate should be updated after cert rotation")
+			assert.True(t, fa.FlowStreamServiceReady(), "server should stay ready across cert rotation")
+		}
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "Run should not be called again after cert rotation")
+		assert.Equal(t, int64(0), fakeRunner.stopCount.Load(), "server should not be stopped by cert rotation")
+
+		close(stopCh)
 		synctest.Wait()
-		assert.Equal(t, int64(2), fakeRunner.runCount.Load(), "Run should be called again after cert rotation")
+		assert.Equal(t, int64(1), fakeRunner.stopCount.Load(), "Run should return when stopCh is closed")
 	})
 }
