@@ -210,7 +210,11 @@ function clean_antrea {
 function clean_for_windows_install_cni {
     # https://github.com/antrea-io/antrea/issues/1577
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
-        CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
+        CLEAN_LIST=(
+            "/cygdrive/c/opt/cni/bin/antrea.exe"
+            "/cygdrive/c/opt/cni/bin/host-local.exe"
+            "/cygdrive/c/etc/cni/net.d/10-antrea.conflist"
+        )
         for file in "${CLEAN_LIST[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -f ${file}"
         done

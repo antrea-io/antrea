@@ -8,6 +8,7 @@
   - [Antrea Windows demo](#antrea-windows-demo)
 - [Deploying Antrea on Windows worker Nodes](#deploying-antrea-on-windows-worker-nodes)
   - [Prerequisites](#prerequisites)
+  - [Upgrading from a Windows service installation](#upgrading-from-a-windows-service-installation)
   - [Installation as a Pod](#installation-as-a-pod)
     - [Download &amp; Configure Antrea for Linux](#download--configure-antrea-for-linux)
     - [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
@@ -69,7 +70,7 @@ the Windows Nodes in the demo.
 ## Deploying Antrea on Windows worker Nodes
 
 Running Antrea on Windows Nodes requires the containerd container runtime (version
-1.6 or higher). Antrea is deployed using [Installation as a
+1.6.18 or higher). Antrea is deployed using [Installation as a
 Pod](#installation-as-a-pod).
 
 Starting from v2.1, Antrea Windows image is built on Linux host with docker buildx
@@ -89,9 +90,38 @@ as the base image.
     [Known issues](#known-issues) section.
   - [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1).
 
+### Upgrading from a Windows service installation
+
+Starting with Antrea v2.8, running the Antrea Agent as a Windows service is no
+longer supported. There is no supported in-place migration from a service
+installation to a Pod installation. Before upgrading a cluster with service-based
+Windows Agents to Antrea v2.8 or later:
+
+1. [Drain](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
+   all Windows Nodes running the Antrea Agent as a service, shut down their hosts,
+   and remove the Nodes from the cluster using `kubectl delete node <node>`.
+   Complete this step for all service-based Windows Nodes before proceeding.
+   The Windows DaemonSet targets all Windows Nodes, including cordoned Nodes,
+   and would otherwise start Pod Agents alongside the existing services.
+2. Provision fresh Windows Nodes and follow [Installation as a
+   Pod](#installation-as-a-pod) using the currently installed Antrea version.
+3. Verify that the replacement Nodes and their Agent Pods are ready before
+   upgrading Antrea in the cluster.
+
+The `antrea-agent-service-account-token` Secret in the `kube-system` Namespace is
+also removed in Antrea v2.8. `helm upgrade` deletes this Secret and invalidates the
+credentials used by service-based Windows Agents, preventing them from
+authenticating to the Kubernetes API. Upgrades using `kubectl apply` leave the
+Secret behind; after completing the upgrade to Antrea v2.8 or later, delete the
+orphaned Secret manually:
+
+```bash
+kubectl -n kube-system delete secret antrea-agent-service-account-token --ignore-not-found
+```
+
 ### Installation as a Pod
 
-This installation method requires Antrea v1.10 or higher, and containerd 1.6 or
+This installation method requires Antrea v1.10 or higher, and containerd 1.6.18 or
 higher (containerd 1.7 or higher is recommended). It relies on support for
 [Windows HostProcess Pods](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
 which is generally available starting with K8s 1.26.
@@ -187,8 +217,8 @@ you will need to invoke the `Install-OVS.ps1` script differently (or not at all)
 | No                         | No                      | `.\Install-OVS.ps1 -InstallUserspace $true -LocalFile <PathToOVSPackage>` |
 
 If you used `antrea-windows-with-ovs.yml` to create the antrea-agent
-Windows DaemonSet, then you are using "Containerized OVS daemons". For all other
-methods, you are *not* using "Containerized OVS daemons".
+Windows DaemonSet, then you are using "Containerized OVS daemons". If you used
+`antrea-windows.yml`, then you are *not* using "Containerized OVS daemons".
 
 Antrea provides a pre-built OVS package which contains a test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try Antrea
@@ -311,8 +341,8 @@ Nodes and Pods in your cluster by running:
 kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION       CONTAINER-RUNTIME
 control-plane                  Ready    control-plane   1h    v1.29.0   10.176.27.168   <none>        Ubuntu 22.04.3 LTS               6.2.0-1017-generic   containerd://1.6.26
-win-5akrf2tpq91                Ready    <none>          1h    v1.29.0   10.176.27.150   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
-win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.27.197   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
+win-5akrf2tpq91                Ready    <none>          1h    v1.29.0   10.176.27.150   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.28
+win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.27.197   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.28
 
 # Show antrea-agent Pods
 kubectl get pods -o wide -n kube-system | grep windows
