@@ -89,6 +89,10 @@ const (
 // than as Unauthenticated.
 var errAuthenticationOverloaded = errors.New("too many authentication requests in flight")
 
+// errAuthenticationUnavailable means a client certificate could not be checked because the client
+// CA bundle has not loaded. It is reported as Unavailable so clients can retry once the bundle loads.
+var errAuthenticationUnavailable = errors.New("client CA bundle is not loaded")
+
 // StreamServerAuthenticator authenticates FlowStreamService clients. It provides the gRPC stream
 // interceptor that runs before any RPC on the service reaches its handler; every RPC the service
 // serves is server-streaming, and rejectUnaryRPC keeps it that way.
@@ -172,10 +176,10 @@ func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewCli
 // Run keeps the client CA bundle used to verify client certificates in sync with the ConfigMap
 // kube-apiserver publishes it in. It blocks until stopCh is closed.
 // The bundle is read through an informer that Run starts, so client certificate authentication only
-// becomes available once that informer has synced. Until then — and permanently on a cluster whose
-// kube-apiserver publishes no client CA at all — x509 verification has no trust bundle and declines
-// every peer certificate rather than accepting an unverified one. Bearer-token authentication does
-// not depend on any of this and keeps working either way.
+// becomes available once a valid bundle has loaded. Until then — and permanently on a cluster whose
+// kube-apiserver publishes no client CA at all — calls carrying a client certificate return
+// Unavailable so clients can retry, unless a bearer token on the same call authenticates.
+// Bearer-token authentication does not depend on the bundle and keeps working either way.
 func (a *StreamServerAuthenticator) Run(stopCh <-chan struct{}) {
 	a.clientCAProvider.Run(wait.ContextForChannel(stopCh), 1)
 }
@@ -187,7 +191,9 @@ func (f caBundleListenerFunc) Enqueue() { f() }
 
 // StreamInterceptor implements grpc.StreamServerInterceptor. It rejects the call with
 // codes.Unauthenticated if the request does not carry a valid bearer token or client certificate;
-// otherwise it attaches the resolved identity to the stream context before invoking handler.
+// calls carrying a client certificate that no other credential authenticates return
+// codes.Unavailable while the client CA bundle is not loaded.
+// On success it attaches the resolved identity to the stream context before invoking handler.
 func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	// Taken before authenticating, so a client that has already accumulated its share of streams
 	// cannot make the Flow Aggregator do authentication work, and released only when the stream ends.
@@ -221,6 +227,9 @@ func authenticationStatusError(err error) error {
 	if errors.Is(err, errAuthenticationOverloaded) {
 		return status.Error(codes.ResourceExhausted, "too many authentication requests in flight, retry later")
 	}
+	if errors.Is(err, errAuthenticationUnavailable) {
+		return status.Error(codes.Unavailable, "client certificate authentication is unavailable, retry later")
+	}
 	return status.Error(codes.Unauthenticated, "invalid client credentials")
 }
 
@@ -244,7 +253,19 @@ func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info
 		}
 	}
 
+	// Read before authenticating: the provider retains the last valid bundle once loaded. Reading
+	// afterward could misclassify an unchecked certificate if the bundle loads during authentication.
+	_, caLoaded := a.clientCAProvider.VerifyOptions()
 	resp, ok, err := a.authenticator.AuthenticateRequest(req)
+	if !ok && !caLoaded && req.TLS != nil && len(req.TLS.PeerCertificates) > 0 {
+		// The certificate went unchecked, and it is tried before any token, so the same call may
+		// succeed once the bundle loads even though a token it also carries was rejected. If the
+		// bundle loaded mid-call and the certificate was then rejected, the retry reports that.
+		if err != nil {
+			return nil, fmt.Errorf("%w; other credentials were not accepted: %w", errAuthenticationUnavailable, err)
+		}
+		return nil, errAuthenticationUnavailable
+	}
 	if err != nil {
 		// Reported when a credential was presented and rejected: an unverifiable certificate, a token
 		// TokenReview declined, or a TokenReview that could not be completed at all.

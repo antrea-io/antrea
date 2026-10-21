@@ -686,7 +686,13 @@ kube-apiserver itself tries them in; if that certificate does not verify, the
 bearer token is tried next.
 
 A stream whose credential is missing, malformed or invalid is rejected with
-`UNAUTHENTICATED` before any record is read.
+`UNAUTHENTICATED` before any record is read. The exception is a call carrying a
+client certificate before the Flow Aggregator has loaded the client CA bundle,
+such as right after it starts: the certificate cannot be checked yet, so unless
+a bearer token on the same call is accepted, the stream is rejected with
+`UNAVAILABLE` and the client should retry. On a cluster whose kube-apiserver
+publishes no client CA bundle, this never clears, and clients must use a bearer
+token instead.
 
 #### Authorizing flow visibility
 

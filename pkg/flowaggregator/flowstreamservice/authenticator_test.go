@@ -41,6 +41,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/kubernetes"
@@ -416,20 +417,107 @@ func TestStreamInterceptor_ExpiredClientCert(t *testing.T) {
 }
 
 // TestStreamInterceptor_ClientCertWithoutCABundle covers the window before the client CA bundle has
-// been loaded, and clusters whose kube-apiserver never publishes one. With no trust bundle the
-// certificate path must fail closed rather than accept an unverified certificate.
+// been loaded, and clusters whose kube-apiserver never publishes one. An unchecked certificate
+// returns Unavailable unless a bearer token on the same call authenticates: the certificate is tried
+// first, so a call whose token is rejected may still succeed once the bundle loads.
 func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 	ca := newTestCA(t)
 	// The authenticator is never Run, so its client CA provider holds no bundle.
-	a := newTestAuthenticator(t, nil)
+	a := newTestAuthenticator(t, map[string]authenticationv1.TokenReviewStatus{
+		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
+	})
 	_, ok := a.clientCAProvider.VerifyOptions()
 	require.False(t, ok, "expected no client CA bundle to be loaded")
+	cert := ca.validClientCert(t, "admin@test.com", nil)
 
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), ca.validClientCert(t, "admin@test.com", nil))
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	requireCode(t, err, codes.Unauthenticated)
-	assert.False(t, handlerCalled)
+	for _, tc := range []struct {
+		name     string
+		header   string
+		withCert bool
+		wantCode codes.Code
+	}{
+		{name: "certificate only", withCert: true, wantCode: codes.Unavailable},
+		{name: "certificate and malformed header", header: "Basic abc", withCert: true, wantCode: codes.Unavailable},
+		{name: "certificate and valid token", header: "Bearer good-token", withCert: true, wantCode: codes.OK},
+		{name: "certificate and rejected token", header: "Bearer bad-token", withCert: true, wantCode: codes.Unavailable},
+		{name: "valid token only", header: "Bearer good-token", wantCode: codes.OK},
+		{name: "rejected token only", header: "Bearer bad-token", wantCode: codes.Unauthenticated},
+		{name: "no credentials", wantCode: codes.Unauthenticated},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := contextWithAuthHeader(tc.header)
+			if tc.withCert {
+				ctx = contextWithClientCert(ctx, cert)
+			}
+			var gotUser user.Info
+			handlerCalled := false
+			err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+			if tc.wantCode == codes.OK {
+				require.NoError(t, err)
+				require.True(t, handlerCalled)
+				assert.Equal(t, "alice", gotUser.GetName())
+			} else {
+				requireCode(t, err, tc.wantCode)
+				assert.False(t, handlerCalled)
+			}
+		})
+	}
+}
+
+// TestStreamInterceptor_ClientCALoadDuringAuthentication verifies that loading the CA after the
+// certificate check cannot turn an unavailable authentication path into a credential rejection.
+// The same certificate must succeed when the client retries after the bundle has loaded, even if
+// the call also carries a rejected bearer token.
+func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
+	ca := newTestCA(t)
+	for _, tc := range []struct {
+		name   string
+		header string
+	}{
+		{name: "certificate only"},
+		{name: "certificate and rejected token", header: "Bearer bad-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k8sClient := k8sfake.NewSimpleClientset(&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: clientCAConfigMapNamespace, Name: clientCAConfigMapName},
+				Data:       map[string]string{clientCAConfigMapKey: string(ca.certPEM)},
+			})
+			a, err := newStreamServerAuthenticator(k8sClient, newTokenReviewClient(t, nil), testStreamLimits)
+			require.NoError(t, err)
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+
+			delegated := a.authenticator
+			a.authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+				resp, ok, err := delegated.AuthenticateRequest(req)
+				if tc.header != "" {
+					require.ErrorContains(t, err, "invalid bearer token")
+				} else {
+					require.NoError(t, err)
+				}
+				require.False(t, ok, "the certificate must not be checked before the CA loads")
+				go a.Run(stopCh)
+				require.Eventually(t, func() bool {
+					_, loaded := a.clientCAProvider.VerifyOptions()
+					return loaded
+				}, 10*time.Second, 10*time.Millisecond, "client CA bundle was never loaded")
+				return resp, ok, err
+			})
+
+			handlerCalled := false
+			ctx := contextWithClientCert(contextWithAuthHeader(tc.header), ca.validClientCert(t, "admin@test.com", nil))
+			err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+			requireCode(t, err, codes.Unavailable)
+			assert.False(t, handlerCalled)
+
+			a.authenticator = delegated
+			var gotUser user.Info
+			err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+			require.NoError(t, err)
+			require.True(t, handlerCalled)
+			assert.Equal(t, "admin@test.com", gotUser.GetName())
+		})
+	}
 }
 
 // TestStreamInterceptor_ClientCertTakesPrecedenceOverBearerToken pins down which credential wins when
