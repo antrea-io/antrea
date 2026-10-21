@@ -987,7 +987,7 @@ func TestFlowAggregator_FlowStreamServiceReadyAndLive(t *testing.T) {
 		// Not serving yet is neither ready nor a failure a restart could fix.
 		{name: "enabled, starting", enabled: true, state: flowstreamservice.StateStarting, wantReady: false, wantLive: true},
 		{name: "enabled, serving", enabled: true, state: flowstreamservice.StateServing, wantReady: true, wantLive: true},
-		// Draining for a certificate update is not ready either, but must not get the container restarted.
+		// Draining during shutdown is not ready either, but must not get the container restarted.
 		{name: "enabled, stopping", enabled: true, state: flowstreamservice.StateStopping, wantReady: false, wantLive: true},
 		{name: "enabled, failed", enabled: true, state: flowstreamservice.StateFailed, wantReady: false, wantLive: false},
 	}

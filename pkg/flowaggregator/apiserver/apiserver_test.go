@@ -68,7 +68,7 @@ func TestInstallHealthChecks(t *testing.T) {
 		live  bool
 	}{
 		{name: "serving", ready: true, live: true},
-		// Starting, or draining for a certificate update: not ready, but a restart would not help.
+		// Starting, or draining during shutdown: not ready, but a restart would not help.
 		{name: "not serving, not failed", ready: false, live: true},
 		// Failed: only a restart recovers, so liveness fails as well.
 		{name: "failed", ready: false, live: false},

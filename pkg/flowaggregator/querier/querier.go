@@ -38,9 +38,9 @@ type FlowAggregatorQuerier interface {
 	// disabled entirely, not just when the (enabled) service happens to be up.
 	FlowStreamServiceReady() bool
 	// FlowStreamServiceLive reports whether FlowStreamService is free of a failure that only a
-	// restart can recover from (it could not start, or stopped serving on its own), for the Flow
-	// Aggregator's own apiserver to expose via livez. Not serving yet, or draining, is not a
-	// failure. It reports true when the feature is disabled entirely.
+	// restart can recover from (it could not start, stopped serving on its own, or could not update
+	// its certificate), for the Flow Aggregator's own apiserver to expose via livez. Not serving yet,
+	// or draining during shutdown, is not a failure. It reports true when the feature is disabled entirely.
 	FlowStreamServiceLive() bool
 }
 

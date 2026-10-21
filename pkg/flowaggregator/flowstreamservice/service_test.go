@@ -1701,10 +1701,12 @@ func TestRun_ServeFailure(t *testing.T) {
 	})
 }
 
-// TestRun_StopBeforeServe covers a stop that is requested before the Serve goroutine got to run,
-// which happens when stopCh is already closed on entry (e.g. the Flow Aggregator was stopped right
-// as the server was being started). The graceful stop then runs first and Serve returns grpc.ErrServerStopped. That is a stop,
-// not a failure: it must not be reported as StateFailed, which would also make /livez fail.
+// TestRun_StopBeforeServe covers a stop that is requested before Run is called, with stopCh already
+// closed on entry (e.g. the Flow Aggregator was stopped right as the server was being started).
+// The graceful stop normally runs first and Serve returns grpc.ErrServerStopped. If Serve runs
+// first, it returns nil when the graceful stop closes the listener, with the same outcome.
+// Either way, this is a stop, not a failure: it must not be reported as StateFailed, which would
+// also make /livez fail.
 func TestRun_StopBeforeServe(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certPEM, keyPEM := newTestCert(t)

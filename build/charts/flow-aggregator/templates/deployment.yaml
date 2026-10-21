@@ -115,7 +115,7 @@ spec:
           - name: api
             containerPort: {{ .Values.apiServer.apiPort }}
             protocol: TCP
-        # All three probes are served by the Flow Aggregator's own apiserver, which reflects
+        # Both probes are served by the Flow Aggregator's own apiserver, which reflects
         # FlowStreamService's state (see pkg/flowaggregator/apiserver), not by a check on the
         # FlowStreamService port itself.
         # They are always present, even when flowStreamService.enable is false: the checks
