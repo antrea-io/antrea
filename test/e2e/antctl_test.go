@@ -169,6 +169,14 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
+		// "observe" is excluded from this generic bare-invocation smoke test: unlike every other
+		// command here, a bare "antctl observe" needs an actual Flow Aggregator to discover and
+		// connect to, which this test does not set up and is not aware of (it runs regardless of
+		// whether flow-visibility is enabled). TestAntctlObserve (antctlobserve_test.go) already
+		// covers "observe" thoroughly, including the flow-visibility-disabled case (it skips).
+		if len(c) == 1 && c[0] == "observe" {
+			continue
+		}
 		cmd := append([]string{"antctl"}, c...)
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}

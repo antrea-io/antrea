@@ -435,7 +435,14 @@ function run_test {
 
   if $flow_visibility; then
       timeout="60m"
-      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator|TestAntctlObserve) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
+      # An explicit --run takes precedence: it is already in RUN_OPT, and a second -run here would
+      # silently override it, as the last one given to "go test" wins.
+      #flow_visibility_run="-run=^(TestFlowExporter|TestFlowAggregator|TestAntctlObserve)"
+      #if [ -n "$run" ]; then
+      #  flow_visibility_run=""
+      #fi
+      #flow_visibility_args="$flow_visibility_run --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
       coverage_flag=""
