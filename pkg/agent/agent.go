@@ -336,7 +336,7 @@ func (i *Initializer) initInterfaceStore() error {
 		var intf *interfacestore.InterfaceConfig
 		interfaceType, ok := port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
 		if !ok {
-			klog.ErrorS(nil, "Interface type is not set, you may be trying to upgrade from an Antrea version which is too old", "interfaceName", intf.InterfaceName)
+			klog.ErrorS(nil, "Interface type is not set, you may be trying to upgrade from an Antrea version which is too old", "interfaceName", port.Name)
 			continue
 		}
 		switch interfaceType {
