@@ -438,8 +438,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 
 	if fa.flowStreamService != nil {
 		// The authenticator keeps the client CA bundle it verifies client certificates against in
-		// sync with the cluster, so it runs for the whole lifetime of the Flow Aggregator, not for
-		// the lifetime of one FlowStreamService server instance.
+		// sync with the cluster, so it runs for the whole lifetime of the Flow Aggregator.
 		if fa.flowStreamAuthenticator != nil {
 			wg.Add(1)
 			go func() {
