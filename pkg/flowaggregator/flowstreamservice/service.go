@@ -83,7 +83,8 @@ const (
 //     (validated against the cluster's client CA bundle).
 //
 // The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not
-// authenticate. Only this package's own tests can build a service that skips authentication.
+// authenticate, or with codes.Unavailable if its only credential is a client certificate and the
+// client CA bundle has not loaded yet. Only this package's own tests can build a service that skips authentication.
 //
 // The identity authenticated then decides what the client receives: every stream is authorized
 // with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in

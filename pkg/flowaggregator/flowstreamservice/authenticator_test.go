@@ -418,8 +418,8 @@ func TestStreamInterceptor_ExpiredClientCert(t *testing.T) {
 
 // TestStreamInterceptor_ClientCertWithoutCABundle covers the window before the client CA bundle has
 // been loaded, and clusters whose kube-apiserver never publishes one. An unchecked certificate
-// returns Unavailable unless a bearer token on the same call authenticates: the certificate is tried
-// first, so a call whose token is rejected may still succeed once the bundle loads.
+// returns Unavailable when it is the call's only credential; a bearer token on the same call is
+// checked as usual, and is reported as Unauthenticated if rejected.
 func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 	ca := newTestCA(t)
 	// The authenticator is never Run, so its client CA provider holds no bundle.
@@ -439,7 +439,7 @@ func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 		{name: "certificate only", withCert: true, wantCode: codes.Unavailable},
 		{name: "certificate and malformed header", header: "Basic abc", withCert: true, wantCode: codes.Unavailable},
 		{name: "certificate and valid token", header: "Bearer good-token", withCert: true, wantCode: codes.OK},
-		{name: "certificate and rejected token", header: "Bearer bad-token", withCert: true, wantCode: codes.Unavailable},
+		{name: "certificate and rejected token", header: "Bearer bad-token", withCert: true, wantCode: codes.Unauthenticated},
 		{name: "valid token only", header: "Bearer good-token", wantCode: codes.OK},
 		{name: "rejected token only", header: "Bearer bad-token", wantCode: codes.Unauthenticated},
 		{name: "no credentials", wantCode: codes.Unauthenticated},
@@ -466,16 +466,18 @@ func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 
 // TestStreamInterceptor_ClientCALoadDuringAuthentication verifies that loading the CA after the
 // certificate check cannot turn an unavailable authentication path into a credential rejection.
-// The same certificate must succeed when the client retries after the bundle has loaded, even if
-// the call also carries a rejected bearer token.
+// A rejected bearer token on the same call is still reported as Unauthenticated. Either way, the
+// same certificate must succeed when the client retries after the bundle has loaded, because it is
+// tried before the token.
 func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
 	ca := newTestCA(t)
 	for _, tc := range []struct {
-		name   string
-		header string
+		name     string
+		header   string
+		wantCode codes.Code
 	}{
-		{name: "certificate only"},
-		{name: "certificate and rejected token", header: "Bearer bad-token"},
+		{name: "certificate only", wantCode: codes.Unavailable},
+		{name: "certificate and rejected token", header: "Bearer bad-token", wantCode: codes.Unauthenticated},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			k8sClient := k8sfake.NewSimpleClientset(&corev1.ConfigMap{
@@ -507,7 +509,7 @@ func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
 			handlerCalled := false
 			ctx := contextWithClientCert(contextWithAuthHeader(tc.header), ca.validClientCert(t, "admin@test.com", nil))
 			err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-			requireCode(t, err, codes.Unavailable)
+			requireCode(t, err, tc.wantCode)
 			assert.False(t, handlerCalled)
 
 			a.authenticator = delegated
