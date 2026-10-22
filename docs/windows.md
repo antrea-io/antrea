@@ -8,6 +8,7 @@
   - [Antrea Windows demo](#antrea-windows-demo)
 - [Deploying Antrea on Windows worker Nodes](#deploying-antrea-on-windows-worker-nodes)
   - [Prerequisites](#prerequisites)
+  - [Upgrading from a Windows service or manual installation](#upgrading-from-a-windows-service-or-manual-installation)
   - [Installation as a Pod](#installation-as-a-pod)
     - [Download &amp; Configure Antrea for Linux](#download--configure-antrea-for-linux)
     - [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
@@ -18,8 +19,6 @@
       - [4. Prepare Node environment needed by antrea-agent](#4-prepare-node-environment-needed-by-antrea-agent)
       - [5. Run kubeadm to join the Node](#5-run-kubeadm-to-join-the-node)
       - [Verify your installation](#verify-your-installation)
-  - [Installation as a Service](#installation-as-a-service)
-  - [Manually run antrea-agent on Windows worker Nodes](#manually-run-antrea-agent-on-windows-worker-nodes)
 - [Known issues](#known-issues)
 <!-- /toc -->
 
@@ -52,15 +51,13 @@ The following components should be configured and run on the Windows Node.
 * OVS daemons
 * antrea-agent
 
-antrea-agent and the OVS daemons can either run as Pods (containerized) or as
-Windows services, and the following configurations are supported:
+antrea-agent runs as a Pod (containerized) on Windows Nodes. The OVS daemons can
+either run as a Pod (containerized) or as Windows services:
 
 | OVS daemons      | antrea-agent     | Supported         | Refer to |
 | ---------------- | ---------------- | ----------------- | -------- |
 | Containerized    | Containerized    | Yes (recommended) | [Installation as a Pod](#installation-as-a-pod) |
-| Containerized    | Windows Service  | No                | N/A |
 | Windows Services | Containerized    | Yes               | [Installation as a Pod](#installation-as-a-pod) |
-| Windows Services | Windows Services | Yes               | [Installation as a Service](#installation-as-a-service) |
 
 ### Antrea Windows demo
 
@@ -72,12 +69,9 @@ the Windows Nodes in the demo.
 
 ## Deploying Antrea on Windows worker Nodes
 
-Running Antrea on Windows Nodes requires the containerd container runtime. The
-recommended installation method is [Installation as a
-Pod](#installation-as-a-pod), and it requires containerd 1.6 or higher. If you
-prefer running the Antrea Agent as a Windows service, or if you are using
-containerd 1.5, you can use the [Installation as a
-Service](#installation-as-a-service) method.
+Running Antrea on Windows Nodes requires the containerd container runtime (version
+1.6.18 or higher). Antrea is deployed using [Installation as a
+Pod](#installation-as-a-pod).
 
 Starting from v2.1, Antrea Windows image is built on Linux host with docker buildx
 and uses [hpc](https://github.com/microsoft/windows-host-process-containers-base-image)
@@ -96,9 +90,39 @@ as the base image.
     [Known issues](#known-issues) section.
   - [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1).
 
+### Upgrading from a Windows service or manual installation
+
+Starting with Antrea v2.8, running the Antrea Agent on Windows worker Nodes
+outside of a Pod, either as a Windows service or as a process started with
+`Start-AntreaAgent.ps1`, is no longer supported. There is no supported in-place
+migration from these installation methods to a Pod installation. Before
+upgrading a cluster with such Windows Agents to Antrea v2.8 or later:
+
+1. [Drain](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
+   all Windows Nodes running the Antrea Agent outside of a Pod, shut down their hosts,
+   and remove the Nodes from the cluster using `kubectl delete node <node>`.
+   Complete this step for all such Windows Nodes before proceeding.
+   The Windows DaemonSet targets all Windows Nodes, including cordoned Nodes,
+   and would otherwise start Pod Agents alongside the existing Agents.
+2. Provision fresh Windows Nodes and follow [Installation as a
+   Pod](#installation-as-a-pod) using the currently installed Antrea version.
+3. Verify that the replacement Nodes and their Agent Pods are ready before
+   upgrading Antrea in the cluster.
+
+The `antrea-agent-service-account-token` Secret in the `kube-system` Namespace is
+also removed in Antrea v2.8. `helm upgrade` deletes this Secret and invalidates the
+credentials used by Windows Agents running outside of Pods, preventing them from
+authenticating to the Kubernetes API. Upgrades using `kubectl apply` leave the
+Secret behind; after completing the upgrade to Antrea v2.8 or later, delete the
+orphaned Secret manually:
+
+```bash
+kubectl -n kube-system delete secret antrea-agent-service-account-token --ignore-not-found
+```
+
 ### Installation as a Pod
 
-This installation method requires Antrea v1.10 or higher, and containerd 1.6 or
+This installation method requires Antrea v1.10 or higher, and containerd 1.6.18 or
 higher (containerd 1.7 or higher is recommended). It relies on support for
 [Windows HostProcess Pods](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
 which is generally available starting with K8s 1.26.
@@ -194,8 +218,8 @@ you will need to invoke the `Install-OVS.ps1` script differently (or not at all)
 | No                         | No                      | `.\Install-OVS.ps1 -InstallUserspace $true -LocalFile <PathToOVSPackage>` |
 
 If you used `antrea-windows-with-ovs.yml` to create the antrea-agent
-Windows DaemonSet, then you are using "Containerized OVS daemons". For all other
-methods, you are *not* using "Containerized OVS daemons".
+Windows DaemonSet, then you are using "Containerized OVS daemons". If you used
+`antrea-windows.yml`, then you are *not* using "Containerized OVS daemons".
 
 Antrea provides a pre-built OVS package which contains a test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try Antrea
@@ -318,83 +342,13 @@ Nodes and Pods in your cluster by running:
 kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION       CONTAINER-RUNTIME
 control-plane                  Ready    control-plane   1h    v1.29.0   10.176.27.168   <none>        Ubuntu 22.04.3 LTS               6.2.0-1017-generic   containerd://1.6.26
-win-5akrf2tpq91                Ready    <none>          1h    v1.29.0   10.176.27.150   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
-win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.27.197   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
+win-5akrf2tpq91                Ready    <none>          1h    v1.29.0   10.176.27.150   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.28
+win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.27.197   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.28
 
 # Show antrea-agent Pods
 kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 ```
-
-### Installation as a Service
-
-Install Antrea as usual. The following command deploys Antrea with the version
-specified by `<TAG>`:
-
-```bash
-kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
-```
-
-When running the Antrea Agent as a Windows service, no DaemonSet is created for
-Windows worker Nodes. You will need to ensure that [nssm](https://nssm.cc/) is
-installed on all your Windows Nodes. `nssm` is a handy tool to manage services
-on Windows.
-
-To prepare your Windows worker Nodes, follow the steps in [Join Windows worker Nodes](#join-windows-worker-nodes).
-With this installation method, OVS daemons are always run as services (not
-containerized), and you will need to run `Install-OVS.ps1` to install them.
-
-When your Nodes are ready, run the following scripts to install the antrea-agent
-service. NOTE: `<KubernetesVersion>`, `<KubeconfigPath>` and
-`<KubeletKubeconfigPath>` should be set by you. For example:
-
-```powershell
-$KubernetesVersion="v1.29.0"
-$KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
-$KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
-```
-
-```powershell
-$TAG="v2.0.0"
-$KubernetesVersion="<KubernetesVersion>"
-$KubeConfig="<KubeconfigPath>"
-$KubeletKubeconfigPath="<KubeletKubeconfigPath>"
-$KubernetesHome="c:/k"
-$AntreaHome="c:/k/antrea"
-
-curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
-Import-Module ./Helper.psm1
-
-Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
-
-New-DirectoryIfNotExist "${AntreaHome}/logs"
-nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
-
-nssm set antrea-agent DependOnService ovs-vswitchd
-nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
-
-Start-Service antrea-agent
-```
-
-### Manually run antrea-agent on Windows worker Nodes
-
-Antrea also provides powershell scripts which help install and run the Antrea
-Agent manually, please complete the steps in
-[Installation](#installation-as-a-pod) section, and skip the
-[Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset) step.
-Then run the following commands in powershell:
-
-```powershell
-mkdir c:\k\antrea
-cd c:\k\antrea
-curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start-AntreaAgent.ps1
-# Run antrea-agent
-# $KubeConfigPath is the path of kubeconfig file
-./Start-AntreaAgent.ps1 -kubeconfig $KubeConfigPath
-```
-
-> Note: Some features such as supportbundle collection are not supported in this
-> way. It's recommended to run antrea-agent as a Pod.
 
 ## Known issues
 

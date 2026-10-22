@@ -86,21 +86,6 @@ for build in "${ANTREA_AGENT_BUILDS[@]}"; do
     GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_AGENT_BINARY_NAME="antrea-agent-$suffix" make antrea-agent-release
 done
 
-ANTREA_CNI_BUILDS=(
-    "windows amd64 windows-x86_64.exe"
-)
-
-for build in "${ANTREA_CNI_BUILDS[@]}"; do
-    args=($build)
-    os="${args[0]}"
-    arch="${args[1]}"
-    suffix="${args[2]}"
-
-    GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_CNI_BINARY_NAME="antrea-cni-$suffix" make antrea-cni-release
-done
-
-sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start-AntreaAgent.ps1 > "$OUTPUT_DIR"/Start-AntreaAgent.ps1
-
 cp ./hack/externalnode/install-vm.sh "$OUTPUT_DIR/"
 cp ./hack/externalnode/install-vm.ps1 "$OUTPUT_DIR/"
 
