@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/servicecidr"
+	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
@@ -1047,5 +1048,67 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table main exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
+	}
+}
+
+// TestRestoreEgressRoutesAndRules verifies that a new route client, as created when antrea-agent restarts, deletes the
+// routes and rules that the previous one created for Egress IPs from a separate subnet. The routes are not in the main
+// table, which is the only table listed when routes are not filtered by table.
+func TestRestoreEgressRoutesAndRules(t *testing.T) {
+	skipIfNotInContainer(t)
+
+	networkConfig := &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}
+	tcs := []struct {
+		name    string
+		addr    string
+		gateway string
+		tableID uint32
+		mark    uint32
+		family  int
+	}{
+		{name: "IPv4", addr: "10.10.10.5/24", gateway: "10.10.10.1", tableID: 101, mark: 1, family: netlink.FAMILY_V4},
+		{name: "IPv6", addr: "fd00:10:10:10::5/64", gateway: "fd00:10:10:10::1", tableID: 120, mark: 2, family: netlink.FAMILY_V6},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.family == netlink.FAMILY_V6 && !nettest.SupportsIPv6() {
+				t.Skipf("Skipping test as IPv6 is not supported")
+			}
+			// The interface to which the Egress IPs from the subnet are assigned, a VLAN sub-interface in practice.
+			require.NoError(t, netlink.LinkAdd(&netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "antrea-ext.10"}}))
+			link, err := netlink.LinkByName("antrea-ext.10")
+			require.NoError(t, err)
+			defer netlink.LinkDel(link)
+			require.NoError(t, netlink.LinkSetUp(link))
+			addr, err := netlink.ParseAddr(tc.addr)
+			require.NoError(t, err)
+			require.NoError(t, netlink.AddrAdd(link, addr))
+
+			listRoutes := func() []netlink.Route {
+				routes, err := netlink.RouteListFiltered(tc.family, &netlink.Route{Table: int(tc.tableID)}, netlink.RT_FILTER_TABLE)
+				require.NoError(t, err)
+				return routes
+			}
+			listRules := func() []netlink.Rule {
+				rules, err := netlink.RuleListFiltered(tc.family, &netlink.Rule{Table: int(tc.tableID)}, netlink.RT_FILTER_TABLE)
+				require.NoError(t, err)
+				return rules
+			}
+			prefixLength, _ := addr.Mask.Size()
+
+			routeClient, err := newTestRouteClient(networkConfig, routeClientOptions{})
+			require.NoError(t, err)
+			require.NoError(t, routeClient.AddEgressRoutes(tc.tableID, link.Attrs().Index, net.ParseIP(tc.gateway), prefixLength))
+			require.NoError(t, routeClient.AddEgressRule(tc.tableID, tc.mark, tc.family == netlink.FAMILY_V6))
+			require.Len(t, listRoutes(), 2, "expected a subnet route and a default route in table %d", tc.tableID)
+			require.Len(t, listRules(), 1, "expected an ip rule for table %d", tc.tableID)
+
+			// antrea-agent restarts with a new route client.
+			routeClient, err = newTestRouteClient(networkConfig, routeClientOptions{})
+			require.NoError(t, err)
+			require.NoError(t, routeClient.RestoreEgressRoutesAndRules(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable))
+			assert.Empty(t, listRoutes(), "expected no routes in table %d", tc.tableID)
+			assert.Empty(t, listRules(), "expected no ip rules for table %d", tc.tableID)
+		})
 	}
 }
