@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -253,139 +255,141 @@ func BenchmarkSchedule(b *testing.B) {
 }
 
 func TestRun(t *testing.T) {
-	ctx := context.Background()
-	egresses := []runtime.Object{
-		&crdv1b1.Egress{
-			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		egresses := []runtime.Object{
+			&crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+				Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
+			},
+			&crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
+				Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
+			},
+			&crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC", CreationTimestamp: metav1.NewTime(time.Unix(3, 0))},
+				Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
+			},
+		}
+		node1 := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "node1",
+				Annotations: map[string]string{},
+			},
+		}
+		node2 := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "node2",
+				Annotations: map[string]string{},
+			},
+		}
+		fakeCluster := newFakeMemberlistCluster([]string{"node1", "node2"})
+		crdClient := fakeversioned.NewSimpleClientset(egresses...)
+		crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+		egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
+		clientset := fake.NewSimpleClientset(node1, node2)
+		informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+		nodeInformer := informerFactory.Core().V1().Nodes()
+
+		s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 2)
+		egressUpdates := make(chan string, 10)
+		s.AddEventHandler(func(egress string) {
+			egressUpdates <- egress
+		})
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		crdInformerFactory.Start(stopCh)
+		informerFactory.Start(stopCh)
+		// Rely on synctest.Wait, rather than the informers' WaitForCacheSync, to deterministically wait
+		// for the initial ADD events to be delivered to the event handlers: WaitForCacheSync only
+		// guarantees that the local caches are populated, not that the event handlers have run.
+		synctest.Wait()
+
+		go s.Run(stopCh)
+
+		// The original distribution when the total capacity is sufficient.
+		assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
+		assertScheduleResult(t, s, "egressA", "1.1.1.1", "node1", true)
+		assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
+		assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
+
+		// After egressA is updated, it should be moved to node2 determined by its consistent hash result.
+		patch := map[string]interface{}{
+			"spec": map[string]string{
+				"egressIP": "1.1.1.5",
+			},
+		}
+		patchBytes, _ := json.Marshal(patch)
+		crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), "egressA", types.MergePatchType, patchBytes, metav1.PatchOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New("egressA"))
+		assertScheduleResult(t, s, "egressA", "1.1.1.5", "node2", true)
+		assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
+		assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
+
+		// After node2 leaves, egress A and egressB should be moved to node1 as they were created earlier than egressC.
+		// egressC should be left unassigned.
+		fakeCluster.updateNodes([]string{"node1"})
+		assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
+		assertScheduleResult(t, s, "egressA", "1.1.1.5", "node1", true)
+		assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
+		assertScheduleResult(t, s, "egressC", "", "", false)
+
+		// After egressA is deleted, egressC should be assigned to node1.
+		crdClient.CrdV1beta1().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressC"))
+		assertScheduleResult(t, s, "egressA", "", "", false)
+		assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
+		assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
+
+		// After egressD is created, it should be left unassigned as the total capacity is insufficient.
+		crdClient.CrdV1beta1().Egresses().Create(ctx, &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
 			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
-		},
-		&crdv1b1.Egress{
-			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
-			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
-		},
-		&crdv1b1.Egress{
-			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC", CreationTimestamp: metav1.NewTime(time.Unix(3, 0))},
-			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
-		},
-	}
-	node1 := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "node1",
-			Annotations: map[string]string{},
-		},
-	}
-	node2 := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "node2",
-			Annotations: map[string]string{},
-		},
-	}
-	fakeCluster := newFakeMemberlistCluster([]string{"node1", "node2"})
-	crdClient := fakeversioned.NewSimpleClientset(egresses...)
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
-	clientset := fake.NewSimpleClientset(node1, node2)
-	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
-	nodeInformer := informerFactory.Core().V1().Nodes()
+		}, metav1.CreateOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New("egressD"))
+		assertScheduleResult(t, s, "egressD", "", "", false)
 
-	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 2)
-	egressUpdates := make(chan string, 10)
-	s.AddEventHandler(func(egress string) {
-		egressUpdates <- egress
+		// After node2 joins, egressB should be moved to node2 determined by its consistent hash result, and egressD should be assigned to node1.
+		fakeCluster.updateNodes([]string{"node1", "node2"})
+		assertReceivedItems(t, egressUpdates, sets.New("egressB", "egressD"))
+		assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
+		assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
+		assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
+
+		// Set node1's max-egress-ips annotation to invalid value, nothing should happen.
+		updatedNode1 := node1.DeepCopy()
+		updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "invalid-value"
+		clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New[string]())
+		// Set node1's max-egress-ips annotation to 1, egressD should be moved to node2.
+		updatedNode1 = node1.DeepCopy()
+		updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "1"
+		clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New("egressD"))
+		assertScheduleResult(t, s, "egressD", "1.1.1.1", "node2", true)
+		// Unset node1's max-egress-ips annotation, egressD should be moved to node1.
+		clientset.CoreV1().Nodes().Update(ctx, node1, metav1.UpdateOptions{})
+		assertReceivedItems(t, egressUpdates, sets.New("egressD"))
+		assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 	})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	crdInformerFactory.Start(stopCh)
-	informerFactory.Start(stopCh)
-	crdInformerFactory.WaitForCacheSync(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
-
-	go s.Run(stopCh)
-
-	// The original distribution when the total capacity is sufficient.
-	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
-	assertScheduleResult(t, s, "egressA", "1.1.1.1", "node1", true)
-	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
-	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
-	// After egressA is updated, it should be moved to node2 determined by its consistent hash result.
-	patch := map[string]interface{}{
-		"spec": map[string]string{
-			"egressIP": "1.1.1.5",
-		},
-	}
-	patchBytes, _ := json.Marshal(patch)
-	crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), "egressA", types.MergePatchType, patchBytes, metav1.PatchOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New("egressA"))
-	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node2", true)
-	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
-	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
-	// After node2 leaves, egress A and egressB should be moved to node1 as they were created earlier than egressC.
-	// egressC should be left unassigned.
-	fakeCluster.updateNodes([]string{"node1"})
-	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
-	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node1", true)
-	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
-	assertScheduleResult(t, s, "egressC", "", "", false)
-
-	// After egressA is deleted, egressC should be assigned to node1.
-	crdClient.CrdV1beta1().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressC"))
-	assertScheduleResult(t, s, "egressA", "", "", false)
-	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
-	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
-	// After egressD is created, it should be left unassigned as the total capacity is insufficient.
-	crdClient.CrdV1beta1().Egresses().Create(ctx, &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
-		Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
-	}, metav1.CreateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
-	assertScheduleResult(t, s, "egressD", "", "", false)
-
-	// After node2 joins, egressB should be moved to node2 determined by its consistent hash result, and egressD should be assigned to node1.
-	fakeCluster.updateNodes([]string{"node1", "node2"})
-	assertReceivedItems(t, egressUpdates, sets.New("egressB", "egressD"))
-	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
-	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
-
-	// Set node1's max-egress-ips annotation to invalid value, nothing should happen.
-	updatedNode1 := node1.DeepCopy()
-	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "invalid-value"
-	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]())
-	// Set node1's max-egress-ips annotation to 1, egressD should be moved to node2.
-	updatedNode1 = node1.DeepCopy()
-	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "1"
-	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
-	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node2", true)
-	// Unset node1's max-egress-ips annotation, egressD should be moved to node1.
-	clientset.CoreV1().Nodes().Update(ctx, node1, metav1.UpdateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
-	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 }
 
+// assertReceivedItems must be called from within a synctest bubble. synctest.Wait blocks until
+// every goroutine in the bubble (including the scheduler's worker) is durably blocked, which
+// guarantees that all the updates triggered so far have already been sent to the channel, and that
+// no more update is coming.
 func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[string]) {
 	t.Helper()
-	receivedItems := sets.New[string]()
-	for i := 0; i < expectedItems.Len(); i++ {
-		select {
-		case <-time.After(2 * time.Second):
-			t.Fatalf("Timeout getting item #%d from the channel", i)
-		case item := <-ch:
-			receivedItems.Insert(item)
-		}
+	synctest.Wait()
+	// The channel is buffered and its capacity is larger than the number of updates that a single
+	// scheduling round can generate, so all the updates are guaranteed to be readable here.
+	var receivedItems []string
+	for len(ch) > 0 {
+		receivedItems = append(receivedItems, <-ch)
 	}
-	assert.Equal(t, expectedItems, receivedItems)
-
-	select {
-	case <-time.After(100 * time.Millisecond):
-	case item := <-ch:
-		t.Fatalf("Got unexpected item %s from the channel", item)
-	}
+	// Compare the number of items as well, to catch duplicate updates for the same Egress.
+	require.Len(t, receivedItems, expectedItems.Len())
+	assert.Equal(t, expectedItems, sets.New(receivedItems...))
 }
 
 func assertScheduleResult(t *testing.T, s *egressIPScheduler, egress, egressIP, egressNode string, scheduled bool) {

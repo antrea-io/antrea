@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -211,6 +211,12 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		true,
 	)
 	egressController.localIPDetector = localIPDetector
+	// The workqueue and the event broadcaster start background goroutines on creation. These tests
+	// never call Run, which is what normally stops them, so they must be stopped explicitly:
+	// otherwise synctest.Test panics with "deadlock: main bubble goroutine has exited but blocked
+	// goroutines remain".
+	t.Cleanup(egressController.queue.ShutDown)
+	t.Cleanup(egressController.eventBroadcaster.Shutdown)
 	return &fakeController{
 		EgressController:         egressController,
 		mockController:           controller,
@@ -223,6 +229,16 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		mockServiceCIDRInterface: mockServiceCIDRProvider,
 		podUpdateChannel:         podUpdateChannel,
 	}
+}
+
+// startInformers must be called from within a synctest bubble. It starts the informers and relies
+// on synctest.Wait, rather than the informers' WaitForCacheSync, to deterministically wait for the
+// initial ADD events to be delivered to the event handlers: WaitForCacheSync only guarantees that
+// the local caches are populated, not that the registered event handlers have run.
+func (c *fakeController) startInformers(stopCh <-chan struct{}) {
+	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
+	synctest.Wait()
 }
 
 func TestSyncEgress(t *testing.T) {
@@ -1111,336 +1127,312 @@ func TestSyncEgress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initObjects := []runtime.Object{tt.existingEgress}
-			if tt.existingExternalIPPool != nil {
-				initObjects = append(initObjects, tt.existingExternalIPPool)
-			}
-			c := newFakeController(t, initObjects)
-			c.supportSeparateSubnet = tt.supportSeparateSubnet
-			c.trafficShapingEnabled = true
-			if tt.maxEgressIPsPerNode > 0 {
-				c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
-			}
-			events := make([]*eventsv1.Event, 0)
-			var eventsMutex sync.Mutex
-			c.eventBroadcaster.StartEventWatcher(func(e runtime.Object) {
-				eventsMutex.Lock()
-				defer eventsMutex.Unlock()
-				events = append(events, e.(*eventsv1.Event))
-			})
-			getEventMessages := func() []string {
-				eventsMutex.Lock()
-				defer eventsMutex.Unlock()
-				messages := make([]string, len(events))
-				for idx := range events {
-					messages[idx] = events[idx].Note
+			synctest.Test(t, func(t *testing.T) {
+				initObjects := []runtime.Object{tt.existingEgress}
+				if tt.existingExternalIPPool != nil {
+					initObjects = append(initObjects, tt.existingExternalIPPool)
 				}
-				return messages
-			}
+				c := newFakeController(t, initObjects)
+				c.supportSeparateSubnet = tt.supportSeparateSubnet
+				c.trafficShapingEnabled = true
+				if tt.maxEgressIPsPerNode > 0 {
+					c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
+				}
+				events := make([]*eventsv1.Event, 0)
+				var eventsMutex sync.Mutex
+				c.eventBroadcaster.StartEventWatcher(func(e runtime.Object) {
+					eventsMutex.Lock()
+					defer eventsMutex.Unlock()
+					events = append(events, e.(*eventsv1.Event))
+				})
+				getEventMessages := func() []string {
+					eventsMutex.Lock()
+					defer eventsMutex.Unlock()
+					messages := make([]string, len(events))
+					for idx := range events {
+						messages[idx] = events[idx].Note
+					}
+					return messages
+				}
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			c.crdInformerFactory.Start(stopCh)
-			c.informerFactory.Start(stopCh)
-			c.crdInformerFactory.WaitForCacheSync(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			c.addEgressGroup(tt.existingEgressGroup)
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				c.startInformers(stopCh)
+				c.addEgressGroup(tt.existingEgressGroup)
 
-			tt.expectedCalls(c.mockOFClient, c.mockRouteClient, c.mockIPAssigner)
-			c.egressIPScheduler.schedule()
-			err := c.syncEgress(tt.existingEgress.Name)
-			assert.NoError(t, err)
+				tt.expectedCalls(c.mockOFClient, c.mockRouteClient, c.mockIPAssigner)
+				c.egressIPScheduler.schedule()
+				err := c.syncEgress(tt.existingEgress.Name)
+				assert.NoError(t, err)
 
-			if tt.newEgress.Name == tt.existingEgress.Name {
-				c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), tt.newEgress, metav1.UpdateOptions{})
-			} else {
-				c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), tt.newEgress, metav1.CreateOptions{})
-			}
-			if tt.newExternalIPPool != nil {
-				if tt.existingExternalIPPool != nil && tt.existingExternalIPPool.Name == tt.newExternalIPPool.Name {
-					c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), tt.newExternalIPPool, metav1.UpdateOptions{})
+				if tt.newEgress.Name == tt.existingEgress.Name {
+					c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), tt.newEgress, metav1.UpdateOptions{})
 				} else {
-					c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), tt.newExternalIPPool, metav1.CreateOptions{})
+					c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), tt.newEgress, metav1.CreateOptions{})
 				}
-			}
-
-			if tt.newEgressGroup != nil {
-				c.addEgressGroup(tt.newEgressGroup)
-			}
-			if tt.newLocalIPs != nil {
-				c.localIPDetector = &fakeLocalIPDetector{localIPs: tt.newLocalIPs}
-			}
-			assert.Eventually(t, func() bool {
 				if tt.newExternalIPPool != nil {
-					pool, _ := c.externalIPPoolLister.Get(tt.newExternalIPPool.Name)
-					if !reflect.DeepEqual(pool, tt.newExternalIPPool) {
-						return false
+					if tt.existingExternalIPPool != nil && tt.existingExternalIPPool.Name == tt.newExternalIPPool.Name {
+						c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), tt.newExternalIPPool, metav1.UpdateOptions{})
+					} else {
+						c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), tt.newExternalIPPool, metav1.CreateOptions{})
 					}
 				}
-				egress, _ := c.egressLister.Get(tt.newEgress.Name)
-				return reflect.DeepEqual(egress, tt.newEgress)
-			}, time.Second, 100*time.Millisecond)
 
-			c.egressIPScheduler.schedule()
-			err = c.syncEgress(tt.newEgress.Name)
-			assert.NoError(t, err)
-			// Call it one more time to ensure it's idempotent, no extra datapath calls are supposed to be made.
-			err = c.syncEgress(tt.newEgress.Name)
-			assert.NoError(t, err)
-			for _, expectedEgress := range tt.expectedEgresses {
-				gotEgress, err := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), expectedEgress.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
-			}
-			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				if tt.newEgressGroup != nil {
+					c.addEgressGroup(tt.newEgressGroup)
+				}
+				if tt.newLocalIPs != nil {
+					c.localIPDetector = &fakeLocalIPDetector{localIPs: tt.newLocalIPs}
+				}
+				// Wait for the updates above to be reflected in the local caches.
+				synctest.Wait()
+				if tt.newExternalIPPool != nil {
+					pool, _ := c.externalIPPoolLister.Get(tt.newExternalIPPool.Name)
+					assert.Equal(t, tt.newExternalIPPool, pool)
+				}
+				updatedEgress, _ := c.egressLister.Get(tt.newEgress.Name)
+				assert.Equal(t, tt.newEgress, updatedEgress)
+
+				c.egressIPScheduler.schedule()
+				err = c.syncEgress(tt.newEgress.Name)
+				assert.NoError(t, err)
+				// Call it one more time to ensure it's idempotent, no extra datapath calls are supposed to be made.
+				err = c.syncEgress(tt.newEgress.Name)
+				assert.NoError(t, err)
+				for _, expectedEgress := range tt.expectedEgresses {
+					gotEgress, err := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), expectedEgress.Name, metav1.GetOptions{})
+					require.NoError(t, err)
+					assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
+				}
+				// Wait for the events to be delivered to the event watcher.
+				synctest.Wait()
 				messages := getEventMessages()
 				if len(tt.expectedEvents) == 0 {
 					assert.Empty(t, messages, "Expected no events")
 				} else {
 					assert.Equal(t, tt.expectedEvents, messages)
 				}
-			}, 2*time.Second, 200*time.Millisecond)
+			})
 		})
 	}
 }
 
 func TestPodUpdateShouldSyncEgress(t *testing.T) {
-	egress := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-	}
-	egressGroup := &cpv1b2.EgressGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-		GroupMembers: []cpv1b2.GroupMember{
-			{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
-			{Pod: &cpv1b2.PodReference{Name: "pendingPod", Namespace: "ns1"}},
-		},
-	}
-	c := newFakeController(t, []runtime.Object{egress})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go c.podUpdateChannel.Run(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.informerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
+	synctest.Test(t, func(t *testing.T) {
+		egress := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+		}
+		egressGroup := &cpv1b2.EgressGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			GroupMembers: []cpv1b2.GroupMember{
+				{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+				{Pod: &cpv1b2.PodReference{Name: "pendingPod", Namespace: "ns1"}},
+			},
+		}
+		c := newFakeController(t, []runtime.Object{egress})
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go c.podUpdateChannel.Run(stopCh)
+		c.startInformers(stopCh)
+		// Drain the ADD event generated by the informer for the existing Egress, so that the
+		// assertions below only observe the events triggered by the test itself.
+		checkQueueItemExistence(t, c.queue, egress.Name)
 
-	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	c.addEgressGroup(egressGroup)
-	require.Equal(t, 1, c.queue.Len())
-	item, _ := c.queue.Get()
-	require.Equal(t, egress.Name, item)
-	require.NoError(t, c.syncEgress(item))
-	c.queue.Done(item)
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		c.addEgressGroup(egressGroup)
+		synctest.Wait()
+		require.Equal(t, 1, c.queue.Len())
+		item, _ := c.queue.Get()
+		require.Equal(t, egress.Name, item)
+		require.NoError(t, c.syncEgress(item))
+		c.queue.Done(item)
 
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(10), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	// Mock CNIServer
-	addPodInterface(c.ifaceStore, "ns1", "pendingPod", 10)
-	ev := types.PodUpdate{
-		PodName:      "pendingPod",
-		PodNamespace: "ns1",
-	}
-	c.podUpdateChannel.Notify(ev)
-	require.Eventually(t, func() bool {
-		return c.queue.Len() == 1
-	}, time.Second, 10*time.Millisecond)
-	item, _ = c.queue.Get()
-	require.Equal(t, egress.Name, item)
-	require.NoError(t, c.syncEgress(item))
-	c.queue.Done(item)
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(10), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		// Mock CNIServer
+		addPodInterface(c.ifaceStore, "ns1", "pendingPod", 10)
+		ev := types.PodUpdate{
+			PodName:      "pendingPod",
+			PodNamespace: "ns1",
+		}
+		c.podUpdateChannel.Notify(ev)
+		synctest.Wait()
+		require.Equal(t, 1, c.queue.Len())
+		item, _ = c.queue.Get()
+		require.Equal(t, egress.Name, item)
+		require.NoError(t, c.syncEgress(item))
+		c.queue.Done(item)
+	})
 }
 
 func TestExternalIPPoolUpdateShouldSyncEgress(t *testing.T) {
-	egress1 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-	}
-	egress2 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: fakeExternalIPPool},
-	}
-	egress3 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "another-pool"},
-	}
-	c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go c.podUpdateChannel.Run(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.informerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-
-	assertItemsInQueue := func(items ...string) {
-		require.Eventually(t, func() bool {
-			return c.queue.Len() == len(items)
-		}, time.Second, 10*time.Millisecond)
-		expectedItems := sets.New(items...)
-		for i := 0; i < len(items); i++ {
-			item, _ := c.queue.Get()
-			c.queue.Done(item)
-			expectedItems.Delete(item)
+	synctest.Test(t, func(t *testing.T) {
+		egress1 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
 		}
-		assert.Empty(t, expectedItems)
-	}
+		egress2 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: fakeExternalIPPool},
+		}
+		egress3 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "another-pool"},
+		}
+		c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go c.podUpdateChannel.Run(stopCh)
+		c.startInformers(stopCh)
 
-	assertItemsInQueue(egress1.Name, egress2.Name, egress3.Name)
+		// The ADD events generated by the informer for the existing Egresses.
+		checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
 
-	// Creating the pool with subnetInfo should trigger Egress sync.
-	externalIPPool := &crdv1b1.ExternalIPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uidA"},
-		Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
-	}
-	c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), externalIPPool, metav1.CreateOptions{})
-	assertItemsInQueue(egress1.Name, egress2.Name)
+		// Creating the pool with subnetInfo should trigger Egress sync.
+		externalIPPool := &crdv1b1.ExternalIPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uidA"},
+			Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
+		}
+		c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), externalIPPool, metav1.CreateOptions{})
+		checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name)
 
-	// Updating the pool's subnetInfo should trigger Egress sync.
-	updateExternalIPPool := externalIPPool.DeepCopy()
-	updateExternalIPPool.Spec.SubnetInfo.VLAN = 10
-	c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), updateExternalIPPool, metav1.UpdateOptions{})
-	assertItemsInQueue(egress1.Name, egress2.Name)
+		// Updating the pool's subnetInfo should trigger Egress sync.
+		updateExternalIPPool := externalIPPool.DeepCopy()
+		updateExternalIPPool.Spec.SubnetInfo.VLAN = 10
+		c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), updateExternalIPPool, metav1.UpdateOptions{})
+		checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name)
 
-	// Updating the pool's annotation should not trigger Egress sync.
-	updateExternalIPPool = updateExternalIPPool.DeepCopy()
-	updateExternalIPPool.Annotations = map[string]string{"foo": "bar"}
-	c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), updateExternalIPPool, metav1.UpdateOptions{})
-	assertItemsInQueue()
+		// Updating the pool's annotation should not trigger Egress sync.
+		updateExternalIPPool = updateExternalIPPool.DeepCopy()
+		updateExternalIPPool.Annotations = map[string]string{"foo": "bar"}
+		c.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), updateExternalIPPool, metav1.UpdateOptions{})
+		checkQueueEmpty(t, c.queue)
+	})
 }
 
 func TestSyncOverlappingEgress(t *testing.T) {
-	egress1 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-	}
-	egressGroup1 := &cpv1b2.EgressGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-		GroupMembers: []cpv1b2.GroupMember{
-			{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
-			{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
-		},
-	}
-	// egress2 shares a Pod with egress1.
-	egress2 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1},
-	}
-	egressGroup2 := &cpv1b2.EgressGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
-		GroupMembers: []cpv1b2.GroupMember{
-			{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
-			{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
-		},
-	}
-	// egress3 shares a Pod with egress1 and has the same EgressIP.
-	egress3 := &crdv1b1.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
-		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-	}
-	egressGroup3 := &cpv1b2.EgressGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
-		GroupMembers: []cpv1b2.GroupMember{
-			{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
-			{Pod: &cpv1b2.PodReference{Name: "pod4", Namespace: "ns4"}},
-		},
-	}
-	c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.informerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-	c.addEgressGroup(egressGroup1)
-	c.addEgressGroup(egressGroup2)
-	c.addEgressGroup(egressGroup3)
-	checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
+	synctest.Test(t, func(t *testing.T) {
+		egress1 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+		}
+		egressGroup1 := &cpv1b2.EgressGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			GroupMembers: []cpv1b2.GroupMember{
+				{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+				{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
+			},
+		}
+		// egress2 shares a Pod with egress1.
+		egress2 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1},
+		}
+		egressGroup2 := &cpv1b2.EgressGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+			GroupMembers: []cpv1b2.GroupMember{
+				{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+				{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
+			},
+		}
+		// egress3 shares a Pod with egress1 and has the same EgressIP.
+		egress3 := &crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+		}
+		egressGroup3 := &cpv1b2.EgressGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
+			GroupMembers: []cpv1b2.GroupMember{
+				{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
+				{Pod: &cpv1b2.PodReference{Name: "pod4", Namespace: "ns4"}},
+			},
+		}
+		c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		c.startInformers(stopCh)
+		// Drain the ADD events generated by the informers for the existing Egresses, so that the
+		// assertions below only observe the events triggered by the test itself.
+		checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
+		c.addEgressGroup(egressGroup1)
+		c.addEgressGroup(egressGroup2)
+		c.addEgressGroup(egressGroup3)
+		checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
 
-	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	err := c.syncEgress(egress1.Name)
-	assert.NoError(t, err)
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		err := c.syncEgress(egress1.Name)
+		assert.NoError(t, err)
 
-	// egress2's IP is not local and pod1 has enforced egress1, so only one Pod SNAT flow is expected.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
-	err = c.syncEgress(egress2.Name)
-	assert.NoError(t, err)
+		// egress2's IP is not local and pod1 has enforced egress1, so only one Pod SNAT flow is expected.
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
+		err = c.syncEgress(egress2.Name)
+		assert.NoError(t, err)
 
-	// egress3 shares the same IP as egress1 and pod2 has enforced egress1, so only one Pod SNAT flow is expected.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(4), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	err = c.syncEgress(egress3.Name)
-	assert.NoError(t, err)
+		// egress3 shares the same IP as egress1 and pod2 has enforced egress1, so only one Pod SNAT flow is expected.
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(4), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		err = c.syncEgress(egress3.Name)
+		assert.NoError(t, err)
 
-	// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
-	// is still referring to it.
-	// egress2 and egress3 are expected to be triggered for resync.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
-	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress1.Name, metav1.DeleteOptions{})
-	assert.Eventually(t, func() bool {
-		_, err := c.egressLister.Get(egress1.Name)
-		return err != nil
-	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress1.Name)
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	err = c.syncEgress(egress1.Name)
-	assert.NoError(t, err)
-	checkQueueItemExistence(t, c.queue, egress2.Name, egress3.Name)
+		// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
+		// is still referring to it.
+		// egress2 and egress3 are expected to be triggered for resync.
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+		c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress1.Name, metav1.DeleteOptions{})
+		checkQueueItemExistence(t, c.queue, egress1.Name)
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		err = c.syncEgress(egress1.Name)
+		assert.NoError(t, err)
+		checkQueueItemExistence(t, c.queue, egress2.Name, egress3.Name)
 
-	// pod1 is expected to enforce egress2.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
-	err = c.syncEgress(egress2.Name)
-	assert.NoError(t, err)
+		// pod1 is expected to enforce egress2.
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
+		err = c.syncEgress(egress2.Name)
+		assert.NoError(t, err)
 
-	// pod2 is expected to enforce egress3.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	err = c.syncEgress(egress3.Name)
-	assert.NoError(t, err)
+		// pod2 is expected to enforce egress3.
+		c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		err = c.syncEgress(egress3.Name)
+		assert.NoError(t, err)
 
-	// After deleting egress2, pod1 and pod3 no longer enforces any Egress.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
-	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
-	assert.Eventually(t, func() bool {
-		_, err := c.egressLister.Get(egress2.Name)
-		return err != nil
-	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress2.Name)
-	err = c.syncEgress(egress2.Name)
-	assert.NoError(t, err)
-	require.Equal(t, 0, c.queue.Len())
+		// After deleting egress2, pod1 and pod3 no longer enforces any Egress.
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
+		c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
+		checkQueueItemExistence(t, c.queue, egress2.Name)
+		err = c.syncEgress(egress2.Name)
+		assert.NoError(t, err)
+		checkQueueEmpty(t, c.queue)
 
-	// After deleting egress3, pod2 and pod4 no longer enforces any Egress. The Egress IP should be released.
-	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
-	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4))
-	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress3.Name, metav1.DeleteOptions{})
-	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	assert.Eventually(t, func() bool {
-		_, err := c.egressLister.Get(egress3.Name)
-		return err != nil
-	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress3.Name)
-	err = c.syncEgress(egress3.Name)
-	assert.NoError(t, err)
-	require.Equal(t, 0, c.queue.Len())
+		// After deleting egress3, pod2 and pod4 no longer enforces any Egress. The Egress IP should be released.
+		c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+		c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4))
+		c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress3.Name, metav1.DeleteOptions{})
+		c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+		checkQueueItemExistence(t, c.queue, egress3.Name)
+		err = c.syncEgress(egress3.Name)
+		assert.NoError(t, err)
+		checkQueueEmpty(t, c.queue)
 
-	assert.Len(t, c.egressBindings, 0)
-	assert.Len(t, c.egressStates, 0)
-	assert.Len(t, c.egressIPStates, 0)
+		assert.Len(t, c.egressBindings, 0)
+		assert.Len(t, c.egressStates, 0)
+		assert.Len(t, c.egressIPStates, 0)
+	})
 }
 
 func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, podName string, ofPort int32) {
@@ -1799,56 +1791,82 @@ func TestGetEgressIPByMark(t *testing.T) {
 }
 
 func TestUpdateServiceCIDRs(t *testing.T) {
-	c := newFakeController(t, nil)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	// Retry immediately.
-	c.serviceCIDRUpdateRetryDelay = 0
+	synctest.Test(t, func(t *testing.T) {
+		c := newFakeController(t, nil)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
 
-	serviceCIDRs := []*net.IPNet{
-		ip.MustParseCIDR("10.96.0.0/16"),
-		ip.MustParseCIDR("1096::/64"),
-	}
-	assert.Len(t, c.serviceCIDRUpdateCh, 0)
-	// Call the handler the 1st time, it should enqueue an event.
-	c.onServiceCIDRUpdate(serviceCIDRs)
-	assert.Len(t, c.serviceCIDRUpdateCh, 1)
-	// Call the handler the 2nd time, it should not block and should discard the event.
-	c.onServiceCIDRUpdate(serviceCIDRs)
-	assert.Len(t, c.serviceCIDRUpdateCh, 1)
+		serviceCIDRs := []*net.IPNet{
+			ip.MustParseCIDR("10.96.0.0/16"),
+			ip.MustParseCIDR("1096::/64"),
+		}
+		assert.Len(t, c.serviceCIDRUpdateCh, 0)
+		// Call the handler the 1st time, it should enqueue an event.
+		c.onServiceCIDRUpdate(serviceCIDRs)
+		assert.Len(t, c.serviceCIDRUpdateCh, 1)
+		// Call the handler the 2nd time, it should not block and should discard the event.
+		c.onServiceCIDRUpdate(serviceCIDRs)
+		assert.Len(t, c.serviceCIDRUpdateCh, 1)
 
-	// In the 1st round, returning the ServiceCIDRs fails, it should not retry.
-	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(nil, fmt.Errorf("not initialized"))
+		// In the 1st round, returning the ServiceCIDRs fails, it should not retry.
+		c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(nil, fmt.Errorf("not initialized"))
 
-	go c.updateServiceCIDRs(stopCh)
+		go c.updateServiceCIDRs(stopCh)
 
-	// Wait for the event to be processed.
-	require.Eventually(t, func() bool {
-		return len(c.serviceCIDRUpdateCh) == 0
-	}, time.Second, 100*time.Millisecond)
-	// In the 2nd round, returning the ServiceCIDR succeeds but installing flows fails, it should retry.
-	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
-	c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Return(fmt.Errorf("transient error"))
-	// In the 3rd round, both succeed.
-	finishCh := make(chan struct{})
-	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
-	c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Do(func(_ []*net.IPNet) { close(finishCh) }).Return(nil)
-	// Enqueue only one event as the 2nd failure is supposed to trigger a retry.
-	c.onServiceCIDRUpdate(serviceCIDRs)
+		// Wait for the event to be processed.
+		synctest.Wait()
+		assert.Len(t, c.serviceCIDRUpdateCh, 0)
+		// No retry is expected after a GetServiceCIDRs failure: advancing the clock past
+		// serviceCIDRUpdateRetryDelay should not cause any further call. No mock call is expected at
+		// this point, so a retry would fail the test.
+		time.Sleep(c.serviceCIDRUpdateRetryDelay)
+		synctest.Wait()
 
-	select {
-	case <-finishCh:
-	case <-time.After(time.Second):
-		t.Errorf("InstallSNATBypassServiceFlows didn't succeed in time")
-	}
+		// In the 2nd round, returning the ServiceCIDR succeeds but installing flows fails, it should
+		// retry after serviceCIDRUpdateRetryDelay.
+		c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
+		c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Return(fmt.Errorf("transient error"))
+		// In the 3rd round, both succeed.
+		finishCh := make(chan struct{})
+		c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
+		c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Do(func(_ []*net.IPNet) { close(finishCh) }).Return(nil)
+		// Enqueue only one event as the 2nd failure is supposed to trigger a retry.
+		c.onServiceCIDRUpdate(serviceCIDRs)
+		synctest.Wait()
+		select {
+		case <-finishCh:
+			t.Fatal("InstallSNATBypassServiceFlows was retried before serviceCIDRUpdateRetryDelay elapsed")
+		default:
+		}
+
+		// Advancing the bubble's clock by serviceCIDRUpdateRetryDelay should trigger the retry.
+		time.Sleep(c.serviceCIDRUpdateRetryDelay)
+		synctest.Wait()
+		select {
+		case <-finishCh:
+		default:
+			t.Error("InstallSNATBypassServiceFlows was not retried after serviceCIDRUpdateRetryDelay elapsed")
+		}
+	})
 }
 
+// checkQueueEmpty must be called from within a synctest bubble. Like checkQueueItemExistence, it
+// relies on synctest.Wait to ensure that all the events triggered so far have already been
+// delivered to the queue.
+func checkQueueEmpty[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T]) {
+	t.Helper()
+	synctest.Wait()
+	assert.Equal(t, 0, queue.Len(), "Expected the queue to be empty")
+}
+
+// checkQueueItemExistence must be called from within a synctest bubble. synctest.Wait blocks until
+// every goroutine in the bubble (including the informers' processing loops) is durably blocked,
+// which guarantees that all events triggered so far have already been delivered to the queue.
 func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
-	t.Logf("queue len %d", queue.Len())
-	require.Eventually(t, func() bool {
-		return len(items) == queue.Len()
-	}, time.Second, 10*time.Millisecond, "Didn't find enough items in the queue")
+	t.Helper()
+	synctest.Wait()
 	expectedItems := sets.New(items...)
+	require.Equal(t, expectedItems.Len(), queue.Len(), "Unexpected number of items in the queue")
 	actualItems := sets.New[T]()
 	for i := 0; i < len(expectedItems); i++ {
 		key, _ := queue.Get()
