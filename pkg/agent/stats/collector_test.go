@@ -54,6 +54,12 @@ var (
 		Name:      "bar",
 		UID:       "uid4",
 	}
+	cnp1 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.K8sClusterNetworkPolicy,
+		Namespace: "",
+		Name:      "qux",
+		UID:       "uid5",
+	}
 )
 
 func TestCollect(t *testing.T) {
@@ -103,6 +109,7 @@ func TestCollect(t *testing.T) {
 				},
 				antreaClusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 				antreaNetworkPolicyStats:        map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
+				clusterNetworkPolicyStats:       map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 			},
 		},
 		{
@@ -123,11 +130,17 @@ func TestCollect(t *testing.T) {
 					Packets:  5,
 					Sessions: 3,
 				},
+				4: {
+					Bytes:    45,
+					Packets:  9,
+					Sessions: 4,
+				},
 			},
 			ofIDToPolicyMap: map[uint32]*agenttypes.PolicyRule{
 				1: {PolicyRef: &np1},
 				2: {Name: "rule1", PolicyRef: &acnp1},
 				3: {Name: "rule2", PolicyRef: &annp1},
+				4: {Name: "rule3", PolicyRef: &cnp1},
 			},
 			expectedStatsCollection: &statsCollection{
 				networkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
@@ -152,6 +165,15 @@ func TestCollect(t *testing.T) {
 							Bytes:    30,
 							Packets:  5,
 							Sessions: 3,
+						},
+					},
+				},
+				clusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+					cnp1.UID: {
+						"rule3": {
+							Bytes:    45,
+							Packets:  9,
+							Sessions: 4,
 						},
 					},
 				},
@@ -185,6 +207,7 @@ func TestCollect(t *testing.T) {
 				},
 				antreaClusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 				antreaNetworkPolicyStats:        map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
+				clusterNetworkPolicyStats:       map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 			},
 		},
 	}
