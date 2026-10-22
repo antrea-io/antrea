@@ -8,7 +8,7 @@
   - [Antrea Windows demo](#antrea-windows-demo)
 - [Deploying Antrea on Windows worker Nodes](#deploying-antrea-on-windows-worker-nodes)
   - [Prerequisites](#prerequisites)
-  - [Upgrading from a Windows service installation](#upgrading-from-a-windows-service-installation)
+  - [Upgrading from a Windows service or manual installation](#upgrading-from-a-windows-service-or-manual-installation)
   - [Installation as a Pod](#installation-as-a-pod)
     - [Download &amp; Configure Antrea for Linux](#download--configure-antrea-for-linux)
     - [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
@@ -90,19 +90,20 @@ as the base image.
     [Known issues](#known-issues) section.
   - [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1).
 
-### Upgrading from a Windows service installation
+### Upgrading from a Windows service or manual installation
 
-Starting with Antrea v2.8, running the Antrea Agent as a Windows service is no
-longer supported. There is no supported in-place migration from a service
-installation to a Pod installation. Before upgrading a cluster with service-based
-Windows Agents to Antrea v2.8 or later:
+Starting with Antrea v2.8, running the Antrea Agent on Windows worker Nodes
+outside of a Pod, either as a Windows service or as a process started with
+`Start-AntreaAgent.ps1`, is no longer supported. There is no supported in-place
+migration from these installation methods to a Pod installation. Before
+upgrading a cluster with such Windows Agents to Antrea v2.8 or later:
 
 1. [Drain](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
-   all Windows Nodes running the Antrea Agent as a service, shut down their hosts,
+   all Windows Nodes running the Antrea Agent outside of a Pod, shut down their hosts,
    and remove the Nodes from the cluster using `kubectl delete node <node>`.
-   Complete this step for all service-based Windows Nodes before proceeding.
+   Complete this step for all such Windows Nodes before proceeding.
    The Windows DaemonSet targets all Windows Nodes, including cordoned Nodes,
-   and would otherwise start Pod Agents alongside the existing services.
+   and would otherwise start Pod Agents alongside the existing Agents.
 2. Provision fresh Windows Nodes and follow [Installation as a
    Pod](#installation-as-a-pod) using the currently installed Antrea version.
 3. Verify that the replacement Nodes and their Agent Pods are ready before
@@ -110,7 +111,7 @@ Windows Agents to Antrea v2.8 or later:
 
 The `antrea-agent-service-account-token` Secret in the `kube-system` Namespace is
 also removed in Antrea v2.8. `helm upgrade` deletes this Secret and invalidates the
-credentials used by service-based Windows Agents, preventing them from
+credentials used by Windows Agents running outside of Pods, preventing them from
 authenticating to the Kubernetes API. Upgrades using `kubectl apply` leave the
 Secret behind; after completing the upgrade to Antrea v2.8 or later, delete the
 orphaned Secret manually:
