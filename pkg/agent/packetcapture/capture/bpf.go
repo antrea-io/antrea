@@ -17,6 +17,7 @@ package capture
 import (
 	"encoding/binary"
 	"net"
+	"reflect"
 	"strings"
 
 	"golang.org/x/net/bpf"
@@ -297,56 +298,6 @@ func (h *ipFamilyHandler) calculateSkipOffset(chunkIndex int, skipFalse, skipToE
 	return skipToEnd
 }
 
-func (h *ipFamilyHandler) countAddrForSkipFalse(srcIP, dstIP net.IP) uint8 {
-	var count uint8
-	// We keep track of this count so we can correctly calculate the
-	// relative jump offsets (SkipFalse) that decrease by 2 per chunk
-	// for the srcIP and dstIP cases.
-	if srcIP != nil {
-		count += uint8(h.addressChunks * 2)
-	}
-	if dstIP != nil {
-		count += uint8(h.addressChunks * 2)
-	}
-	return count
-}
-
-func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport *transportFilters) uint8 {
-	var count uint8
-
-	count += handler.countAddrForSkipFalse(srcIP, dstIP)
-
-	if transport.srcPort > 0 || transport.dstPort > 0 || len(transport.tcpFlags) > 0 || len(transport.icmp) > 0 {
-		if handler.etherType == etherTypeIPv4 {
-			// load fragment offset
-			count += 3
-		}
-
-		if transport.srcPort > 0 {
-			count += 2
-		}
-		if transport.dstPort > 0 {
-			count += 2
-		}
-		if len(transport.tcpFlags) > 0 {
-			count += uint8(len(transport.tcpFlags) * 3)
-		}
-		if len(transport.icmp) > 0 {
-			count++
-			for _, m := range transport.icmp {
-				count++
-				if m.icmpCode != nil {
-					count += 2
-				}
-			}
-		}
-	}
-	// ret keep
-	count++
-
-	return count
-}
-
 // compileIPFilters generates the BPF instructions for matching source and/or destination
 // IP addresses. It is protocol-agnostic, using the handler to abstract the differences
 // between IPv4 (1 chunk) and IPv6 (4 chunks). It also manages the complex jump logic
@@ -423,13 +374,28 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 
 		// tcp flags
 		if len(transport.tcpFlags) > 0 {
+			flagsLoaded := false
 			for i, f := range transport.tcpFlags {
-				inst = append(inst, handler.loadTCPFlags)
-				inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
-				if i == len(transport.tcpFlags)-1 { // last flag match condition
-					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
+				if !flagsLoaded {
+					inst = append(inst, handler.loadTCPFlags)
+					flagsLoaded = true
+				}
+				if f.flag == 0 {
+					// Optimization: when f.flag is 0 (i.e. we check if all bits in f.mask are cleared),
+					// libpcap/tcpdump uses a single BPF_JSET instruction with swapped branches.
+					if i == len(transport.tcpFlags)-1 { // last flag match condition
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: skipToEnd(), SkipFalse: 0})
+					} else {
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: 0, SkipFalse: skipToEnd() - 1})
+					}
 				} else {
-					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+					inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+					flagsLoaded = false                 // ALU operation overwrites/mutates the accumulator
+					if i == len(transport.tcpFlags)-1 { // last flag match condition
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
+					} else {
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+					}
 				}
 			}
 		}
@@ -461,7 +427,6 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 		}
 	}
 
-	// return (accept)
 	inst = append(inst, returnKeep)
 
 	return inst
@@ -478,11 +443,39 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 	return compileGenericPacketFilter(ipv4Handler, packetSpec, srcIP, dstIP, direction)
 }
 
+// sizeSentinel is a placeholder value used during the first compilation pass.
+// The two-pass approach relies on the invariant that the emitted instruction
+// count is independent of the size/jump-offset values: the first pass uses
+// this sentinel to obtain the count, and the second pass compiles with the
+// real size so that jump offsets are correct.
+const sizeSentinel = 255
+
 // compileGenericPacketFilter compiles the CRD spec to BPF instructions using a
 // protocol-specific handler to manage differences between IPv4 and IPv6.
 func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
-	size := uint8(calculateInstructionsSize(handler, packetSpec, srcIP, dstIP, direction))
+	firstPass := doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, sizeSentinel)
+	// Guard against the unlikely case where the generated program exceeds 255
+	// instructions, which would cause silent uint8 truncation on the second pass.
+	if len(firstPass) > int(sizeSentinel) {
+		panic("BPF program exceeds maximum instruction count (255)")
+	}
+	size := uint8(len(firstPass))
+	return doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, size)
+}
 
+func getCommonPrefixChunks(handler *ipFamilyHandler, a, b net.IP) int {
+	if a == nil || b == nil {
+		return 0
+	}
+	for i := 0; i < handler.addressChunks; i++ {
+		if handler.getAddressChunk(a, i) != handler.getAddressChunk(b, i) {
+			return i
+		}
+	}
+	return handler.addressChunks
+}
+
+func doCompileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection, size uint8) []bpf.Instruction {
 	// Start with checking the EtherType.
 	inst := []bpf.Instruction{loadEtherKind}
 	// skip means how many instructions we need to skip if the compare fails.
@@ -507,21 +500,14 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 			proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 		}
 
-		// For IPv6 with transport-level filters and at least one IP filter,
-		// defer protocol checks until after IP checks for one-way directions.
-		// This better aligns with tcpdump output ordering for many complex
-		// expressions where L3 constraints are evaluated before protocol checks.
-		// IPv4 does not need this reordering: tcpdump/libpcap always emits
-		// IPv4 protocol checks immediately after the EtherType check,
-		// regardless of filter complexity.
 		deferProtoCheck = handler.etherType == etherTypeIPv6 &&
 			hasTransport &&
-			(srcIP != nil || dstIP != nil) &&
-			(direction == crdv1alpha1.CaptureDirectionSourceToDestination ||
-				direction == crdv1alpha1.CaptureDirectionDestinationToSource)
+			(srcIP != nil || dstIP != nil)
 
 		if !deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		} else if direction == crdv1alpha1.CaptureDirectionBoth {
+			inst = appendProtocolFilters(inst, handler, proto, false, size)
 		}
 	}
 
@@ -541,6 +527,10 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 					if f.Mask != nil {
 						m = *f.Mask
 					}
+					// When Value is 0 and Mask is non-zero ("flag cleared" check),
+					// libpcap/tcpdump optimizes this into a single BPF_JSET instruction
+					// with swapped branches. Antrea mimics this optimization to achieve
+					// byte-for-byte bytecode parity with tcpdump.
 					transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
 						flag: uint32(f.Value),
 						mask: uint32(m),
@@ -593,30 +583,346 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 		}
 	}
 
+	skipToDrop := func(curInsts int) uint8 { return size - uint8(curInsts) - 2 }
+
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
 		if hasProtocol && deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
 		}
+		inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
 		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
 		if hasProtocol && deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
 		}
-	default:
-		skipFalse := calculateSkipFalse(handler, srcIP, dstIP, &transport)
-		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
 		inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
-		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+	default:
+		var bothProto uint32
+		if hasProtocol && deferProtoCheck {
+			bothProto = proto
+		}
+		inst = compileBothDirectionFilters(inst, handler, srcIP, dstIP, size, &transport, skipToDrop, bothProto)
 	}
-	inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
 
 	// return (drop)
 	inst = append(inst, returnDrop)
 
+	return inst
+}
+
+func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandler, srcIP, dstIP net.IP, size uint8, transport *transportFilters, skipToDrop func(int) uint8, proto uint32) []bpf.Instruction {
+	common := getCommonPrefixChunks(handler, srcIP, dstIP)
+
+	sharedFlags := transport.tcpFlags
+	sharedICMP := transport.icmp
+	transportNoFlagsICMP := *transport
+	transportNoFlagsICMP.tcpFlags = nil
+	transportNoFlagsICMP.icmp = nil
+
+	// When exactly one IP is present (srcOnly/dstOnly), tcpdump inlines
+	// ICMP/flags per-branch rather than factoring them into a shared suffix.
+	// Keep them in the per-direction transport filters for those cases.
+	inlineICMPFlags := (srcIP == nil) != (dstIP == nil)
+	if inlineICMPFlags {
+		sharedFlags = nil
+		sharedICMP = nil
+		transportNoFlagsICMP.tcpFlags = transport.tcpFlags
+		transportNoFlagsICMP.icmp = transport.icmp
+	}
+
+	diffJumpIdxs := make([]int, 0, handler.addressChunks)
+	if srcIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrA := handler.getAddressChunk(srcIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+			if i < common {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			} else {
+				diffJumpIdxs = append(diffJumpIdxs, len(inst))
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: 0})
+			}
+		}
+	}
+
+	// singleIPJumps tracks jump indices for the single-IP case (srcOnly
+	// or dstOnly), where the address check failure must branch to path B
+	// rather than to DROP.
+	var singleIPJumps []int
+	if dstIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(dstIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.destinationAddrOffset + offset, Size: lengthWord})
+			if srcIP == nil {
+				idx := len(inst)
+				singleIPJumps = append(singleIPJumps, idx)
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: 0})
+			} else {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			}
+		}
+	}
+
+	transportPatchStart := len(inst)
+
+	hasPorts := transportNoFlagsICMP.srcPort > 0 || transportNoFlagsICMP.dstPort > 0
+	if proto > 0 && handler.etherType == etherTypeIPv6 && hasPorts {
+		inst = append(inst, handler.loadProtocol)
+		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+	}
+
+	transA := compileTransportFilters(handler, size, uint8(len(inst)), &transportNoFlagsICMP)
+	transA = transA[:len(transA)-1]
+	inst = append(inst, transA...)
+
+	for _, idx := range diffJumpIdxs {
+		origJmp := inst[idx].(bpf.JumpIf)
+		origJmp.SkipFalse = uint8(len(inst) - idx - 1)
+		inst[idx] = origJmp
+	}
+
+	// Patch address and transport jump targets for single-IP and no-IP cases.
+	// When exactly one IP is present, the address-check failure must jump to
+	// path B instead of DROP. The transport jumps in path A must also be
+	// redirected to path B.
+	if (srcIP == nil) != (dstIP == nil) {
+		pathBStart := len(inst)
+		// Patch the appropriate address jumps (singleIPJumps for dstOnly,
+		// diffJumpIdxs for srcOnly) to fall through to path B.
+		addrJumps := singleIPJumps
+		if srcIP != nil {
+			addrJumps = diffJumpIdxs
+		}
+		for _, idx := range addrJumps {
+			origJmp := inst[idx].(bpf.JumpIf)
+			origJmp.SkipFalse = uint8(pathBStart - idx - 1)
+			inst[idx] = origJmp
+		}
+		// Redirect transport filter failures in path A to path B.
+		for idx := transportPatchStart; idx < len(inst); idx++ {
+			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
+				if jmp.Cond == bpf.JumpBitsSet && jmp.SkipTrue > 0 {
+					jmp.SkipTrue = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				} else if jmp.SkipFalse > 0 {
+					jmp.SkipFalse = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				}
+			}
+		}
+	} else if srcIP == nil && dstIP == nil {
+		pathBStart := len(inst)
+		patched := false
+		for idx := transportPatchStart; idx < len(inst); idx++ {
+			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
+				if jmp.Cond == bpf.JumpEqual && !patched {
+					jmp.SkipFalse = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+					patched = true
+				}
+			}
+		}
+	}
+
+	lastTransAIdx := len(inst) - 1
+
+	if srcIP != nil {
+		if dstIP != nil {
+			for i := common; i < handler.addressChunks; i++ {
+				addrB := handler.getAddressChunk(dstIP, i)
+				if i != common {
+					offset := uint32(i * 4)
+					inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+				}
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrB, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			}
+		}
+
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(srcIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.destinationAddrOffset + offset, Size: lengthWord})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+		}
+	} else if dstIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(dstIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+		}
+	}
+
+	if proto > 0 && handler.etherType == etherTypeIPv6 && hasPorts {
+		inst = append(inst, handler.loadProtocol)
+		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+	}
+
+	transportB := transportFilters{
+		srcPort:  transportNoFlagsICMP.dstPort,
+		dstPort:  transportNoFlagsICMP.srcPort,
+		tcpFlags: transportNoFlagsICMP.tcpFlags,
+		icmp:     transportNoFlagsICMP.icmp,
+	}
+	// When no IPs are present, path B can reuse certain instructions from
+	// path A (fragment-offset load and shared-port load), so we skip those
+	// leading instructions to avoid duplication.
+	//
+	// Rather than hardcoding instruction counts (which drift if
+	// compileTransportFilters changes), we measure the shared prefix
+	// dynamically: compile both paths with the sentinel size and count how
+	// many leading instructions are structurally identical.
+	sliceStart := 0
+	if srcIP == nil && dstIP == nil {
+		transARef := compileTransportFilters(handler, sizeSentinel, 0, &transportNoFlagsICMP)
+		transBRef := compileTransportFilters(handler, sizeSentinel, 0, &transportB)
+		// Count matching leading instructions, but never include the trailing
+		// returnKeep (last element) in the shared prefix — it must always be
+		// present in transB so we can strip it after the slice.
+		maxPrefix := len(transBRef) - 1
+		for sliceStart < len(transARef) && sliceStart < maxPrefix {
+			if !reflect.DeepEqual(transARef[sliceStart], transBRef[sliceStart]) {
+				break
+			}
+			sliceStart++
+		}
+	}
+	transB := compileTransportFilters(handler, size, uint8(len(inst)-sliceStart), &transportB)
+	if sliceStart > 0 && len(transB) >= sliceStart {
+		transB = transB[sliceStart:]
+	}
+	// Strip the trailing returnKeep from path B (shared with path A).
+	transB = transB[:len(transB)-1]
+	inst = append(inst, transB...)
+
+	if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
+		jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
+		inst[lastTransAIdx] = jmpA
+	}
+
+	if len(sharedFlags) > 0 || len(sharedICMP) > 0 {
+		if handler.etherType == etherTypeIPv4 && !hasPorts && (len(sharedICMP) > 0 || len(sharedFlags) > 0) {
+			skipTrue := skipToDrop(len(inst)) - 1
+			inst = append(inst, loadIPv4HeaderOffset(skipTrue)...)
+		}
+		// For IPv6 ICMP in the shared suffix, add a protocol re-check.
+		// This matches tcpdump behavior where ICMP type checks are gated
+		// by a protocol verification. TCP flag checks do not need this
+		// because the protocol was already verified per-path or globally.
+		if proto > 0 && handler.etherType == etherTypeIPv6 && len(sharedICMP) > 0 && !hasPorts {
+			inst = append(inst, handler.loadProtocol)
+			inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+		}
+
+		icmpInsts := 0
+		if len(sharedICMP) > 0 {
+			icmpInsts = 1 // loadICMPType
+			for _, f := range sharedICMP {
+				icmpInsts++ // jeq type
+				if f.icmpCode != nil {
+					icmpInsts += 2 // loadCode + jeqCode
+				}
+			}
+		}
+		// Pre-build the flag instructions into a temporary slice so we can
+		// compute skipTrue dynamically from actual instruction counts, avoiding
+		// the fragile assumption that every check is exactly 3 instructions
+		// (which breaks when the BPF_JSET optimization emits only 2).
+		var flagInsts []bpf.Instruction
+		flagsLoaded := false
+		for _, f := range sharedFlags {
+			if !flagsLoaded {
+				flagInsts = append(flagInsts, handler.loadTCPFlags)
+				flagsLoaded = true
+			}
+			if f.flag == 0 {
+				// BPF_JSET optimization: checking if bits are cleared uses a
+				// single jset instruction with swapped branches (2 insns total
+				// including the load, or 1 insn if load was already shared).
+				// Placeholder jump offsets; will be patched below.
+				flagInsts = append(flagInsts, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask})
+			} else {
+				flagInsts = append(flagInsts, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+				flagsLoaded = false // ALU operation overwrites the accumulator
+				// Placeholder; will be patched below.
+				flagInsts = append(flagInsts, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag})
+			}
+		}
+		// Total instructions that follow the flag block (ICMP checks + returnKeep).
+		trailingInsts := icmpInsts + 1 // +1 for returnKeep
+		// Patch each jump with accurate offsets now that we know flagInsts sizes.
+		fi := 0
+		for _, f := range sharedFlags {
+			// Advance fi past the optional load instruction.
+			if _, isLoad := flagInsts[fi].(bpf.LoadAbsolute); isLoad {
+				fi++
+			} else if _, isLoad := flagInsts[fi].(bpf.LoadIndirect); isLoad {
+				fi++
+			}
+			// Number of flag instructions remaining after this check.
+			if f.flag == 0 {
+				// jset: if bits ARE set → flag is not cleared → drop (skipTrue to drop).
+				// if bits are NOT set → flag is cleared → OR match succeeded → keep.
+				instsAfter := len(flagInsts) - fi - 1              // instructions after this jset in flag block
+				skipFalse := uint8(instsAfter + trailingInsts - 1) // jump to returnKeep (before trailing drop)
+				skipTrue := uint8(0)                               // fall through to next flag or drop
+				if instsAfter == 0 {
+					// Last flag: drop path is the next instruction after returnKeep.
+					skipTrue = 1
+					skipFalse = 0
+				}
+				flagInsts[fi] = bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: skipTrue, SkipFalse: skipFalse}
+				fi++
+			} else {
+				// and+jeq: skip ALU instruction.
+				fi++ // past the ALUOpConstant
+				instsAfter := len(flagInsts) - fi - 1
+				skipTrue := uint8(instsAfter + trailingInsts - 1) // jump to returnKeep
+				var skipFalse uint8
+				if instsAfter == 0 {
+					// Last flag: set skipFalse to jump past returnKeep to returnDrop.
+					skipTrue = uint8(trailingInsts - 1)
+					skipFalse = 1
+				}
+				flagInsts[fi] = bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipTrue, SkipFalse: skipFalse}
+				fi++
+			}
+		}
+		inst = append(inst, flagInsts...)
+		if len(sharedICMP) > 0 {
+			inst = append(inst, handler.loadICMPType)
+			for i, f := range sharedICMP {
+				var skipTrue, skipFalse uint8
+				if f.icmpCode != nil {
+					if i != len(sharedICMP)-1 {
+						skipFalse = 2
+					} else {
+						skipFalse = skipToDrop(len(inst))
+					}
+				} else {
+					if i != len(sharedICMP)-1 {
+						skipTrue, skipFalse = skipToDrop(len(inst))-1, 0
+					} else {
+						skipTrue, skipFalse = 0, skipToDrop(len(inst))
+					}
+				}
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.icmpType, SkipTrue: skipTrue, SkipFalse: skipFalse})
+				if f.icmpCode != nil {
+					inst = append(inst, handler.loadICMPCode)
+					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: *f.icmpCode, SkipTrue: skipToDrop(len(inst)) - 1, SkipFalse: skipToDrop(len(inst))})
+				}
+			}
+		}
+
+		inst = append(inst, returnKeep)
+		return inst
+	}
+
+	inst = append(inst, returnKeep)
 	return inst
 }
 
@@ -734,103 +1040,3 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 // (023) jeq      #0x7c            jt 24	jf 25		   # TCP Dst port: If 124, goto #24, else #25
 // (024) ret      #262144                                # MATCH
 // (025) ret      #0                                       # NOMATCH
-
-func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) int {
-	count := 0
-	// load ethertype
-	count++
-	// ip check
-	count++
-
-	if srcIP != nil {
-		count += handler.addressChunks * 2 // load + compare for each chunk
-	}
-	if dstIP != nil {
-		count += handler.addressChunks * 2 // load + compare for each chunk
-	}
-
-	if packet != nil {
-		// protocol check
-		if packet.Protocol != nil {
-			count += 2
-			// IPv6 Fragment Extension Header handling adds 3 extra instructions
-			// when there are no transport-layer filters (ports, flags, ICMP).
-			if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packet) {
-				count += ip6FragExtInstructionCount
-			}
-		}
-		transport := packet.TransportHeader
-		portFiltersSize := func() int {
-			count := 0
-			if transport.TCP != nil {
-				// load Fragment Offset
-				if handler.etherType == etherTypeIPv4 {
-					count += 3
-				}
-				if transport.TCP.SrcPort != nil {
-					count += 2
-				}
-				if transport.TCP.DstPort != nil {
-					count += 2
-				}
-				if transport.TCP.Flags != nil {
-					// every TCP Flag match condition will have 3 instructions - load, bitwise AND, compare
-					count += len(transport.TCP.Flags) * 3
-				}
-			} else if transport.UDP != nil {
-				// load Fragment Offset
-				if handler.etherType == etherTypeIPv4 {
-					count += 3
-				}
-				if transport.UDP.SrcPort != nil {
-					count += 2
-				}
-				if transport.UDP.DstPort != nil {
-					count += 2
-				}
-			} else if transport.ICMP != nil {
-				// load Fragment Offset
-				if handler.etherType == etherTypeIPv4 {
-					count += 3
-				}
-				count++ // load icmp type
-				for _, m := range transport.ICMP.Messages {
-					count++ // compare icmp type
-					if m.Code != nil {
-						count += 2 // load + compare icmp code
-					}
-				}
-			} else if transport.ICMPv6 != nil {
-				count++ // load icmpv6 type
-				for _, m := range transport.ICMPv6.Messages {
-					count++ // compare icmpv6 type
-					if m.Code != nil {
-						count += 2 // load + compare icmpv6 code
-					}
-				}
-			}
-			return count
-		}()
-
-		count += portFiltersSize
-
-		if direction == crdv1alpha1.CaptureDirectionBoth {
-			// extra returnKeep
-			count++
-
-			// src and dst ip (return traffic)
-			if srcIP != nil {
-				count += handler.addressChunks * 2
-			}
-			if dstIP != nil {
-				count += handler.addressChunks * 2
-			}
-
-			count += portFiltersSize
-		}
-	}
-
-	// ret command
-	count += 2
-	return count
-}
