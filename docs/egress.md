@@ -18,6 +18,10 @@
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
   - [Configuring static Egress](#configuring-static-egress)
 - [Configuration options](#configuration-options)
+- [Egress without a tunnel in noEncap mode](#egress-without-a-tunnel-in-noencap-mode)
+  - [Enabling the l2 dispatch](#enabling-the-l2-dispatch)
+  - [Network requirements](#network-requirements)
+  - [Effects of the l2 dispatch](#effects-of-the-l2-dispatch)
 - [Securing the memberlist cluster](#securing-the-memberlist-cluster)
   - [Rotating the key](#rotating-the-key)
   - [Enabling encryption when upgrading an existing cluster](#enabling-encryption-when-upgrading-an-existing-cluster)
@@ -158,7 +162,9 @@ the traffic will be dropped.
 enable the `EgressTrafficShaping` feature gate. Each Egress IP can be applied one bandwidth only.
 If multiple Egresses use the same IP but configure different bandwidths, the effective
 bandwidth will be selected randomly from the set of configured bandwidths. The effective use of the `bandwidth`
-function requires the OVS datapath to support meters.
+function requires the OVS datapath to support meters. In `noEncap` mode with the `l2` dispatch, the
+bandwidth applies only to the Pods on the Egress Node, see
+[Egress without a tunnel in noEncap mode](#egress-without-a-tunnel-in-noencap-mode).
 
 An Egress with traffic shaping example:
 
@@ -433,6 +439,98 @@ case.
   specify different values for different Nodes, taking priority over the value
   configured in the config file. The option and the annotation were added in
   Antrea v1.11.0.
+- `egress.dispatch` - How the Node of a Pod sends the Egress traffic of the Pod
+  to the Egress Node in `noEncap` mode, when the Egress IP is on another Node:
+  `tunnel` (the default) or `l2`. Refer to
+  [Egress without a tunnel in noEncap mode](#egress-without-a-tunnel-in-noencap-mode).
+  The option was added in Antrea v2.8.0.
+
+## Egress without a tunnel in noEncap mode
+
+In `noEncap` mode, Pod traffic between Nodes is routed. By default, Egress still
+sends the traffic of a Pod through a tunnel when the Egress IP is on another
+Node. For this, Antrea creates the tunnel interface (`antrea-tun0`) on every
+Node, and reduces the MTU of every Pod by the encapsulation overhead.
+
+The `l2` dispatch avoids the tunnel. The Node of the Pod sends the traffic
+unchanged to the MAC address of the Egress Node, and the Egress Node finds the
+Egress IP from the source Pod IP. Antrea then creates no tunnel interface for
+Egress, and the Pod MTU equals the MTU of the transport interface. The reply
+traffic returns to the Pod like any other Pod traffic.
+
+### Enabling the l2 dispatch
+
+The `l2` dispatch is an alpha feature. To use it:
+
+1. Enable the `EgressDispatchL2` feature gate for both the Agent and the
+   Controller. The Controller then sends each Egress Node the IPs of the Pods
+   which use its Egress IPs.
+2. Set the `egress.dispatch` option of the Agent to `l2`, on all Nodes.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      EgressDispatchL2: true
+    trafficEncapMode: noEncap
+    egress:
+      dispatch: l2
+  antrea-controller.conf: |
+    featureGates:
+      EgressDispatchL2: true
+```
+
+With Helm, set `featureGates.EgressDispatchL2=true` and `egress.dispatch=l2`.
+
+The Agent rejects `l2` in the other traffic modes. In `encap` mode, Egress
+traffic takes the tunnel like the other Pod traffic. In `hybrid` mode, Egress
+keeps the tunnel, which also reaches the Nodes in other subnets.
+
+The Agent also rejects `l2` with `enableBridgingMode`, which connects the uplink
+of each Node to the OVS bridge for [AntreaIPAM](antrea-ipam.md). The Agent
+connects the uplink after it has set up the routing of the `l2` dispatch, which
+would then use the uplink instead of the local port of the bridge.
+
+Use the same dispatch on all Nodes. A Node with the `l2` dispatch has no tunnel
+interface, so it cannot receive the Egress traffic of a Node with the `tunnel`
+dispatch. A Node with the `tunnel` dispatch does not map the source Pod IPs of
+the traffic it receives to its Egress IPs.
+
+When you change the dispatch of an existing cluster, restart the Pods, so that
+they get the MTU of the new dispatch. A Pod created with the `l2` dispatch has
+an MTU which is too large for the tunnel.
+
+### Network requirements
+
+The `l2` dispatch needs the following from the Node network:
+
+- All Nodes are in one L2 segment on their transport interface.
+- The network delivers a frame to the MAC address of a Node even when the
+  destination IP of the packet is not an IP of that Node. For Egress, the
+  destination is an external IP.
+- The network accepts a frame whose source IP is a Pod IP, not an IP of the
+  sending Node. `noEncap` mode already requires this for Pod traffic.
+
+### Effects of the l2 dispatch
+
+- The bandwidth limit of an Egress (`spec.bandwidth`) applies only to the Pods
+  on the Egress Node. The traffic of the Pods on other Nodes does not pass
+  through OVS on the Egress Node.
+- If the Egress Node is outside the local transport subnet of a Node, the Pods
+  on that Node keep the default SNAT: their traffic leaves through their own
+  Node, with the IP of that Node. The Agent logs an error and records an event
+  on the Egress.
+- When a Pod starts, or when an Egress IP moves to another Node, the Egress Node
+  learns the Pod IP from the Controller. Until then, the Egress Node masquerades
+  the traffic of the Pod with its own Node IP, like the default SNAT. On an
+  Egress Node whose forwarding policy drops packets by default, for example
+  because Docker is installed, that traffic is dropped instead.
+- The `l2` dispatch supports IPv4 and IPv6.
 
 ## Securing the memberlist cluster
 
