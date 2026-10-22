@@ -41,6 +41,7 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 		}
 		bgpPolicyResp := apis.BGPPolicyResponse{
 			BGPPolicyName:           bgpPolicyInfo.BGPPolicyName,
+			Draining:                bgpPolicyInfo.Draining,
 			RouterID:                bgpPolicyInfo.RouterID,
 			LocalASN:                bgpPolicyInfo.LocalASN,
 			ListenPort:              bgpPolicyInfo.ListenPort,
