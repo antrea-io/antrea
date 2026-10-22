@@ -178,6 +178,13 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			expectedSyncErr:         "failed to generate support bundle: failed to dump groups",
 		},
 		{
+			name:                    "SupportBundleCollection failed to dump BGP resources",
+			supportBundleCollection: generateSupportbundleCollection("supportBundle16", "sftp://10.220.175.92:22/root/supportbundle", nil),
+			agentDumper:             &mockAgentDumper{dumpBGPResourcesErr: fmt.Errorf("failed to dump BGP resources")},
+			uploader:                &testUploader{},
+			expectedSyncErr:         "failed to generate support bundle: failed to dump BGP resources",
+		},
+		{
 			name:                    "Add SupportBundleCollection with host key",
 			supportBundleCollection: generateSupportbundleCollection("supportBundle13", "sftp://10.220.175.92:22/root/supportbundle", hostKey1.Marshal()),
 			agentDumper:             &mockAgentDumper{},
@@ -307,6 +314,7 @@ type mockAgentDumper struct {
 	dumpGoroutinePprofErr         error
 	dumpOVSPortsErr               error
 	dumpMemberlistErr             error
+	dumpBGPResourcesErr           error
 }
 
 func (d *mockAgentDumper) DumpLog(basedir string) error {
@@ -347,4 +355,8 @@ func (d *mockAgentDumper) DumpOVSPorts(basedir string) error {
 
 func (d *mockAgentDumper) DumpMemberlist(basedir string) error {
 	return d.dumpMemberlistErr
+}
+
+func (d *mockAgentDumper) DumpBGPResources(basedir string) error {
+	return d.dumpBGPResourcesErr
 }
