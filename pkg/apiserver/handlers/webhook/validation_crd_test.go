@@ -30,6 +30,7 @@ func TestHandlerForValidateFunc(t *testing.T) {
 		name               string
 		contentType        string
 		admissionReview    *admissionv1.AdmissionReview
+		requestBody        []byte
 		expectedStatusCode int
 	}{
 		{
@@ -53,6 +54,12 @@ func TestHandlerForValidateFunc(t *testing.T) {
 			contentType:        contentTypeJson,
 			expectedStatusCode: http.StatusBadRequest,
 		},
+		{
+			name:               "request body too large",
+			contentType:        contentTypeJson,
+			requestBody:        make([]byte, maxRequestBodySize+1),
+			expectedStatusCode: http.StatusBadRequest,
+		},
 	}
 
 	var validateFn validateFunc = func(*admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
@@ -62,7 +69,7 @@ func TestHandlerForValidateFunc(t *testing.T) {
 
 	for _, tt := range testCases {
 		resp := httptest.NewRecorder()
-		var b []byte
+		b := tt.requestBody
 		if tt.admissionReview != nil {
 			b, _ = json.Marshal(tt.admissionReview)
 		}

@@ -25,6 +25,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const maxRequestBodySize = 4 * 1024 * 1024 // 4 MiB
+
 type validateFunc func(*admv1.AdmissionReview) *admv1.AdmissionResponse
 
 func HandlerForValidateFunc(fn validateFunc) http.HandlerFunc {
@@ -32,7 +34,14 @@ func HandlerForValidateFunc(fn validateFunc) http.HandlerFunc {
 		klog.V(2).Info("Received request to validate Antrea CRD")
 		var reqBody []byte
 		if r.Body != nil {
-			reqBody, _ = io.ReadAll(r.Body)
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+			var err error
+			reqBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				klog.ErrorS(err, "Failed to read validation webhook request body")
+				http.Error(w, "failed to read request body", http.StatusBadRequest)
+				return
+			}
 		}
 		if len(reqBody) == 0 {
 			klog.Errorf("Validation webhook crdvalidator received empty request body")

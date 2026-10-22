@@ -60,6 +60,12 @@ func TestHandleMutationNetworkPolicy(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 			contentType:        contentTypeJson,
 		},
+		{
+			name:               "request body too large",
+			requestBody:        make([]byte, maxRequestBodySize+1),
+			expectedStatusCode: http.StatusBadRequest,
+			contentType:        contentTypeJson,
+		},
 	}
 
 	for _, tt := range testCases {
