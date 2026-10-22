@@ -170,7 +170,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		defer close(finishCh)
 
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 		c.processNextWorkItem()
@@ -187,7 +187,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.processNextWorkItem()
 
 		// After node1 is deleted, routes and flows should be installed for otherNode successfully.
-		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
+		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil, uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway).Times(1)
 		c.processNextWorkItem()
 	}()
@@ -212,7 +212,7 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
-	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(0)).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
@@ -334,7 +334,7 @@ func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
-	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(0)).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
@@ -844,7 +844,7 @@ func TestInitialListHasSynced(t *testing.T) {
 
 	require.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(100*time.Millisecond))
 
-	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(0)).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()

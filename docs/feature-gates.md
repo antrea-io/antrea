@@ -41,6 +41,7 @@ edit the Agent configuration in the
 | `PreferSameTrafficDistribution` | Agent              | `false` | Alpha      | v2.5          | N/A          | N/A        | Yes                |                                                        |
 | `CleanupStaleUDPSvcConntrack`   | Agent              | `true`  | Beta       | v1.13         | v2.1         | N/A        | Yes                |                                                        |
 | `LoadBalancerModeDSR`           | Agent              | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                |                                                        |
+| `DSRDispatchL2`                 | Agent              | `false` | Alpha      | v2.8          | N/A          | N/A        | Yes                |                                                        |
 | `AntreaPolicy`                  | Agent + Controller | `true`  | Beta       | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+.               |
 | `Traceflow`                     | Agent + Controller | `true`  | Beta       | v0.8          | v0.11        | N/A        | Yes                |                                                        |
 | `FlowExporter`                  | Agent              | `false` | Alpha      | v0.9          | N/A          | N/A        | Yes                |                                                        |
@@ -153,7 +154,28 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 - Options `antreaProxy.enable` and `antreaProxy.proxyAll`  are set to true.
 - IPv4 only.
 - Linux Nodes only.
-- Encap mode only.
+- Traffic mode `encap`, `noEncap` or `hybrid`, not `networkPolicyOnly`.
+
+### DSRDispatchL2
+
+`DSRDispatchL2` allows the ingress Node to send the traffic of a DSR Service to the MAC address of
+the Node that runs the selected backend Pod, without encapsulation. The traffic keeps the Service IP
+as its destination, and no bytes are added to it. With this `l2` dispatch as the default, `noEncap`
+mode needs no tunnel for DSR, so the Pod MTU is not reduced. The dispatch is selected with the
+`antreaProxy.dsr.dispatch` option or the `service.antrea.io/dsr-dispatch` Service annotation. For
+more information, refer to [Choosing the dispatch of DSR
+traffic](antrea-proxy.md#choosing-the-dispatch-of-dsr-traffic).
+
+#### Requirements for this Feature
+
+- Feature gate `LoadBalancerModeDSR` is enabled, and the requirements of that feature are met.
+- Traffic mode `noEncap` or `hybrid`.
+- Option `hostNetworkMode` is `iptables`.
+- Option `enableBridgingMode` is false.
+- All Nodes are in one L2 segment on their transport interface. In `hybrid` mode, the traffic to
+  Nodes in other subnets goes through the tunnel.
+- The Node network delivers a frame to the MAC address of a Node even when the destination IP of
+  the frame is not an IP of that Node, and it does not filter the source IPs of frames.
 
 ### CleanupStaleUDPSvcConntrack
 

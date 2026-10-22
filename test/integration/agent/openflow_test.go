@@ -405,7 +405,7 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 		} else {
 			dsIPs.IPv4 = node.nodeAddress
 		}
-		err := c.InstallNodeFlows(node.name, peerConfigs, dsIPs, 0, node.nodeMAC)
+		err := c.InstallNodeFlows(node.name, peerConfigs, dsIPs, 0, node.nodeMAC, 0)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
