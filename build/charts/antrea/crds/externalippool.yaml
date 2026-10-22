@@ -70,6 +70,9 @@ spec:
                   properties:
                     matchExpressions:
                       items:
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
