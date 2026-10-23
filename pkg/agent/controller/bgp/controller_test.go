@@ -112,6 +112,9 @@ var (
 	updatedIPv4Peer2Config = generateBGPPeerConfig(&updatedIPv4Peer2, peer2AuthPassword)
 	updatedIPv6Peer2Config = generateBGPPeerConfig(&updatedIPv6Peer2, peer2AuthPassword)
 
+	updatedASNIPv4Peer1       = generateBGPPeer(ipv4Peer1Addr, peer3ASN, 179, 120)
+	updatedASNIPv4Peer1Config = generateBGPPeerConfig(&updatedASNIPv4Peer1, "")
+
 	peer3ASN          = int32(65533)
 	peer3AuthPassword = "bgp-peer3" // #nosec G101
 	ipv4Peer3Addr     = "192.168.77.253"
@@ -1124,6 +1127,49 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.RemovePeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
 				mockBGPServer.UpdatePeer(gomock.Any(), updatedIPv6Peer2Config)
+			},
+		},
+		{
+			name: "Effective BGPPolicy, update BGPPeer ASN",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{updatedASNIPv4Peer1,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2},
+				&v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{updatedASNIPv4Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer1Config,
+					ipv6Peer2Config,
+				},
+				&confederationConfig{100, sets.New[uint32](uint32(65001))},
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				gomock.InOrder(
+					mockBGPServer.RemovePeer(gomock.Any(), ipv4Peer1Config),
+					mockBGPServer.AddPeer(gomock.Any(), updatedASNIPv4Peer1Config),
+				)
 			},
 		},
 		{
