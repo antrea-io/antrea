@@ -24,8 +24,10 @@ import (
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	schemacel "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	celconfig "k8s.io/apiserver/pkg/apis/cel"
 	"sigs.k8s.io/yaml"
 )
 
@@ -143,4 +145,141 @@ func TestExternalIPPoolNodeSelectorSchema(t *testing.T) {
 	t.Run("empty selector", func(t *testing.T) {
 		validateSelector(t, map[string]any{}, true)
 	})
+}
+
+func TestExternalIPPoolSubnetInfoSchema(t *testing.T) {
+	data, err := os.ReadFile("../../../build/charts/antrea/crds/externalippool.yaml")
+	require.NoError(t, err)
+	var crd apiextensionsv1.CustomResourceDefinition
+	require.NoError(t, yaml.Unmarshal(data, &crd))
+	var openAPISchema apiextensions.JSONSchemaProps
+	require.NoError(t, apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(
+		crd.Spec.Versions[0].Schema.OpenAPIV3Schema, &openAPISchema, nil))
+	structural, err := schema.NewStructural(&openAPISchema)
+	require.NoError(t, err)
+	require.Empty(t, schema.ValidateStructural(field.NewPath("schema"), structural))
+	validator := schemacel.NewValidator(structural, true, celconfig.PerCallLimit)
+	require.NotNil(t, validator)
+
+	newObject := func(withSubnetInfo bool) map[string]any {
+		spec := map[string]any{
+			"ipRanges":     []any{map[string]any{"cidr": "192.0.2.0/24"}},
+			"nodeSelector": map[string]any{},
+		}
+		if withSubnetInfo {
+			spec["subnetInfo"] = map[string]any{
+				"gateway":      "192.0.2.1",
+				"prefixLength": int64(24),
+			}
+		}
+		return map[string]any{"spec": spec}
+	}
+	for _, tt := range []struct {
+		name          string
+		create        bool
+		oldSubnetInfo bool
+		newSubnetInfo bool
+		mutate        func(map[string]any)
+		errMsg        string
+	}{
+		{
+			name:   "create without subnetInfo",
+			create: true,
+		},
+		{
+			name:          "create with subnetInfo",
+			create:        true,
+			newSubnetInfo: true,
+		},
+		{
+			name: "unchanged without subnetInfo",
+		},
+		{
+			name:          "unchanged with subnetInfo",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+		},
+		{
+			name:          "gateway mutation",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+			mutate: func(object map[string]any) {
+				object["spec"].(map[string]any)["subnetInfo"].(map[string]any)["gateway"] = "192.0.2.2"
+			},
+			errMsg: "gateway is immutable",
+		},
+		{
+			name:          "prefixLength mutation",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+			mutate: func(object map[string]any) {
+				object["spec"].(map[string]any)["subnetInfo"].(map[string]any)["prefixLength"] = int64(25)
+			},
+			errMsg: "prefixLength is immutable",
+		},
+		{
+			name:          "add subnetInfo",
+			newSubnetInfo: true,
+			errMsg:        "subnetInfo cannot be added or removed",
+		},
+		{
+			name:          "remove subnetInfo",
+			oldSubnetInfo: true,
+			errMsg:        "subnetInfo cannot be added or removed",
+		},
+		{
+			name:          "VLAN mutation",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+			mutate: func(object map[string]any) {
+				object["spec"].(map[string]any)["subnetInfo"].(map[string]any)["vlan"] = int64(10)
+			},
+		},
+		{
+			name:          "status mutation",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+			mutate: func(object map[string]any) {
+				object["status"] = map[string]any{"usage": map[string]any{"total": int64(252), "used": int64(1)}}
+			},
+		},
+		{
+			name:          "nodeSelector mutation with subnetInfo",
+			oldSubnetInfo: true,
+			newSubnetInfo: true,
+			mutate: func(object map[string]any) {
+				object["spec"].(map[string]any)["nodeSelector"] = map[string]any{
+					"matchLabels": map[string]any{"role": "worker"},
+				}
+			},
+		},
+		{
+			name: "nodeSelector mutation without subnetInfo",
+			mutate: func(object map[string]any) {
+				object["spec"].(map[string]any)["nodeSelector"] = map[string]any{
+					"matchLabels": map[string]any{"role": "worker"},
+				}
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			object := newObject(tt.newSubnetInfo)
+			if tt.mutate != nil {
+				tt.mutate(object)
+			}
+			var oldObject any
+			if !tt.create {
+				oldObject = newObject(tt.oldSubnetInfo)
+			}
+			// Execute the manifest's CEL transition rules without invoking the admission webhook.
+			errs, _ := validator.Validate(t.Context(), field.NewPath(""), structural, object, oldObject,
+				celconfig.RuntimeCELCostBudget)
+			if tt.errMsg == "" {
+				assert.Empty(t, errs)
+			} else {
+				require.Len(t, errs, 1)
+				assert.Equal(t, tt.errMsg, errs[0].Detail)
+			}
+		})
+	}
 }

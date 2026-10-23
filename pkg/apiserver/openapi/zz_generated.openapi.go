@@ -4003,7 +4003,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 					},
 					"subnetInfo": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes. Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.",
+							Description: "The subnet information of this IP pool. If set, all IP ranges in the pool should share the same subnet attributes. Egress uses these attributes to route traffic. The gateway IP is reserved when it is included in an IP range, and cannot be allocated to either an Egress or a Service. SubnetInfo cannot be added or removed after creation. Gateway and PrefixLength are immutable, but VLAN can be updated.",
 							Ref:         ref(v1beta1.SubnetInfo{}.OpenAPIModelName()),
 						},
 					},
@@ -6834,7 +6834,7 @@ func schema_pkg_apis_crd_v1beta2_ExternalIPPoolSpec(ref common.ReferenceCallback
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subnets specifies the subnet attributes for each IP family. At most one entry per family is allowed. When omitted, the allocated IPs are assumed to be on the same subnet as the hosting Node, and no separate subnet gateway or VLAN is configured.",
+							Description: "Subnets specifies the subnet attributes for each IP family. At most one entry per family is allowed. When omitted, the allocated IPs are assumed to be on the same subnet as the hosting Node, and no separate subnet gateway or VLAN is configured. Each gateway is reserved when it is included in an IP range and cannot be allocated to either an Egress or a Service. Subnets cannot be added or removed after creation, and their Gateway and PrefixLength fields are immutable. VLAN updates and reordering of existing entries are allowed.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

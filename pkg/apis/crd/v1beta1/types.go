@@ -238,8 +238,10 @@ type ExternalIPPool struct {
 type ExternalIPPoolSpec struct {
 	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
 	IPRanges []IPRange `json:"ipRanges"`
-	// The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes.
-	// Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.
+	// The subnet information of this IP pool. If set, all IP ranges in the pool should share the same subnet attributes.
+	// Egress uses these attributes to route traffic. The gateway IP is reserved when it is included in an IP range,
+	// and cannot be allocated to either an Egress or a Service.
+	// SubnetInfo cannot be added or removed after creation. Gateway and PrefixLength are immutable, but VLAN can be updated.
 	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`

@@ -496,6 +496,90 @@ func TestValidateExternalIPPoolSubnetUpdate(t *testing.T) {
 	}
 }
 
+func TestValidateV1beta1ExternalIPPoolSubnetInfoUpdate(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		mutate func(oldPool, newPool *crdv1b1.ExternalIPPool)
+		errMsg string
+	}{
+		{name: "unchanged subnet info"},
+		{
+			name: "unchanged without subnet info",
+			mutate: func(oldPool, newPool *crdv1b1.ExternalIPPool) {
+				oldPool.Spec.SubnetInfo, newPool.Spec.SubnetInfo = nil, nil
+			},
+		},
+		{
+			name: "add subnet info",
+			mutate: func(oldPool, _ *crdv1b1.ExternalIPPool) {
+				oldPool.Spec.SubnetInfo = nil
+			},
+			errMsg: "subnetInfo cannot be added or removed",
+		},
+		{
+			name: "remove subnet info",
+			mutate: func(_, newPool *crdv1b1.ExternalIPPool) {
+				newPool.Spec.SubnetInfo = nil
+			},
+			errMsg: "subnetInfo cannot be added or removed",
+		},
+		{
+			name: "change gateway",
+			mutate: func(_, newPool *crdv1b1.ExternalIPPool) {
+				newPool.Spec.SubnetInfo.Gateway = "192.0.2.2"
+			},
+			errMsg: "gateway is immutable",
+		},
+		{
+			name: "change prefix length",
+			mutate: func(_, newPool *crdv1b1.ExternalIPPool) {
+				newPool.Spec.SubnetInfo.PrefixLength = 23
+			},
+			errMsg: "prefixLength is immutable",
+		},
+		{
+			name: "change VLAN",
+			mutate: func(_, newPool *crdv1b1.ExternalIPPool) {
+				newPool.Spec.SubnetInfo.VLAN = 20
+			},
+		},
+		{
+			name: "change node selector",
+			mutate: func(_, newPool *crdv1b1.ExternalIPPool) {
+				newPool.Spec.NodeSelector.MatchLabels = map[string]string{"role": "egress"}
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			oldPool := &crdv1b1.ExternalIPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+				Spec: crdv1b1.ExternalIPPoolSpec{
+					IPRanges:   []crdv1b1.IPRange{{CIDR: "192.0.2.0/24"}},
+					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: "192.0.2.1", PrefixLength: 24, VLAN: 10},
+				},
+			}
+			newPool := oldPool.DeepCopy()
+			if tt.mutate != nil {
+				tt.mutate(oldPool, newPool)
+			}
+			c := newController(nil)
+			response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Update,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "externalippools"},
+				OldObject: runtime.RawExtension{Raw: marshal(t, oldPool)},
+				Object:    runtime.RawExtension{Raw: marshal(t, newPool)},
+			}})
+			if tt.errMsg == "" {
+				assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, response)
+			} else {
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Equal(t, tt.errMsg, response.Result.Message)
+			}
+		})
+	}
+}
+
 func TestValidateV1beta1ProjectionOfDualStackPool(t *testing.T) {
 	v2Pool := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": crdv1b2.SchemeGroupVersion.String(),
@@ -532,10 +616,11 @@ func TestValidateV1beta1ProjectionOfDualStackPool(t *testing.T) {
 	}}
 	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, c.ValidateExternalIPPool(review))
 
-	// The old client may edit the projected gateway without touching the conversion annotation.
+	// A visible gateway update must not bypass immutability through the conversion annotation.
 	require.NoError(t, unstructured.SetNestedField(updatedV1Pool.Object, "192.0.2.2", "spec", "subnetInfo", "gateway"))
 	review.Request.Object.Raw = marshal(t, updatedV1Pool)
-	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, c.ValidateExternalIPPool(review))
+	assert.Equal(t, &admv1.AdmissionResponse{Result: &metav1.Status{Message: "gateway is immutable"}}, c.ValidateExternalIPPool(review))
+	require.NoError(t, unstructured.SetNestedField(updatedV1Pool.Object, "192.0.2.1", "spec", "subnetInfo", "gateway"))
 
 	// Updating or removing the visible VLAN must preserve the hidden subnet, including its VLAN.
 	for _, vlan := range []int64{30, 0} {
@@ -549,7 +634,7 @@ func TestValidateV1beta1ProjectionOfDualStackPool(t *testing.T) {
 		var restored crdv1b2.ExternalIPPool
 		require.NoError(t, convertV1beta1ExternalIPPoolForValidation(review.Request.Object.Raw, &restored))
 		assert.Equal(t, []crdv1b2.SubnetInfo{
-			{Gateway: "192.0.2.2", PrefixLength: 24, VLAN: int32(vlan)},
+			{Gateway: "192.0.2.1", PrefixLength: 24, VLAN: int32(vlan)},
 			{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 20},
 		}, restored.Spec.Subnets)
 	}
@@ -578,14 +663,13 @@ func TestValidateV1beta1ExternalIPPoolSubnetRemoval(t *testing.T) {
 		subnets   []crdv1b2.SubnetInfo
 		emptyPool bool
 		setNull   bool
-		allowed   bool
 	}{
 		{name: "dual-stack pool", subnets: []crdv1b2.SubnetInfo{v4, v6}},
 		{name: "dual-stack pool with reversed subnet order", subnets: []crdv1b2.SubnetInfo{v6, v4}},
 		{name: "dual-stack pool with null subnetInfo", subnets: []crdv1b2.SubnetInfo{v4, v6}, setNull: true},
 		{name: "empty dual-stack pool", subnets: []crdv1b2.SubnetInfo{v4, v6}, emptyPool: true},
-		{name: "native IPv4 pool", subnets: []crdv1b2.SubnetInfo{v4}, allowed: true},
-		{name: "native IPv6 pool", subnets: []crdv1b2.SubnetInfo{v6}, allowed: true},
+		{name: "native IPv4 pool", subnets: []crdv1b2.SubnetInfo{v4}},
+		{name: "native IPv6 pool", subnets: []crdv1b2.SubnetInfo{v6}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := &crdv1b2.ExternalIPPool{
@@ -624,14 +708,12 @@ func TestValidateV1beta1ExternalIPPoolSubnetRemoval(t *testing.T) {
 			}}
 			c := newController(nil)
 			response := c.ValidateExternalIPPool(review)
-			require.Equal(t, tt.allowed, response.Allowed, "unexpected admission response: %+v", response.Result)
-			if tt.allowed {
-				var restored crdv1b2.ExternalIPPool
-				require.NoError(t, convertV1beta1ExternalIPPoolForValidation(review.Request.Object.Raw, &restored))
-				assert.Empty(t, restored.Spec.Subnets)
-			} else {
-				require.NotNil(t, response.Result)
+			require.False(t, response.Allowed)
+			require.NotNil(t, response.Result)
+			if len(tt.subnets) > 1 {
 				assert.Equal(t, "v1beta1 clients cannot remove subnets from a dual-stack ExternalIPPool", response.Result.Message)
+			} else {
+				assert.Equal(t, "subnetInfo cannot be added or removed", response.Result.Message)
 			}
 		})
 	}

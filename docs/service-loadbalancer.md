@@ -8,6 +8,7 @@
   - [Configuration](#configuration)
     - [Enable Service external IP management feature](#enable-service-external-ip-management-feature)
     - [Create an ExternalIPPool custom resource](#create-an-externalippool-custom-resource)
+    - [Gateway IP reservation](#gateway-ip-reservation)
     - [Create a Service of type LoadBalancer](#create-a-service-of-type-loadbalancer)
     - [Validate Service external IP](#validate-service-external-ip)
   - [Limitations](#limitations)
@@ -129,6 +130,23 @@ spec:
     matchLabels:
       network-role: ingress-node
 ```
+
+#### Gateway IP reservation
+
+When an ExternalIPPool includes `spec.subnetInfo` (v1beta1) or `spec.subnets`
+(v1beta2), each configured gateway IP is reserved and cannot be allocated to a
+Service. Before upgrading from a version that does
+not reserve the gateway, check for Services whose
+`status.loadBalancer.ingress[].ip` equals the pool's `spec.subnetInfo.gateway`
+(v1beta1) or a gateway in `spec.subnets` (v1beta2).
+Move affected Services to an available IP other than the gateway before upgrading;
+for example, set `spec.loadBalancerIP` to that IP.
+
+After upgrading, a Service that was automatically allocated the gateway receives
+a new IP. A Service that explicitly requests the gateway through
+`spec.loadBalancerIP` loses its external IP. To recover, clear
+`spec.loadBalancerIP` to request automatic allocation, or change it to an
+available IP other than the gateway.
 
 #### Create a Service of type LoadBalancer
 

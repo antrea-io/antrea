@@ -151,7 +151,7 @@ func testExternalIPPoolVersionConversion(t *testing.T, data *TestData) {
 		require.NoError(t, err)
 		t.Cleanup(func() { assert.NoError(t, v2Pools.Delete(ctx, created.Name, metav1.DeleteOptions{})) })
 		assert.Equal(t, expected, created.Spec.Subnets)
-		for _, edit := range []string{"label", "gateway and VLAN", "remove subnet"} {
+		for _, edit := range []string{"label", "VLAN", "gateway", "remove subnet"} {
 			t.Run(edit, func(t *testing.T) {
 				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					old, err := v1Pools.Get(ctx, created.Name, metav1.GetOptions{})
@@ -163,22 +163,25 @@ func testExternalIPPoolVersionConversion(t *testing.T, data *TestData) {
 					switch edit {
 					case "label":
 						old.Labels = map[string]string{"conversion": "old-client"}
-					case "gateway and VLAN":
-						old.Spec.SubnetInfo.Gateway = "198.18.10.2"
+					case "VLAN":
 						old.Spec.SubnetInfo.VLAN = 30
+					case "gateway":
+						old.Spec.SubnetInfo.Gateway = "198.18.10.2"
 					case "remove subnet":
 						old.Spec.SubnetInfo = nil
 					}
 					_, err = v1Pools.Update(ctx, old, metav1.UpdateOptions{})
 					return err
 				})
-				if edit == "remove subnet" {
-					require.ErrorContains(t, err, "v1beta1 clients cannot remove subnets from a dual-stack ExternalIPPool")
-				} else {
+				switch edit {
+				case "gateway":
+					require.ErrorContains(t, err, "gateway is immutable")
+				case "remove subnet":
+					require.ErrorContains(t, err, "subnetInfo cannot be added or removed")
+				default:
 					require.NoError(t, err)
 				}
-				if edit == "gateway and VLAN" {
-					expected[1].Gateway = "198.18.10.2"
+				if edit == "VLAN" {
 					expected[1].VLAN = 30
 				}
 				current, err := v2Pools.Get(ctx, created.Name, metav1.GetOptions{})
