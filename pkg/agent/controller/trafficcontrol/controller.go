@@ -844,7 +844,7 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 			if tcState.returnPortName != "" {
 				// If the stale return port name cached in TrafficControl state is not empty, release the stale return port
 				// from the TrafficControl.
-				if err = c.releaseTrafficControlPort(returnPortName, tcName, true); err != nil {
+				if err = c.releaseTrafficControlPort(tcState.returnPortName, tcName, true); err != nil {
 					return err
 				}
 			}
