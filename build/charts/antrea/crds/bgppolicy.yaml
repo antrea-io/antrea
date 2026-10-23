@@ -97,6 +97,9 @@ spec:
                     required:
                       - address
                       - asn
+                    x-kubernetes-validations:
+                      - rule: "!has(self.bfd) || !self.bfd.enabled || !has(self.multihopTTL) || self.multihopTTL == 1"
+                        message: "bfd cannot be used for a BGP peer whose multihopTTL is greater than 1, because only single-hop BFD is supported"
                     properties:
                       address:
                         type: string
@@ -126,6 +129,31 @@ spec:
                         minimum: 1
                         maximum: 3600
                         default: 120
+                      bfd:
+                        type: object
+                        required:
+                          - enabled
+                        properties:
+                          enabled:
+                            type: boolean
+                          transmitIntervalMilliseconds:
+                            type: integer
+                            format: int32
+                            minimum: 50
+                            maximum: 60000
+                            default: 300
+                          receiveIntervalMilliseconds:
+                            type: integer
+                            format: int32
+                            minimum: 50
+                            maximum: 60000
+                            default: 300
+                          detectionMultiplier:
+                            type: integer
+                            format: int32
+                            minimum: 1
+                            maximum: 255
+                            default: 3
       additionalPrinterColumns:
         - description: Local BGP AS number
           jsonPath: .spec.localASN

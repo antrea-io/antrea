@@ -12,7 +12,7 @@ firewalls allow the necessary traffic based on your configuration.
 | Antrea with IPsec ESP enabled                  | All                                   | IP protocol ID 50 and 51, UDP 500 and 4500 | No           |                              |
 | Antrea with WireGuard enabled                  | All                                   | UDP 51820<sup>[3]</sup>                    | Yes          |                              |
 | Antrea Multi-cluster with WireGuard encryption | Multi-cluster Gateway Node            | UDP 51821                                  | Yes          |                              |
-| Antrea with feature BGPPolicy enabled          | Selected by user-provided BGPPolicies | TCP 179<sup>[1]</sup>                      | Yes          |                              |
+| Antrea with feature BGPPolicy enabled          | Selected by user-provided BGPPolicies | TCP 179<sup>[1]</sup>, UDP 3784<sup>[5]</sup> | Yes          |                              |
 | All                                            | Kube-apiserver host                   | TCP 443 or 6443<sup>[2]</sup>              | Yes          |                              |
 | All                                            | All                                   | TCP 10349, 10350, 10351, UDP 10351         | Yes          |                              |
 | Antrea with proxyAll enabled                   | All                                   | TCP 10256<sup>[4]</sup>                    | Yes          | Optional, for external LBs   |
@@ -22,9 +22,11 @@ listed above, so that Antrea keeps working when the default firewall policy of t
 Node is to drop. This covers the tunnel ports, IPsec, WireGuard, the Antrea Agent and
 Controller ports, and the AntreaProxy health check port. The rules for the Antrea
 Controller port are only installed when antrea-agent uses the in-cluster config to
-reach it, because its port is only discovered from the Antrea Service in that case. The ports used
-by Antrea Multi-cluster and by BGPPolicy are not covered, and still need to be allowed
-by the host firewall configuration.
+reach it, because its port is only discovered from the Antrea Service in that case. The rules also
+cover the BFD port when the BGPPolicy feature is enabled. The ports used by Antrea Multi-cluster,
+and the port on which the BGP process listens, are not covered and still need to be allowed by the
+host firewall configuration. The BGP port is not covered because a BGPPolicy can change it, so it
+is not known when the rules are installed.
 
 [1] _The default value is 179, but a user created BGPPolicy can assign a different
 port number._
@@ -39,3 +41,6 @@ other ports described above. In both cases, no manual configuration on the host 
 configuration `antreaProxy.serviceHealthCheckServerBindAddress`. It is used only
 for external load balancer health checks. If `antreaProxy.disableServiceHealthCheckServer`
 is set `true`, the health check server listening on the port will be disabled._
+
+[5] _Only needed for the BGP peers for which BFD is enabled. Unlike the BGP port, it is not
+configurable, as it is the well-known port assigned to single-hop BFD._
