@@ -350,29 +350,40 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	defer a.mutex.Unlock()
 
 	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
+	// An inter-Node record only reports its own Node's stats, even when a deny action
+	// lets it be exported without waiting for the peer Node.
+	perNodeStats := record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)
 
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
 		readyToSend := aggregationRecord.ReadyToSend
-		if correlationRequired {
-			// Do correlation of records if record belongs to inter-node flow and
-			// records from source and destination node are not received.
-			if !readyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
+		// Records are only correlated while the entry is waiting for its peer. An entry
+		// created by a record which needs no correlation is ready (and exported) right
+		// away, so a later record from the other Node only contributes its stats, and
+		// its K8s / NetworkPolicy metadata is not merged. Merging it would change the
+		// metadata between successive exports of the same flow.
+		if !readyToSend {
+			sameNode := areRecordsFromSameNode(record, aggregationRecord.Record)
+			// A record that needs no correlation can complete a pending flow, even when
+			// the first record required a peer. Merge its metadata too, including any deny
+			// policy information, before making the flow ready to export.
+			if !correlationRequired || !sameNode {
 				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
-				aggregationRecord.areCorrelatedFieldsFilled = true
+				aggregationRecord.areCorrelatedFieldsFilled = !sameNode
 			}
-			// Aggregation of incoming flow record with existing by updating stats
-			// and flow timestamps.
+		}
+		if perNodeStats {
+			// Update only the reporting Node's stats and timestamps, including for
+			// later deny records received after the flow is ready to export.
 			if isRecordFromSrc(record) {
 				a.aggregateRecords(record, aggregationRecord.Record, true, false)
 			} else {
 				a.aggregateRecords(record, aggregationRecord.Record, false, true)
 			}
 		} else {
-			// For flows that do not need correlation, just do aggregation of the
-			// flow record with existing record by updating the stats and flow timestamps.
+			// A single-Node record supplies the stats and timestamps for both sides.
 			a.aggregateRecords(record, aggregationRecord.Record, true, true)
 		}
 		aggregationRecord.updatedSinceLastExport = true
@@ -387,7 +398,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	} else {
 		record.Aggregation = &flowpb.Aggregation{}
 		// Add all the new stat fields and initialize them.
-		if correlationRequired {
+		if perNodeStats {
 			if isRecordFromSrc(record) {
 				a.addFieldsForStatsAggregation(record, true, false)
 				a.addFieldsForThroughputCalculation(record, true, false)
@@ -819,8 +830,9 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 // isCorrelationRequired returns true when the record is one half of a flow whose two halves are
 // observed on different Nodes and must be correlated: a regular inter-Node flow, or the
 // ingress-Node half of an inter-Node "from external" flow (see isSourceNodeFromExternalFlow).
-// It returns false when the flow was dropped or rejected by a network policy rule, as the two
-// halves are then not expected to correlate.
+// Egress Drop / Reject and ingress Reject records do not require a peer record: egress denial
+// prevents the flow from reaching the destination Node, and an ingress rejection may end the
+// connection before the source Node observes it. Ingress Drop records still require correlation.
 func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
 	if record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP ||
 		record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT ||

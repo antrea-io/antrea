@@ -565,6 +565,14 @@ Aggregator provides support for the correlation of the flow records from the
 source Node and the destination Node, and it exports a single flow record with complete
 information for both inter-Node and intra-Node flows.
 
+Inter-Node flows denied by an egress Drop / Reject or an ingress Reject rule are
+an exception, as the other Node may never report them. A record for such a flow
+is exported without waiting for the other Node, and the Flow Aggregator fills in
+the missing Pod information from its own Pod cache. If the record from the other
+Node arrives first, the two records are correlated. If it arrives later, only its
+statistics are aggregated: its Kubernetes and NetworkPolicy information is not
+added, e.g., the egress NetworkPolicy of an ingress-rejected flow.
+
 ##### Aggregation of Flow Records
 
 Flow Aggregator aggregates the flow records that belong to a single connection.

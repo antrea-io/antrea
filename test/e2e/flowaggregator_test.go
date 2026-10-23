@@ -646,6 +646,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 	})
 
+	t.Run("InterNodeIngressRejectSourceFirst", func(t *testing.T) {
+		testInterNodeIngressRejectSourceFirst(t, data, isIPv6)
+	})
+
 	// InterNodeDenyConnEgressANP tests the case, where Pods are deployed on different Nodes with an Antrea egress deny policy rule
 	// applied to source Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a (Egress reject) -> perftest-c, perftest-a (Egress drop)-> perftest-e
@@ -1189,6 +1193,111 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		if egressName != "" {
 			checkEgressInfoClickHouse(t, record, egressName, egressIP, egressNodeName)
 		}
+	}
+}
+
+// testInterNodeIngressRejectSourceFirst forces the source record to reach the Flow Aggregator
+// before the ingress Reject record. Without this ordering, TCP rejection usually removes the
+// source conntrack entry before the Flow Exporter can observe it.
+func testInterNodeIngressRejectSourceFirst(t *testing.T, data *TestData, isIPv6 bool) {
+	skipIfAntreaPolicyDisabled(t)
+	const label = "InterNodeIngressRejectSourceFirst"
+	addLabelToTestPods(t, data, label, podNames)
+	deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c", "perftest-e",
+		controlPlaneNodeName(), workerNodeName(1), true)
+	flowAggPods, err := data.getFlowAggregators(flowAggregatorNamespace)
+	require.NoError(t, err)
+	require.NotEmpty(t, flowAggPods)
+
+	srcIP, dstIP := podAIPs.IPv4.String(), podCIPs.IPv4.String()
+	if isIPv6 {
+		srcIP, dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String()
+	}
+	// Use a different destination port from the other iperf tests so antctl cannot
+	// match an earlier flow, even before Pod labels have been added to the record.
+	const dstPort = "5202"
+	command := []string{"timeout", "3", "iperf3", "-c", dstIP, "-p", dstPort, "-n", "1"}
+	if isIPv6 {
+		command = append(command, "-6")
+	}
+	signalAgent := func(signal string) error {
+		cmd := "pkill -" + signal + " -x antrea-agent"
+		rc, stdout, stderr, err := data.RunCommandOnNodeExt(workerNodeName(1), cmd, nil, "", true)
+		if err != nil || rc != 0 {
+			return fmt.Errorf("failed to signal destination Agent with %s: rc=%d, stdout=%s, stderr=%s, error=%v",
+				signal, rc, stdout, stderr, err)
+		}
+		return nil
+	}
+	// Pausing the Agent holds back both the reject response and the deny flow record,
+	// while OVS continues forwarding packets to the installed policy rule. Always
+	// resume it on failure, including a failure while sending the STOP signal.
+	paused := true
+	t.Cleanup(func() {
+		if paused {
+			assert.NoError(t, signalAgent("CONT"), "Failed to resume destination Agent")
+		}
+	})
+	require.NoError(t, signalAgent("STOP"))
+	_, _, err = data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", command)
+	require.Error(t, err, "The ingress policy should prevent the connection from succeeding")
+
+	var sourceRecord apis.FlowRecordsResponse
+	command = []string{"antctl", "get", "flowrecords", "-o", "json",
+		"--srcip", srcIP, "--dstip", dstIP, "--dstport", dstPort, "--proto", "6"}
+	sourceRecordTimeout := exporterFlowPollInterval + exporterActiveFlowExportTimeout + 2*time.Second
+	err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, sourceRecordTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			stdout, stderr, err := runAntctl(flowAggPods[0].Name, command, data)
+			if err != nil {
+				return false, fmt.Errorf("failed to query pending flow records: %w: %s", err, stderr)
+			}
+			var records []apis.FlowRecordsResponse
+			if err := json.Unmarshal([]byte(stdout), &records); err != nil {
+				return false, err
+			}
+			if len(records) == 0 {
+				return false, nil
+			}
+			if len(records) != 1 {
+				return false, fmt.Errorf("expected one pending source record, got %d", len(records))
+			}
+			sourceRecord = records[0]
+			return true, nil
+		})
+	// Resume immediately after polling, before reporting any assertion failure.
+	require.NoError(t, signalAgent("CONT"))
+	paused = false
+	require.NoError(t, err, "The source record must reach the Flow Aggregator before the reject record")
+	require.Equal(t, "perftest-a", sourceRecord["sourcePodName"])
+	require.Empty(t, sourceRecord["destinationPodName"])
+	require.EqualValues(t, ipfixregistry.NetworkPolicyRuleActionNoAction, sourceRecord["ingressNetworkPolicyRuleAction"])
+	srcPort := fmt.Sprint(sourceRecord["sourceTransportPort"])
+
+	records := getCollectorOutput(t, srcIP, dstIP, srcPort, false, false, isIPv6, data, label,
+		getCollectorOutputDefaultTimeout)
+	require.NotEmpty(t, records)
+	for _, record := range records {
+		checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1), data.testNamespace)
+		checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
+		assert.Contains(t, record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionReject))
+		assert.Contains(t, record, "ingressNetworkPolicyName: "+ingressRejectANPName)
+		assert.Contains(t, record, "ingressNetworkPolicyNamespace: "+data.testNamespace)
+		assert.Contains(t, record, "ingressNetworkPolicyRuleName: "+testIngressRuleName)
+		assert.Contains(t, record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy))
+		assert.Contains(t, record, "egressNetworkPolicyName: "+egressAllowANPName)
+	}
+	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, srcPort, false, false, label)
+	require.NotEmpty(t, clickHouseRecords)
+	for _, record := range clickHouseRecords {
+		checkPodAndNodeDataClickHouse(data, t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
+		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeInterNode)
+		assert.Equal(t, ipfixregistry.NetworkPolicyRuleActionReject, record.IngressNetworkPolicyRuleAction)
+		assert.Equal(t, ingressRejectANPName, record.IngressNetworkPolicyName)
+		assert.Equal(t, data.testNamespace, record.IngressNetworkPolicyNamespace)
+		assert.Equal(t, testIngressRuleName, record.IngressNetworkPolicyRuleName)
+		assert.Equal(t, ipfixregistry.PolicyTypeAntreaNetworkPolicy, record.IngressNetworkPolicyType)
+		assert.Equal(t, egressAllowANPName, record.EgressNetworkPolicyName)
 	}
 }
 
