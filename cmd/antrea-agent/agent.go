@@ -475,6 +475,8 @@ func run(o *Options) error {
 	var proxyQuerier proxy.ProxyQuerier
 	if o.enableAntreaProxy {
 		proxyServer, err = proxy.NewProxyServer(nodeConfig.Name,
+			nodeConfig.PodIPv4CIDR,
+			nodeConfig.PodIPv6CIDR,
 			nodeManager,
 			ofClient,
 			routeClient,
