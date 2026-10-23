@@ -31,6 +31,7 @@ limitations under the License.
 Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/endpointschangetracker.go
 
 Modifies:
+- Pass the local PodCIDR to EndpointSliceCache.
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and its usages.
 - Change type of "EndpointsMap" from "map[ServicePortName][]Endpoint" to "map[ServicePortName]map[string]Endpoint".
 
@@ -39,6 +40,7 @@ Modifies:
 package proxy
 
 import (
+	"net"
 	"sync"
 	"time"
 
@@ -80,7 +82,7 @@ type makeEndpointFunc func(info *BaseEndpointInfo, svcPortName *ServicePortName)
 type processEndpointsMapChangeFunc func(oldEndpointsMap, newEndpointsMap EndpointsMap)
 
 // NewEndpointsChangeTracker initializes an EndpointsChangeTracker
-func NewEndpointsChangeTracker(ipFamily v1.IPFamily, nodeName string, makeEndpointInfo makeEndpointFunc, processEndpointsMapChange processEndpointsMapChangeFunc) *EndpointsChangeTracker {
+func NewEndpointsChangeTracker(ipFamily v1.IPFamily, nodeName string, localPodCIDR *net.IPNet, makeEndpointInfo makeEndpointFunc, processEndpointsMapChange processEndpointsMapChangeFunc) *EndpointsChangeTracker {
 	addressType := discovery.AddressTypeIPv4
 	if ipFamily == v1.IPv6Protocol {
 		addressType = discovery.AddressTypeIPv6
@@ -91,7 +93,7 @@ func NewEndpointsChangeTracker(ipFamily v1.IPFamily, nodeName string, makeEndpoi
 		lastChangeTriggerTimes:    make(map[types.NamespacedName][]time.Time),
 		trackerStartTime:          time.Now(),
 		processEndpointsMapChange: processEndpointsMapChange,
-		endpointSliceCache:        NewEndpointSliceCache(nodeName, makeEndpointInfo),
+		endpointSliceCache:        NewEndpointSliceCache(nodeName, localPodCIDR, makeEndpointInfo),
 	}
 }
 
