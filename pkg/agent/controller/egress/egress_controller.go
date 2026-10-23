@@ -698,6 +698,8 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 			ipState.flowsInstalled = true
 		}
 		if !ipState.ruleInstalled {
+			// AddSNATRule only caches the rule. The route Client installs it and retries on failure, so
+			// ruleInstalled means that the rule has been handed over, not that it is in the datapath.
 			if err := c.routeClient.AddSNATRule(ipState.egressIP, ipState.mark); err != nil {
 				return 0, fmt.Errorf("error installing SNAT rule for IP %s: %v", ipState.egressIP, err)
 			}
