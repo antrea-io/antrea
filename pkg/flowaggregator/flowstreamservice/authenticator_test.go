@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -53,13 +54,12 @@ import (
 // newTokenReviewClient returns an AuthenticationV1 client that answers TokenReview creates from
 // valid, defaulting to "not authenticated" for any token that is not a key of it.
 //
-// This is served over real HTTP rather than through a fake clientset reactor because the delegating
-// authenticator's TokenReview goes through the typed client's RESTClient(), which a fake clientset
-// does not provide. Serving it means the token also makes a real round trip through the API
-// machinery's serialization, which a reactor would have skipped.
+// This is served over HTTP because the delegating authenticator's TokenReview goes through the typed
+// client's RESTClient(), which a fake clientset does not provide. The in-memory network supports
+// synctest bubbles while preserving the round trip through the API machinery's serialization.
 func newTokenReviewClient(t *testing.T, valid map[string]authenticationv1.TokenReviewStatus) authenticationv1client.AuthenticationV1Interface {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var review authenticationv1.TokenReview
 		if err := json.NewDecoder(r.Body).Decode(&review); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -78,9 +78,9 @@ func newTokenReviewClient(t *testing.T, valid map[string]authenticationv1.TokenR
 			t.Errorf("failed to encode TokenReview response: %v", err)
 		}
 	}))
-	t.Cleanup(server.Close)
-
-	client, err := kubernetes.NewForConfig(&rest.Config{Host: server.URL})
+	// Client sets server.URL, so it must be called before constructing the Kubernetes client.
+	httpClient := server.Client()
+	client, err := kubernetes.NewForConfigAndClient(&rest.Config{Host: server.URL}, httpClient)
 	require.NoError(t, err)
 	return client.AuthenticationV1()
 }
@@ -185,7 +185,7 @@ func newTestAuthenticator(t *testing.T, tokens map[string]authenticationv1.Token
 // newAuthenticatorWithClientCA returns an authenticator that has loaded caPEM as its client CA bundle
 // from the ConfigMap kube-apiserver publishes it in, and has confirmed the bundle is in place before
 // returning, so client certificate tests do not race the informer that reads it. TokenReview is
-// answered from tokens, as in newTestAuthenticator.
+// answered from tokens, as in newTestAuthenticator. It must be called inside a synctest bubble.
 func newAuthenticatorWithClientCA(t *testing.T, caPEM []byte, tokens map[string]authenticationv1.TokenReviewStatus) *StreamServerAuthenticator {
 	t.Helper()
 	k8sClient := k8sfake.NewSimpleClientset(&corev1.ConfigMap{
@@ -198,10 +198,11 @@ func newAuthenticatorWithClientCA(t *testing.T, caPEM []byte, tokens map[string]
 	stopCh := make(chan struct{})
 	t.Cleanup(func() { close(stopCh) })
 	go a.Run(stopCh)
-	require.Eventually(t, func() bool {
-		_, ok := a.clientCAProvider.VerifyOptions()
-		return ok
-	}, 10*time.Second, 10*time.Millisecond, "client CA bundle was never loaded")
+	// Long enough on the fake clock for the informer to sync and the bundle to load.
+	time.Sleep(time.Second)
+	synctest.Wait()
+	_, loaded := a.clientCAProvider.VerifyOptions()
+	require.True(t, loaded, "client CA bundle was never loaded")
 	return a
 }
 
@@ -371,49 +372,55 @@ func TestStreamInterceptor_TokenAuthenticationIsBounded(t *testing.T) {
 // TestStreamInterceptor_ValidClientCert covers the client certificate path: a certificate signed by
 // the cluster's client CA resolves to the identity it carries, without any call to kube-apiserver.
 func TestStreamInterceptor_ValidClientCert(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
-	cert := ca.validClientCert(t, "admin@test.com", []string{"admins", "viewers"})
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		cert := ca.validClientCert(t, "admin@test.com", []string{"admins", "viewers"})
 
-	var gotUser user.Info
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
-	require.NoError(t, err)
-	require.True(t, handlerCalled)
+		var gotUser user.Info
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+		require.NoError(t, err)
+		require.True(t, handlerCalled)
 
-	assert.Equal(t, "admin@test.com", gotUser.GetName())
-	// The Subject's Organization entries become groups, and system:authenticated is added so that
-	// both credential kinds report a consistent group list.
-	assert.ElementsMatch(t, []string{"admins", "viewers", user.AllAuthenticated}, gotUser.GetGroups())
+		assert.Equal(t, "admin@test.com", gotUser.GetName())
+		// The Subject's Organization entries become groups, and system:authenticated is added so that
+		// both credential kinds report a consistent group list.
+		assert.ElementsMatch(t, []string{"admins", "viewers", user.AllAuthenticated}, gotUser.GetGroups())
+	})
 }
 
 // TestStreamInterceptor_ClientCertFromUntrustedCA covers a syntactically valid certificate that was
 // not signed by the cluster's client CA. Verification is local, so this is rejected without asking
 // kube-apiserver anything.
 func TestStreamInterceptor_ClientCertFromUntrustedCA(t *testing.T) {
-	trustedCA := newTestCA(t)
-	otherCA := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, trustedCA.certPEM, nil)
-	cert := otherCA.validClientCert(t, "attacker@test.com", []string{"system:masters"})
+	synctest.Test(t, func(t *testing.T) {
+		trustedCA := newTestCA(t)
+		otherCA := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, trustedCA.certPEM, nil)
+		cert := otherCA.validClientCert(t, "attacker@test.com", []string{"system:masters"})
 
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	requireCode(t, err, codes.Unauthenticated)
-	assert.False(t, handlerCalled)
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
 }
 
 func TestStreamInterceptor_ExpiredClientCert(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
-	cert := ca.signClientCert(t, "admin@test.com", []string{"admins"}, time.Now().Add(-time.Hour), time.Now().Add(-time.Minute))
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		cert := ca.signClientCert(t, "admin@test.com", []string{"admins"}, time.Now().Add(-time.Hour), time.Now().Add(-time.Minute))
 
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	requireCode(t, err, codes.Unauthenticated)
-	assert.False(t, handlerCalled)
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
 }
 
 // TestStreamInterceptor_ClientCertWithoutCABundle covers the window before the client CA bundle has
@@ -470,7 +477,6 @@ func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 // same certificate must succeed when the client retries after the bundle has loaded, because it is
 // tried before the token.
 func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
-	ca := newTestCA(t)
 	for _, tc := range []struct {
 		name     string
 		header   string
@@ -480,44 +486,48 @@ func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
 		{name: "certificate and rejected token", header: "Bearer bad-token", wantCode: codes.Unauthenticated},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			k8sClient := k8sfake.NewSimpleClientset(&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Namespace: clientCAConfigMapNamespace, Name: clientCAConfigMapName},
-				Data:       map[string]string{clientCAConfigMapKey: string(ca.certPEM)},
-			})
-			a, err := newStreamServerAuthenticator(k8sClient, newTokenReviewClient(t, nil), testStreamLimits)
-			require.NoError(t, err)
-			stopCh := make(chan struct{})
-			t.Cleanup(func() { close(stopCh) })
+			synctest.Test(t, func(t *testing.T) {
+				ca := newTestCA(t)
+				k8sClient := k8sfake.NewSimpleClientset(&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: clientCAConfigMapNamespace, Name: clientCAConfigMapName},
+					Data:       map[string]string{clientCAConfigMapKey: string(ca.certPEM)},
+				})
+				a, err := newStreamServerAuthenticator(k8sClient, newTokenReviewClient(t, nil), testStreamLimits)
+				require.NoError(t, err)
+				stopCh := make(chan struct{})
+				t.Cleanup(func() { close(stopCh) })
 
-			delegated := a.authenticator
-			a.authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
-				resp, ok, err := delegated.AuthenticateRequest(req)
-				if tc.header != "" {
-					require.ErrorContains(t, err, "invalid bearer token")
-				} else {
-					require.NoError(t, err)
-				}
-				require.False(t, ok, "the certificate must not be checked before the CA loads")
-				go a.Run(stopCh)
-				require.Eventually(t, func() bool {
+				delegated := a.authenticator
+				a.authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+					resp, ok, err := delegated.AuthenticateRequest(req)
+					if tc.header != "" {
+						require.ErrorContains(t, err, "invalid bearer token")
+					} else {
+						require.NoError(t, err)
+					}
+					require.False(t, ok, "the certificate must not be checked before the CA loads")
+					go a.Run(stopCh)
+					// Long enough on the fake clock for the informer to sync and the bundle to load.
+					time.Sleep(time.Second)
+					synctest.Wait()
 					_, loaded := a.clientCAProvider.VerifyOptions()
-					return loaded
-				}, 10*time.Second, 10*time.Millisecond, "client CA bundle was never loaded")
-				return resp, ok, err
+					require.True(t, loaded, "client CA bundle was never loaded")
+					return resp, ok, err
+				})
+
+				handlerCalled := false
+				ctx := contextWithClientCert(contextWithAuthHeader(tc.header), ca.validClientCert(t, "admin@test.com", nil))
+				err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+				requireCode(t, err, tc.wantCode)
+				assert.False(t, handlerCalled)
+
+				a.authenticator = delegated
+				var gotUser user.Info
+				err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+				require.NoError(t, err)
+				require.True(t, handlerCalled)
+				assert.Equal(t, "admin@test.com", gotUser.GetName())
 			})
-
-			handlerCalled := false
-			ctx := contextWithClientCert(contextWithAuthHeader(tc.header), ca.validClientCert(t, "admin@test.com", nil))
-			err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-			requireCode(t, err, tc.wantCode)
-			assert.False(t, handlerCalled)
-
-			a.authenticator = delegated
-			var gotUser user.Info
-			err = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
-			require.NoError(t, err)
-			require.True(t, handlerCalled)
-			assert.Equal(t, "admin@test.com", gotUser.GetName())
 		})
 	}
 }
@@ -527,19 +537,21 @@ func TestStreamInterceptor_ClientCALoadDuringAuthentication(t *testing.T) {
 // identifies the client and the token is never reviewed — the same precedence kube-apiserver applies
 // to a request that arrives with both.
 func TestStreamInterceptor_ClientCertTakesPrecedenceOverBearerToken(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, map[string]authenticationv1.TokenReviewStatus{
-		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
-	})
-	cert := ca.validClientCert(t, "admin@test.com", []string{"admins"})
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, map[string]authenticationv1.TokenReviewStatus{
+			"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
+		})
+		cert := ca.validClientCert(t, "admin@test.com", []string{"admins"})
 
-	var gotUser user.Info
-	handlerCalled := false
-	ctx := contextWithClientCert(contextWithAuthHeader("Bearer good-token"), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
-	require.NoError(t, err)
-	require.True(t, handlerCalled)
-	assert.Equal(t, "admin@test.com", gotUser.GetName())
+		var gotUser user.Info
+		handlerCalled := false
+		ctx := contextWithClientCert(contextWithAuthHeader("Bearer good-token"), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+		require.NoError(t, err)
+		require.True(t, handlerCalled)
+		assert.Equal(t, "admin@test.com", gotUser.GetName())
+	})
 }
 
 // TestStreamInterceptor_UnverifiableClientCertFallsBackToBearerToken covers the case that makes the
@@ -549,37 +561,41 @@ func TestStreamInterceptor_ClientCertTakesPrecedenceOverBearerToken(t *testing.T
 // configures a static client certificate signed by the Flow Aggregator's own CA, not the cluster's,
 // and a Go client offers it whether or not the current session's credential is a certificate.
 func TestStreamInterceptor_UnverifiableClientCertFallsBackToBearerToken(t *testing.T) {
-	clusterCA := newTestCA(t)
-	unrelatedCA := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, clusterCA.certPEM, map[string]authenticationv1.TokenReviewStatus{
-		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
-	})
-	cert := unrelatedCA.validClientCert(t, "not-a-cluster-identity", nil)
+	synctest.Test(t, func(t *testing.T) {
+		clusterCA := newTestCA(t)
+		unrelatedCA := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, clusterCA.certPEM, map[string]authenticationv1.TokenReviewStatus{
+			"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
+		})
+		cert := unrelatedCA.validClientCert(t, "not-a-cluster-identity", nil)
 
-	var gotUser user.Info
-	handlerCalled := false
-	ctx := contextWithClientCert(contextWithAuthHeader("Bearer good-token"), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
-	require.NoError(t, err)
-	require.True(t, handlerCalled)
-	assert.Equal(t, "alice", gotUser.GetName())
+		var gotUser user.Info
+		handlerCalled := false
+		ctx := contextWithClientCert(contextWithAuthHeader("Bearer good-token"), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))
+		require.NoError(t, err)
+		require.True(t, handlerCalled)
+		assert.Equal(t, "alice", gotUser.GetName())
+	})
 }
 
 // TestStreamInterceptor_ClientCertIsNotBoundedByTokenSlots covers that the concurrency bound does not
 // apply to a call whose only credential is a certificate: that path is verified locally against the
 // cached CA bundle and never calls kube-apiserver, so there is nothing for it to bound.
 func TestStreamInterceptor_ClientCertIsNotBoundedByTokenSlots(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
-	for range maxConcurrentTokenAuthentications {
-		a.tokenAuthSlots <- struct{}{}
-	}
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		for range maxConcurrentTokenAuthentications {
+			a.tokenAuthSlots <- struct{}{}
+		}
 
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), ca.validClientCert(t, "admin@test.com", nil))
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	require.NoError(t, err)
-	assert.True(t, handlerCalled)
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), ca.validClientCert(t, "admin@test.com", nil))
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		require.NoError(t, err)
+		assert.True(t, handlerCalled)
+	})
 }
 
 // TestStreamInterceptor_CertificateMetadataIsIgnored pins down that a certificate and private key
@@ -587,17 +603,19 @@ func TestStreamInterceptor_ClientCertIsNotBoundedByTokenSlots(t *testing.T) {
 // the Flow Aggregator: anything able to read the Flow Aggregator's memory could then impersonate
 // that user against kube-apiserver with their full privileges until the certificate expired.
 func TestStreamInterceptor_CertificateMetadataIsIgnored(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
 
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
-		"client-cert-bin", string(ca.certPEM),
-		"client-key-bin", "any-private-key",
-	))
-	handlerCalled := false
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	requireCode(t, err, codes.Unauthenticated)
-	assert.False(t, handlerCalled)
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+			"client-cert-bin", string(ca.certPEM),
+			"client-key-bin", "any-private-key",
+		))
+		handlerCalled := false
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
 }
 
 // TestStreamInterceptor_AnonymousTokenIdentityIsRejected covers a TokenReview that reports success
@@ -636,15 +654,17 @@ func TestStreamInterceptor_AnonymousTokenIdentityIsRejected(t *testing.T) {
 // a certificate signed by the cluster's client CA whose Subject CommonName is literally
 // "system:anonymous" would otherwise resolve to the anonymous user.
 func TestStreamInterceptor_AnonymousClientCertIsRejected(t *testing.T) {
-	ca := newTestCA(t)
-	a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
-	cert := ca.validClientCert(t, user.Anonymous, nil)
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		cert := ca.validClientCert(t, user.Anonymous, nil)
 
-	handlerCalled := false
-	ctx := contextWithClientCert(context.Background(), cert)
-	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
-	requireCode(t, err, codes.Unauthenticated)
-	assert.False(t, handlerCalled)
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
 }
 
 // TestRejectUnaryRPC covers the unary interceptor the server installs. FlowStreamService authenticates
