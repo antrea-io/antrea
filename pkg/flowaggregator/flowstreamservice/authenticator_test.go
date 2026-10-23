@@ -391,6 +391,23 @@ func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	})
 }
 
+// TestStreamInterceptor_ClientCertWithoutCommonName covers a certificate signed by the cluster's
+// client CA that carries no CommonName: it verifies but resolves to no identity. Once the bundle has
+// loaded, the call must be rejected with Unauthenticated.
+func TestStreamInterceptor_ClientCertWithoutCommonName(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		cert := ca.validClientCert(t, "", nil)
+
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
+}
+
 // TestStreamInterceptor_ClientCertFromUntrustedCA covers a syntactically valid certificate that was
 // not signed by the cluster's client CA. Verification is local, so this is rejected without asking
 // kube-apiserver anything.
@@ -449,13 +466,19 @@ func TestStreamInterceptor_ClientCertWithoutCABundle(t *testing.T) {
 		{name: "certificate and rejected token", header: "Bearer bad-token", withCert: true, wantCode: codes.Unauthenticated},
 		{name: "valid token only", header: "Bearer good-token", wantCode: codes.OK},
 		{name: "rejected token only", header: "Bearer bad-token", wantCode: codes.Unauthenticated},
+		{name: "malformed header only", header: "Basic abc", wantCode: codes.Unauthenticated},
 		{name: "no credentials", wantCode: codes.Unauthenticated},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := contextWithAuthHeader(tc.header)
+			// Every real call arrives over TLS, so a call without a certificate still carries a TLS
+			// state, with no peer certificates.
+			var peerCerts []*x509.Certificate
 			if tc.withCert {
-				ctx = contextWithClientCert(ctx, cert)
+				peerCerts = []*x509.Certificate{cert}
 			}
+			ctx := peer.NewContext(contextWithAuthHeader(tc.header), &peer.Peer{
+				AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{PeerCertificates: peerCerts}},
+			})
 			var gotUser user.Info
 			handlerCalled := false
 			err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, &gotUser))

@@ -269,8 +269,9 @@ func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info
 		if !caLoaded && req.TLS != nil && len(req.TLS.PeerCertificates) > 0 {
 			return nil, errAuthenticationUnavailable
 		}
-		// Reported when nothing the call carries is a credential: no authorization metadata and no
-		// client certificate, or an authorization value that is not a bearer token.
+		// Reported when no credential resolves to an identity: no authorization metadata and no client
+		// certificate, an authorization value that is not a bearer token, or a verified certificate
+		// with no CommonName.
 		return nil, fmt.Errorf("call carries no credential to authenticate")
 	}
 	u := resp.User
