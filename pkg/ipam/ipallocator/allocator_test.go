@@ -154,6 +154,38 @@ func TestAllocateIP(t *testing.T) {
 	}
 }
 
+func TestIPv6OffsetsDoNotWrap(t *testing.T) {
+	tests := []struct {
+		name      string
+		allocator *SingleIPAllocator
+	}{
+		{"CIDR", newCIDRAllocator("2001:db8:0:1::/125", nil)},
+		{"range", newIPRangeAllocator("2001:db8:0:1::1", "2001:db8:0:1::7")},
+	}
+	// These offsets differ from the first usable address by positive and negative multiples of 2^64.
+	invalidIPs := []net.IP{net.ParseIP("2001:db8:0:2::1"), net.ParseIP("2001:db8::1")}
+	validIP := net.ParseIP("2001:db8:0:1::1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, ip := range invalidIPs {
+				assert.False(t, tt.allocator.Has(ip), "IP %s must be outside the allocator", ip)
+				require.Error(t, tt.allocator.AllocateIP(ip))
+			}
+			assert.Zero(t, tt.allocator.Used())
+			require.NoError(t, tt.allocator.AllocateIP(validIP))
+			for _, ip := range invalidIPs {
+				require.Error(t, tt.allocator.Release(ip))
+				assert.Equal(t, 1, tt.allocator.Used())
+			}
+			require.Error(t, tt.allocator.AllocateIP(validIP), "invalid releases must preserve the valid allocation")
+			require.NoError(t, tt.allocator.Release(validIP))
+			ip, err := tt.allocator.AllocateNext()
+			require.NoError(t, err)
+			assert.True(t, validIP.Equal(ip))
+		})
+	}
+}
+
 func TestAllocateRelease(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -318,4 +350,212 @@ func TestNameAndTotal(t *testing.T) {
 	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
 	assert.Equal(t, 14, ma.Total())
+}
+
+func TestInvalidIPs(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		ip   net.IP
+	}{
+		{name: "nil"},
+		{name: "empty", ip: net.IP{}},
+		{name: "invalid length", ip: net.IP{1, 2, 3}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Include :: so invalid IPs converted to zero cannot pass as valid addresses.
+			a, err := NewIPRangeAllocator(net.ParseIP("::"), net.ParseIP("::3"), tt.ip, net.ParseIP("::1"))
+			require.NoError(t, err)
+			assert.Equal(t, 3, a.Total(), "invalid reservations must not reduce capacity")
+			assert.False(t, a.Has(tt.ip))
+			assert.False(t, a.IsReserved(tt.ip))
+			require.Error(t, a.AllocateIP(tt.ip))
+			ip, err := a.AllocateNext()
+			require.NoError(t, err)
+			assert.Equal(t, "::", ip.String())
+			require.Error(t, a.Release(tt.ip))
+			assert.Equal(t, 1, a.Used(), "invalid releases must preserve the allocation")
+		})
+	}
+}
+
+func TestIsReserved(t *testing.T) {
+	ma := MultiIPAllocator{
+		newCIDRAllocator("192.0.2.0/29", []string{"192.0.2.1", "192.0.2.7", "192.0.2.8"}),
+		newCIDRAllocator("2001:db8::/125", []string{"2001:db8::1"}),
+	}
+	require.NoError(t, ma.AllocateIP(net.ParseIP("192.0.2.2")))
+	for _, tt := range []struct {
+		ip       string
+		has      bool
+		reserved bool
+	}{
+		{ip: "192.0.2.1", has: true, reserved: true},
+		{ip: "192.0.2.7", has: true, reserved: true},
+		{ip: "192.0.2.2", has: true},
+		{ip: "192.0.2.3", has: true},
+		{ip: "192.0.2.8"},
+		{ip: "2001:0db8:0:0:0:0:0:1", has: true, reserved: true},
+		{ip: "2001:db8::2", has: true},
+	} {
+		t.Run(tt.ip, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			assert.Equal(t, tt.has, ma.Has(ip))
+			assert.Equal(t, tt.reserved, ma.IsReserved(ip))
+		})
+	}
+}
+
+func TestReservedIPs(t *testing.T) {
+	tests := []struct {
+		name     string
+		cidr     string
+		start    string
+		end      string
+		reserved []string
+		wantIPs  []string
+	}{
+		{
+			name:     "IPv4 CIDR",
+			cidr:     "10.10.10.0/29",
+			reserved: []string{"10.10.10.0", "10.10.10.1", "10.10.10.1", "10.10.10.7", "10.10.10.8"},
+			wantIPs:  []string{"10.10.10.2", "10.10.10.3", "10.10.10.4", "10.10.10.5", "10.10.10.6"},
+		},
+		{
+			name:     "IPv6 CIDR",
+			cidr:     "fd00::/125",
+			reserved: []string{"fd00::", "fd00::1", "fd00:0:0:0:0:0:0:1", "fd00::7", "fd00::8"},
+			wantIPs:  []string{"fd00::2", "fd00::3", "fd00::4", "fd00::5", "fd00::6"},
+		},
+		{
+			name:     "IPv4 range",
+			start:    "10.10.10.0",
+			end:      "10.10.10.4",
+			reserved: []string{"10.10.9.255", "10.10.10.0", "10.10.10.2", "10.10.10.2", "10.10.10.5"},
+			wantIPs:  []string{"10.10.10.1", "10.10.10.3", "10.10.10.4"},
+		},
+		{
+			name:     "IPv6 range",
+			start:    "fd00::",
+			end:      "fd00::4",
+			reserved: []string{"fcff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "fd00::", "fd00::2", "fd00::2", "fd00::5"},
+			wantIPs:  []string{"fd00::1", "fd00::3", "fd00::4"},
+		},
+		{
+			name:     "all IPs reserved",
+			start:    "10.10.10.1",
+			end:      "10.10.10.1",
+			reserved: []string{"10.10.10.1", "10.10.10.1"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var reservedIPs []net.IP
+			for _, ip := range tt.reserved {
+				reservedIPs = append(reservedIPs, net.ParseIP(ip))
+			}
+			var allocator *SingleIPAllocator
+			var err error
+			if tt.cidr != "" {
+				_, ipNet, parseErr := net.ParseCIDR(tt.cidr)
+				require.NoError(t, parseErr)
+				allocator, err = NewCIDRAllocator(ipNet, reservedIPs)
+			} else {
+				allocator, err = NewIPRangeAllocator(net.ParseIP(tt.start), net.ParseIP(tt.end), reservedIPs...)
+			}
+			require.NoError(t, err)
+			assert.Equal(t, len(tt.wantIPs), allocator.Total())
+			assert.Equal(t, len(tt.wantIPs), allocator.Free())
+			for _, ip := range reservedIPs {
+				require.Error(t, allocator.AllocateIP(ip), "reserved or out-of-range IP %s must not be allocated", ip)
+			}
+			assert.Zero(t, allocator.Used())
+			for i, wantIP := range tt.wantIPs {
+				ip, err := allocator.AllocateNext()
+				require.NoError(t, err)
+				assert.Equal(t, wantIP, ip.String())
+				assert.Equal(t, i+1, allocator.Used())
+				assert.Equal(t, len(tt.wantIPs)-i-1, allocator.Free())
+			}
+			_, err = allocator.AllocateNext()
+			require.Error(t, err)
+			if len(tt.wantIPs) > 0 {
+				ip := net.ParseIP(tt.wantIPs[0])
+				require.NoError(t, allocator.Release(ip))
+				require.NoError(t, allocator.AllocateIP(ip))
+				assert.Zero(t, allocator.Free())
+			}
+		})
+	}
+}
+
+func TestReservedIPsWithLimitedRange(t *testing.T) {
+	tests := []struct {
+		name    string
+		cidr    string
+		start   string
+		end     string
+		first   string
+		last    string
+		outside string
+	}{
+		{
+			name:    "IPv4 CIDR",
+			cidr:    "10.10.0.0/15",
+			first:   "10.10.0.1",
+			last:    "10.11.0.0",
+			outside: "10.11.0.1",
+		},
+		{
+			name:    "IPv6 CIDR",
+			cidr:    "fd00::/64",
+			first:   "fd00::1",
+			last:    "fd00::1:0",
+			outside: "fd00::1:1",
+		},
+		{
+			name:    "IPv4 range",
+			start:   "10.10.0.0",
+			end:     "10.11.0.1",
+			first:   "10.10.0.0",
+			last:    "10.10.255.255",
+			outside: "10.11.0.0",
+		},
+		{
+			name:    "IPv6 range",
+			start:   "fd00::",
+			end:     "fd00::1:1",
+			first:   "fd00::",
+			last:    "fd00::ffff",
+			outside: "fd00::1:0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reservedIPs := []net.IP{
+				net.ParseIP(tt.first), net.ParseIP(tt.first), net.ParseIP(tt.last), net.ParseIP(tt.outside),
+			}
+			var allocator *SingleIPAllocator
+			var err error
+			if tt.cidr != "" {
+				_, ipNet, parseErr := net.ParseCIDR(tt.cidr)
+				require.NoError(t, parseErr)
+				allocator, err = NewCIDRAllocator(ipNet, reservedIPs)
+			} else {
+				allocator, err = NewIPRangeAllocator(net.ParseIP(tt.start), net.ParseIP(tt.end), reservedIPs...)
+			}
+			require.NoError(t, err)
+			assert.Equal(t, 65534, allocator.Total())
+			assert.Equal(t, 65534, allocator.Free())
+			for _, ip := range reservedIPs {
+				require.Error(t, allocator.AllocateIP(ip))
+			}
+			ips, err := allocator.AllocateRange(65534)
+			require.NoError(t, err)
+			assert.Len(t, ips, 65534)
+			assert.Equal(t, 65534, allocator.Used())
+			assert.Zero(t, allocator.Free())
+			_, err = allocator.AllocateNext()
+			require.Error(t, err)
+		})
+	}
 }
