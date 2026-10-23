@@ -285,12 +285,26 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 		return nil, egress, fmt.Errorf("ExternalIPPool %s does not exist", egress.Spec.ExternalIPPool)
 	}
 
-	var ip net.IP
+	ip := net.ParseIP(egress.Spec.EgressIP)
+	if ip != nil && !c.externalIPAllocator.IPPoolHasIP(egress.Spec.ExternalIPPool, ip) {
+		// A pool can be recreated after admission, before this Egress has a cached allocation.
+		poolName := egress.Spec.ExternalIPPool
+		pool, err := c.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		if err != nil {
+			return nil, egress, fmt.Errorf("error when getting ExternalIPPool %s for Egress %s: %v", poolName, egress.Name, err)
+		}
+		if pool.Spec.SubnetInfo != nil && ip.Equal(net.ParseIP(pool.Spec.SubnetInfo.Gateway)) {
+			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
+				return nil, egress, err
+			} else {
+				egress = updatedEgress
+			}
+		}
+	}
 	// User specifies the Egress IP, try to allocate it. If it fails, the datapath may still work, we just don't track
 	// the IP allocation so deleting this Egress won't release the IP to the Pool.
 	// TODO: Use validation webhook to ensure the requested IP matches the pool.
 	if egress.Spec.EgressIP != "" {
-		ip = net.ParseIP(egress.Spec.EgressIP)
 		if err := c.externalIPAllocator.UpdateIPAllocation(egress.Spec.ExternalIPPool, ip); err != nil {
 			return nil, egress, fmt.Errorf("error when allocating IP %v for Egress %s from ExternalIPPool %s: %v", ip, egress.Name, egress.Spec.ExternalIPPool, err)
 		}
