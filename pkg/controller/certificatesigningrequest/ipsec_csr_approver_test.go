@@ -335,7 +335,65 @@ func Test_verifyIdentity(t *testing.T) {
 				},
 			},
 			nodeName:    "worker-node-1",
-			expectedErr: nil,
+			expectedErr: errExtraFieldsRequired,
+		},
+		{
+			name: "Pod UID missing",
+			objects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "kube-system",
+						Name:      "antrea-agent-8r5f9",
+						UID:       "1206ba75-7d75-474c-8110-99255502178c",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "worker-node-1",
+					},
+				},
+			},
+			csr: &certificatesv1.CertificateSigningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "worker-node-1-ipsec",
+				},
+				Spec: certificatesv1.CertificateSigningRequestSpec{
+					SignerName: "antrea.io/ipsec",
+					Extra: map[string]certificatesv1.ExtraValue{
+						"authentication.kubernetes.io/pod-name": {"antrea-agent-8r5f9"},
+					},
+					Username: "system:serviceaccount:kube-system:antrea-agent",
+				},
+			},
+			nodeName:    "worker-node-1",
+			expectedErr: errExtraFieldsRequired,
+		},
+		{
+			name: "extra fields without Pod binding",
+			objects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "kube-system",
+						Name:      "antrea-agent-8r5f9",
+						UID:       "1206ba75-7d75-474c-8110-99255502178c",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "worker-node-1",
+					},
+				},
+			},
+			csr: &certificatesv1.CertificateSigningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "worker-node-1-ipsec",
+				},
+				Spec: certificatesv1.CertificateSigningRequestSpec{
+					SignerName: "antrea.io/ipsec",
+					Extra: map[string]certificatesv1.ExtraValue{
+						"authentication.kubernetes.io/credential-id": {"JTI=94a395e7-62e9-4b2f-9f67-c151aaa98e39"},
+					},
+					Username: "system:serviceaccount:kube-system:antrea-agent",
+				},
+			},
+			nodeName:    "worker-node-1",
+			expectedErr: errExtraFieldsRequired,
 		},
 		{
 			name: "Pod is not on requested Node",
@@ -577,7 +635,7 @@ func Test_ipsecCertificateApprover_verify(t *testing.T) {
 					Username: "system:serviceaccount:kube-system:antrea-agent",
 				},
 			},
-			expectedApproved: true,
+			expectedApproved: false,
 		},
 	}
 	for _, tt := range tests {

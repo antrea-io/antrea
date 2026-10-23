@@ -134,11 +134,12 @@ func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.
 	if csr.Spec.Username != ic.antreaAgentServiceAccountName {
 		return errUserUnauthorized
 	}
+	// The Pod-binding extra fields are set by the K8s apiserver when the request is
+	// authenticated with a bound ServiceAccount token, which antrea-agent Pods use by
+	// default. Without them, we cannot verify that the request originates from the
+	// antrea-agent Pod running on the requested Node, so the request must not be
+	// approved automatically.
 	podNameValues, podUIDValues := csr.Spec.Extra[sautil.PodNameKey], csr.Spec.Extra[sautil.PodUIDKey]
-	if len(podNameValues) == 0 && len(podUIDValues) == 0 {
-		klog.Info("Could not determine Pod identity from CertificateSigningRequest. Enable K8s BoundServiceAccountTokenVolume feature gate to provide maximum security.")
-		return nil
-	}
 	if len(podNameValues) == 0 || len(podUIDValues) == 0 {
 		return errExtraFieldsRequired
 	}
