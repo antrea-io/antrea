@@ -31,8 +31,11 @@ import (
 	informers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -157,6 +160,47 @@ func TestAllocateNext(t *testing.T) {
 	assert.Equal(t, 21, allocator.Total())
 
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
+}
+
+func TestAllocateNextConflictRetryLimit(t *testing.T) {
+	for _, conflicts := range []int{14, 15} {
+		t.Run(fmt.Sprintf("%d conflicts", conflicts), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				pool := &crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "retry-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+						SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+					},
+				}
+				allocator := newTestIPPoolAllocator(pool, stopCh)
+				require.NotNil(t, allocator)
+				attempts := 0
+				client := allocator.crdClient.(*fakepoolclient.IPPoolClientset)
+				conflictErr := &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict}}
+				client.PrependReactor("update", "ippools", func(k8stesting.Action) (bool, runtime.Object, error) {
+					attempts++
+					if attempts <= conflicts {
+						return true, nil, conflictErr
+					}
+					return false, nil, nil
+				})
+				ip, _, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+				assert.Equal(t, 15, attempts, "all configured attempts should be available")
+				if conflicts == 14 {
+					require.NoError(t, err, "allocation should succeed on the final attempt")
+					assert.Equal(t, net.ParseIP("10.2.2.10").String(), ip.String())
+				} else {
+					require.ErrorIs(t, err, conflictErr)
+				}
+				updated, err := client.CrdV1beta1().IPPools().Get(context.Background(), pool.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Len(t, updated.Status.IPAddresses, 15-conflicts)
+			})
+		})
+	}
 }
 
 // TestConcurrentAllocateNextSharedIPPool simulates many Nodes (or many Pods on
