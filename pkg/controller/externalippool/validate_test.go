@@ -69,7 +69,7 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name: "Adding matched SubnetInfo should be allowed",
+			name: "Adding SubnetInfo should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "UPDATE",
@@ -82,7 +82,10 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 					}
 				}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "subnetInfo cannot be added or removed"},
+			},
 		},
 		{
 			name: "Deleting IPRange should not be allowed",
@@ -133,6 +136,76 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			}
 			gotResponse := c.ValidateExternalIPPool(review)
 			assert.Equal(t, tt.expectedResponse, gotResponse)
+		})
+	}
+}
+
+func TestValidateExternalIPPoolSubnetInfoUpdate(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*crdv1b1.ExternalIPPool)
+		errMsg string
+	}{
+		{
+			name:   "unchanged subnet info",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {},
+		},
+		{
+			name: "update gateway",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {
+				pool.Spec.SubnetInfo.Gateway = "192.168.1.146"
+			},
+			errMsg: "gateway is immutable",
+		},
+		{
+			name: "update prefix length",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {
+				pool.Spec.SubnetInfo.PrefixLength = 24
+			},
+			errMsg: "prefixLength is immutable",
+		},
+		{
+			name: "remove subnet info",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {
+				pool.Spec.SubnetInfo = nil
+			},
+			errMsg: "subnetInfo cannot be added or removed",
+		},
+		{
+			name: "update VLAN",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {
+				pool.Spec.SubnetInfo.VLAN = 202
+			},
+		},
+		{
+			name: "update node selector",
+			mutate: func(pool *crdv1b1.ExternalIPPool) {
+				pool.Spec.NodeSelector.MatchLabels = map[string]string{"network-role": "egress-gateway"}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldPool := newExternalIPPool("pool", "192.168.1.144/28", "", "")
+			oldPool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				Gateway: "192.168.1.145", PrefixLength: 28, VLAN: 201,
+			}
+			newPool := oldPool.DeepCopy()
+			tt.mutate(newPool)
+			c := newController(nil)
+			response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Update,
+				OldObject: runtime.RawExtension{Raw: marshal(oldPool)},
+				Object:    runtime.RawExtension{Raw: marshal(newPool)},
+			}})
+			if tt.errMsg == "" {
+				assert.True(t, response.Allowed)
+				assert.Nil(t, response.Result)
+			} else {
+				assert.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Equal(t, tt.errMsg, response.Result.Message)
+			}
 		})
 	}
 }

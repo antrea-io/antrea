@@ -83,7 +83,7 @@ type ExternalIPAllocator interface {
 	AllocateIPFromPool(externalIPPool string) (net.IP, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
-	// IPPoolHasIP checks whether the IP pool contains the given IP.
+	// IPPoolHasIP checks whether the IP pool contains the given IP and it is not reserved.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
 	UpdateIPAllocation(externalIPPool string, ip net.IP) error
@@ -213,6 +213,11 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 		existingIPRanges.Insert(multiIPAllocator.Names()...)
 	}
 
+	var gatewayIPs []net.IP
+	if ipPool.Spec.SubnetInfo != nil {
+		gatewayIPs = append(gatewayIPs, net.ParseIP(ipPool.Spec.SubnetInfo.Gateway))
+	}
+
 	for idx := range ipPool.Spec.IPRanges {
 		ipRange := &ipPool.Spec.IPRanges[idx]
 		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
@@ -228,8 +233,8 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(ipNet.String()) {
 					return nil, nil
 				}
-				// Don't use the IPv4 network's broadcast address.
-				var reservedIPs []net.IP
+				// Don't allocate the subnet gateway or the IPv4 network's broadcast address.
+				reservedIPs := gatewayIPs
 				if utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 				}
@@ -238,7 +243,7 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil
 				}
-				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
+				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End), gatewayIPs...)
 			}
 		}()
 		if err != nil {
@@ -358,7 +363,7 @@ func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool 
 	if !exists {
 		return false
 	}
-	return allocator.Has(ip)
+	return allocator.Has(ip) && !allocator.IsReserved(ip)
 }
 
 func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {
