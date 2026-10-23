@@ -49,8 +49,6 @@ type Options struct {
 	// Enable StretchedNetworkPolicy to exchange labelIdentities info among the whole
 	// ClusterSet.
 	EnableStretchedNetworkPolicy bool
-	// Watch EndpointSlice API for exported Service if EndpointSlice API is available.
-	EnableEndpointSlice bool
 	// ClusterCalimCRDAvailable indicates if the ClusterClaim CRD is available or not
 	// in the cluster.
 	ClusterCalimCRDAvailable bool

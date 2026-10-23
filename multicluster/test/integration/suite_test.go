@@ -158,7 +158,6 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		clusterSetReconciler,
 		"ClusterIP",
-		false,
 		testNamespace)
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
