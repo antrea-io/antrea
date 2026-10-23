@@ -17,6 +17,7 @@ package podwatch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -87,6 +89,11 @@ type podCNIInfo struct {
 	netNS       string
 }
 
+type secondaryNetworkRollbackState struct {
+	podUID      k8stypes.UID
+	containerID string
+}
+
 type PodController struct {
 	kubeClient          clientset.Interface
 	netAttachDefClient  netdefclient.K8sCniCncfIoV1Interface
@@ -109,7 +116,10 @@ type PodController struct {
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
-	nodeConfig         *config.NodeConfig
+	// Map from "namespace/pod" to secondaryNetworkRollbackState. Only failed
+	// rollbacks are retained; status annotations are not configuration state.
+	pendingRollbacks sync.Map
+	nodeConfig       *config.NodeConfig
 }
 
 func NewPodController(
@@ -220,6 +230,18 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		return nil
 	}
 
+	podKey := podKeyGet(pod.Name, pod.Namespace)
+	if state, pending := pc.pendingRollbacks.Load(podKey); pending {
+		if state == (secondaryNetworkRollbackState{podUID: pod.UID, containerID: podCNIInfo.containerID}) {
+			if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
+				return fmt.Errorf("failed to finish secondary interface rollback for Pod %s/%s: %w", pod.Namespace, pod.Name, err)
+			}
+			storedSecondaryInterfaces = nil
+		}
+		// A new Pod or sandbox must not inherit a previous rollback request.
+		pc.pendingRollbacks.Delete(podKey)
+	}
+
 	var networkList []*netdefv1.NetworkSelectionElement
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
@@ -238,14 +260,15 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 
 	if len(storedSecondaryInterfaces) > 0 {
 		if len(networkList) > 0 {
-			// We do not support secondary network update at the moment. Return as long as one
-			// secondary interface has been created for the Pod.
+			// Secondary network updates are not supported. Retain configured interfaces
+			// even if their status annotation has not been successfully published yet.
 			klog.V(1).InfoS("Secondary network already configured on this Pod. Changes to secondary network configuration are not supported, skipping update",
 				"Pod", klog.KObj(pod))
 			return nil
-		}
-		if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
-			return err
+		} else {
+			if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -409,6 +432,7 @@ func (pc *PodController) syncPod(key string) error {
 	}
 
 	if !podExists {
+		pc.pendingRollbacks.Delete(key)
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
@@ -520,7 +544,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		if err != nil {
 			klog.ErrorS(err, "Failed to get NetworkAttachmentDefinition", "network", network, "Pod", klog.KObj(pod))
 			savedErr = err
-			continue
+			break
 		}
 
 		cniConfig, err := netdefutils.GetCNIConfig(netAttachDef, "")
@@ -554,7 +578,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				// It is probably worth retrying as the NetworkAttachmentDefinition
 				// may eventually be updated with the missing annotation.
 				savedErr = err
-				continue
+				break
 			}
 			resourceName = v
 		}
@@ -609,7 +633,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				"Pod", klog.KObj(pod), "interface", network.InterfaceRequest,
 				"networkType", networkConfig.NetworkType)
 			savedErr = err
-			continue
+			break
 		}
 		status := &netdefv1.NetworkStatus{
 			Name:    network.Name,
@@ -645,9 +669,18 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			// on retry.
 			klog.InfoS("Rolling back partially configured secondary interfaces due to configuration failure",
 				"Pod", klog.KObj(pod), "interfacesConfigured", interfacesConfigured)
-			storedInterfaces := pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
+			var storedInterfaces []*interfacestore.InterfaceConfig
+			for _, iface := range pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace) {
+				if iface.ContainerID == podCNIInfo.containerID {
+					storedInterfaces = append(storedInterfaces, iface)
+				}
+			}
 			if err := pc.removeInterfaces(storedInterfaces); err != nil {
+				pc.pendingRollbacks.Store(podKeyGet(pod.Name, pod.Namespace), secondaryNetworkRollbackState{
+					podUID: pod.UID, containerID: podCNIInfo.containerID,
+				})
 				klog.ErrorS(err, "Failed to remove partially configured secondary interfaces", "Pod", klog.KObj(pod))
+				return nil, errors.Join(savedErr, fmt.Errorf("failed to roll back partially configured secondary interfaces: %w", err))
 			}
 		}
 		return nil, savedErr
