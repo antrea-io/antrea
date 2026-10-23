@@ -35,6 +35,7 @@ Modifies:
 - Replace import utilfeature "k8s.io/apiserver/pkg/util/feature" with "antrea.io/antrea/pkg/features".
 - Remove import "k8s.io/kubernetes/pkg/features".
 - Remove import "sort".
+- Infer locality from the local PodCIDR when an Endpoint has no nodeName.
 - Change type of "EndpointsMap" from "map[ServicePortName][]Endpoint" to "map[ServicePortName]map[string]Endpoint".
 
 */
@@ -43,6 +44,7 @@ package proxy
 
 import (
 	"fmt"
+	"net"
 	"reflect"
 	"sync"
 
@@ -70,6 +72,7 @@ type EndpointSliceCache struct {
 
 	makeEndpointInfo makeEndpointFunc
 	nodeName         string
+	localPodCIDR     *net.IPNet
 }
 
 // endpointSliceTracker keeps track of EndpointSlices as they have been applied
@@ -91,13 +94,14 @@ type endpointSliceData struct {
 }
 
 // NewEndpointSliceCache initializes an EndpointSliceCache.
-func NewEndpointSliceCache(nodeName string, makeEndpointInfo makeEndpointFunc) *EndpointSliceCache {
+func NewEndpointSliceCache(nodeName string, localPodCIDR *net.IPNet, makeEndpointInfo makeEndpointFunc) *EndpointSliceCache {
 	if makeEndpointInfo == nil {
 		makeEndpointInfo = standardEndpointInfo
 	}
 	return &EndpointSliceCache{
 		trackerByServiceMap: map[types.NamespacedName]*endpointSliceTracker{},
 		nodeName:            nodeName,
+		localPodCIDR:        localPodCIDR,
 		makeEndpointInfo:    makeEndpointInfo,
 	}
 }
@@ -230,7 +234,13 @@ func (cache *EndpointSliceCache) addEndpoints(svcPortName *ServicePortName, port
 			continue
 		}
 
+		endpointIP := utilnet.ParseIPSloppy(endpoint.Addresses[0])
 		isLocal := endpoint.NodeName != nil && cache.isLocal(*endpoint.NodeName)
+		// Manually managed Endpoints without nodeName may use IPs in the local PodCIDR,
+		// including unallocated IPs. Treat these Endpoints as local.
+		if endpoint.NodeName == nil && cache.localPodCIDR != nil {
+			isLocal = cache.localPodCIDR.Contains(endpointIP)
+		}
 
 		ready := endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready
 		serving := endpoint.Conditions.Serving == nil || *endpoint.Conditions.Serving
@@ -252,8 +262,7 @@ func (cache *EndpointSliceCache) addEndpoints(svcPortName *ServicePortName, port
 			}
 		}
 
-		endpointIP := utilnet.ParseIPSloppy(endpoint.Addresses[0]).String()
-		endpointInfo := NewBaseEndpointInfo(endpointIP, portNum, isLocal,
+		endpointInfo := NewBaseEndpointInfo(endpointIP.String(), portNum, isLocal,
 			ready, serving, terminating, zoneHints, nodeHints)
 
 		// This logic ensures we're deduplicating potential overlapping endpoints
