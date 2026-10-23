@@ -344,7 +344,10 @@ func (c *ServiceExternalIPController) releaseExternalIP(service apimachinerytype
 					klog.InfoS("Failed to release IP for service: IP Pool does not exist", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
 				} else {
 					klog.ErrorS(err, "Failed to release external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
-					return false, err
+					// A recreated pool may exclude the old IP or reserve it as its gateway.
+					if c.externalIPAllocator.IPPoolHasIP(allocation.ipPool, allocation.ip) {
+						return false, err
+					}
 				}
 			} else {
 				klog.InfoS("Released external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
@@ -522,6 +525,12 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 
 	newExternalIP, err := c.allocateExternalIP(key, currentIPPool, service.Spec.LoadBalancerIP, allowSharedIP)
 	if err != nil {
+		// Do not retain an invalid IP while waiting for a replacement, including when the pool is exhausted.
+		if currentExternalIP != "" && !c.externalIPAllocator.IPPoolHasIP(currentIPPool, net.ParseIP(currentExternalIP)) {
+			if updateErr := c.updateServiceLoadBalancerIP(service, nil); updateErr != nil {
+				return updateErr
+			}
+		}
 		return err
 	}
 	if err := c.updateServiceLoadBalancerIP(service, newExternalIP); err != nil {

@@ -15,11 +15,13 @@
 package egress
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 
 	admv1 "k8s.io/api/admission/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -65,6 +67,19 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 				return false, fmt.Sprintf("Burst %s in Egress %s is invalid: %v", newEgress.Spec.Bandwidth.Burst, newEgress.Name, err)
 			}
 		}
+		// Check the gateway even when EgressIP and ExternalIPPool don't change.
+		ip := net.ParseIP(newEgress.Spec.EgressIP)
+		poolName := newEgress.Spec.ExternalIPPool
+		if ip != nil && poolName != "" {
+			pool, err := c.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				return false, fmt.Sprintf("failed to get ExternalIPPool %s: %v", poolName, err)
+			}
+			if err == nil && pool.Spec.SubnetInfo != nil && ip.Equal(net.ParseIP(pool.Spec.SubnetInfo.Gateway)) {
+				return false, fmt.Sprintf("IP %s is the gateway of ExternalIPPool %s and cannot be used as an Egress IP",
+					newEgress.Spec.EgressIP, poolName)
+			}
+		}
 		// Allow it if EgressIP and ExternalIPPool don't change.
 		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
 			return true, ""
@@ -73,7 +88,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		if newEgress.Spec.EgressIP == "" || newEgress.Spec.ExternalIPPool == "" {
 			return true, ""
 		}
-		ip := net.ParseIP(newEgress.Spec.EgressIP)
 		if ip == nil {
 			return false, fmt.Sprintf("IP %s is not valid", newEgress.Spec.EgressIP)
 		}

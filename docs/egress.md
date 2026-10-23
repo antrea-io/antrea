@@ -270,13 +270,14 @@ supported in a cluster is 20, which should be sufficient for most cases. If you
 need to have more subnets, please raise an issue with your use case, and we will
 consider revising the limit based on that.
 
-**Note**: When using a CIDR in `ipRanges` that includes the `gateway` IP, Antrea
-will **not** automatically exclude the gateway from the allocatable IP range. If
-the gateway IP is allocated (e.g., as an Egress IP), it will cause networking
-issues. To avoid this, ensure that the gateway IP is not part of any CIDR
-specified in `ipRanges`, or use explicit `start` / `end` ranges that do not
-include the gateway IP. See [#7868](https://github.com/antrea-io/antrea/issues/7868)
-for more information.
+**Note**: Antrea reserves the `gateway` IP when it is included in a CIDR or an
+explicit `start` / `end` range, so it cannot be allocated. The `gateway` and
+`prefixLength` fields are immutable, and `subnetInfo` cannot be added or removed
+after the ExternalIPPool is created. The `vlan` field can still be updated.
+
+When upgrading from a version that does not reserve the gateway IP, update any
+Egress or Service using that IP to use a different address before upgrading.
+Existing allocations of the gateway IP cannot be restored after the upgrade.
 
 ### NodeSelector
 
