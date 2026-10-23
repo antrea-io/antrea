@@ -83,7 +83,8 @@ const (
 //     (validated against the cluster's client CA bundle).
 //
 // The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not
-// authenticate. Only this package's own tests can build a service that skips authentication.
+// authenticate, or with codes.Unavailable if its only credential is a client certificate and the
+// client CA bundle has not loaded yet. Only this package's own tests can build a service that skips authentication.
 //
 // The identity authenticated then decides what the client receives: every stream is authorized
 // with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
@@ -234,8 +235,8 @@ func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setSta
 		// authenticating with a bearer token simply presents none and the handshake still succeeds.
 		// Verification is deliberately left to the authenticator rather than to the TLS stack
 		// (which RequireAndVerifyClientCert would do), so that an unverifiable certificate is
-		// reported to the client as a gRPC Unauthenticated error rather than as an opaque handshake
-		// failure. ClientCAs is left unset for the same reason.
+		// reported as a gRPC Unauthenticated error, or Unavailable if the client CA bundle has not
+		// loaded, rather than as an opaque handshake failure. ClientCAs is left unset for the same reason.
 		ClientAuth: tls.RequestClientCert,
 	}
 	transition(StateServing)

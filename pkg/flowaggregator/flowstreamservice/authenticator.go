@@ -89,6 +89,10 @@ const (
 // than as Unauthenticated.
 var errAuthenticationOverloaded = errors.New("too many authentication requests in flight")
 
+// errAuthenticationUnavailable means a client certificate could not be checked because the client
+// CA bundle has not loaded. It is reported as Unavailable so clients can retry once the bundle loads.
+var errAuthenticationUnavailable = errors.New("client CA bundle is not loaded")
+
 // StreamServerAuthenticator authenticates FlowStreamService clients. It provides the gRPC stream
 // interceptor that runs before any RPC on the service reaches its handler; every RPC the service
 // serves is server-streaming, and rejectUnaryRPC keeps it that way.
@@ -172,10 +176,10 @@ func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewCli
 // Run keeps the client CA bundle used to verify client certificates in sync with the ConfigMap
 // kube-apiserver publishes it in. It blocks until stopCh is closed.
 // The bundle is read through an informer that Run starts, so client certificate authentication only
-// becomes available once that informer has synced. Until then — and permanently on a cluster whose
-// kube-apiserver publishes no client CA at all — x509 verification has no trust bundle and declines
-// every peer certificate rather than accepting an unverified one. Bearer-token authentication does
-// not depend on any of this and keeps working either way.
+// becomes available once a valid bundle has loaded. Until then — and permanently on a cluster whose
+// kube-apiserver publishes no client CA at all — requests whose only credential is a client
+// certificate return Unavailable so clients can retry.
+// Bearer-token authentication does not depend on the bundle and keeps working either way.
 func (a *StreamServerAuthenticator) Run(stopCh <-chan struct{}) {
 	a.clientCAProvider.Run(wait.ContextForChannel(stopCh), 1)
 }
@@ -187,7 +191,9 @@ func (f caBundleListenerFunc) Enqueue() { f() }
 
 // StreamInterceptor implements grpc.StreamServerInterceptor. It rejects the call with
 // codes.Unauthenticated if the request does not carry a valid bearer token or client certificate;
-// otherwise it attaches the resolved identity to the stream context before invoking handler.
+// calls whose only credential is a client certificate return codes.Unavailable while the client
+// CA bundle is not loaded.
+// On success it attaches the resolved identity to the stream context before invoking handler.
 func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	// Taken before authenticating, so a client that has already accumulated its share of streams
 	// cannot make the Flow Aggregator do authentication work, and released only when the stream ends.
@@ -221,6 +227,9 @@ func authenticationStatusError(err error) error {
 	if errors.Is(err, errAuthenticationOverloaded) {
 		return status.Error(codes.ResourceExhausted, "too many authentication requests in flight, retry later")
 	}
+	if errors.Is(err, errAuthenticationUnavailable) {
+		return status.Error(codes.Unavailable, "client certificate authentication is unavailable, retry later")
+	}
 	return status.Error(codes.Unauthenticated, "invalid client credentials")
 }
 
@@ -244,15 +253,25 @@ func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info
 		}
 	}
 
+	// Read before authenticating: the provider retains the last valid bundle once loaded. Reading
+	// afterward could misclassify an unchecked certificate if the bundle loads during authentication.
+	_, caLoaded := a.clientCAProvider.VerifyOptions()
 	resp, ok, err := a.authenticator.AuthenticateRequest(req)
 	if err != nil {
 		// Reported when a credential was presented and rejected: an unverifiable certificate, a token
-		// TokenReview declined, or a TokenReview that could not be completed at all.
+		// TokenReview declined, or a TokenReview that could not be completed at all. This holds even
+		// for a request whose certificate went unchecked because the bundle was not loaded: a rejected
+		// token is a definite answer, and some clients, such as antrea-ui, present a certificate the
+		// bundle would never verify alongside the token that actually identifies them.
 		return nil, fmt.Errorf("credentials were not accepted: %w", err)
 	}
 	if !ok {
-		// Reported when nothing the call carries is a credential: no authorization metadata and no
-		// client certificate, or an authorization value that is not a bearer token.
+		if !caLoaded && req.TLS != nil && len(req.TLS.PeerCertificates) > 0 {
+			return nil, errAuthenticationUnavailable
+		}
+		// Reported when no credential resolves to an identity: no authorization metadata and no client
+		// certificate, an authorization value that is not a bearer token, or a verified certificate
+		// with no CommonName.
 		return nil, fmt.Errorf("call carries no credential to authenticate")
 	}
 	u := resp.User
