@@ -391,6 +391,23 @@ func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	})
 }
 
+// TestStreamInterceptor_ClientCertWithoutCommonName covers a certificate signed by the cluster's
+// client CA that carries no CommonName: it verifies but resolves to no identity. Once the bundle has
+// loaded, the call must be rejected with Unauthenticated.
+func TestStreamInterceptor_ClientCertWithoutCommonName(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ca := newTestCA(t)
+		a := newAuthenticatorWithClientCA(t, ca.certPEM, nil)
+		cert := ca.validClientCert(t, "", nil)
+
+		handlerCalled := false
+		ctx := contextWithClientCert(context.Background(), cert)
+		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, recordingHandler(&handlerCalled, nil))
+		requireCode(t, err, codes.Unauthenticated)
+		assert.False(t, handlerCalled)
+	})
+}
+
 // TestStreamInterceptor_ClientCertFromUntrustedCA covers a syntactically valid certificate that was
 // not signed by the cluster's client CA. Verification is local, so this is rejected without asking
 // kube-apiserver anything.
