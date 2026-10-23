@@ -24,12 +24,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
-	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
@@ -60,7 +63,7 @@ type controller struct {
 func newController(crdObjects []runtime.Object) *controller {
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
+	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta2().ExternalIPPools())
 	return &controller{
 		externalIPPoolController,
 		crdClient,
@@ -151,6 +154,30 @@ func TestAllocateIPFromPool(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAllocateIPFromPoolWithFamily(t *testing.T) {
+	pool := newExternalIPPool("dual-stack", "10.10.10.0/30", "", "")
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, antreacrds.IPRange{
+		Start: "2001:db8::10",
+		End:   "2001:db8::11",
+	})
+	controller := newController([]runtime.Object{pool})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
+
+	ip, err := controller.AllocateIPFromPoolWithFamily(pool.Name, v1.IPv6Protocol)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("2001:db8::10"), ip)
+	ip, err = controller.AllocateIPFromPoolWithFamily(pool.Name, v1.IPv4Protocol)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("10.10.10.1"), ip)
+	_, err = controller.AllocateIPFromPoolWithFamily(pool.Name, v1.IPFamily("invalid"))
+	require.Error(t, err)
 }
 
 func TestReleaseIP(t *testing.T) {
@@ -296,7 +323,7 @@ func TestIPPoolEvents(t *testing.T) {
 	go controller.Run(stopCh)
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
 	// ADD event
-	eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context,
+	eip, err := controller.crdClient.CrdV1beta2().ExternalIPPools().Create(context,
 		newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
 		metav1.CreateOptions{},
 	)
@@ -304,14 +331,14 @@ func TestIPPoolEvents(t *testing.T) {
 	assert.Equal(t, "eip1", <-consumerCh)
 	// UPDATE event
 	eip.Spec.IPRanges[0].End = "10.10.10.4"
-	eip, err = controller.crdClient.CrdV1beta1().ExternalIPPools().Update(context,
+	eip, err = controller.crdClient.CrdV1beta2().ExternalIPPools().Update(context,
 		eip,
 		metav1.UpdateOptions{},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, "eip1", <-consumerCh)
 	// DELETE event
-	err = controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context,
+	err = controller.crdClient.CrdV1beta2().ExternalIPPools().Delete(context,
 		eip.Name,
 		metav1.DeleteOptions{},
 	)
@@ -409,6 +436,87 @@ func TestIPPoolExists(t *testing.T) {
 	}
 }
 
+func TestIPPoolIPFamilies(t *testing.T) {
+	pool := newExternalIPPool("dual-stack", "10.10.10.0/24", "2001:db8::10", "2001:db8::20")
+	apiError := apierrors.NewServiceUnavailable("API server unavailable")
+	tests := []struct {
+		name         string
+		cached       bool
+		apiObjects   []runtime.Object
+		apiError     error
+		noClient     bool
+		wantNotFound bool
+		wantAPIGet   bool
+	}{
+		{
+			name:   "cache hit avoids API query",
+			cached: true,
+		},
+		{
+			name:       "cache miss falls back to API",
+			apiObjects: []runtime.Object{pool},
+			wantAPIGet: true,
+		},
+		{
+			name:         "pool does not exist",
+			wantNotFound: true,
+			wantAPIGet:   true,
+		},
+		{
+			name:       "API error is preserved",
+			apiError:   apiError,
+			wantAPIGet: true,
+		},
+		{
+			name:         "cache miss without client",
+			noClient:     true,
+			wantNotFound: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := newController(tt.apiObjects)
+			client := controller.crdClient.(*fakeversioned.Clientset)
+			// Keep the informer stopped so cache misses do not depend on event timing.
+			if tt.cached {
+				informer := controller.crdInformerFactory.Crd().V1beta2().ExternalIPPools().Informer()
+				require.NoError(t, informer.GetIndexer().Add(pool))
+			}
+			if tt.apiError != nil {
+				client.PrependReactor("get", "externalippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tt.apiError
+				})
+			}
+			if tt.noClient {
+				controller.ExternalIPPoolController.crdClient = nil
+			}
+
+			families, err := controller.IPPoolIPFamilies(pool.Name)
+			switch {
+			case tt.wantNotFound:
+				require.Error(t, err)
+				assert.True(t, apierrors.IsNotFound(err), "expected NotFound, got %v", err)
+				assert.Nil(t, families)
+			case tt.apiError != nil:
+				assert.ErrorIs(t, err, tt.apiError)
+				assert.Nil(t, families)
+			default:
+				require.NoError(t, err)
+				assert.Equal(t, sets.New(v1.IPv4Protocol, v1.IPv6Protocol), families)
+			}
+			if tt.wantAPIGet {
+				actions := client.Actions()
+				require.Len(t, actions, 1)
+				assert.True(t, actions[0].Matches("get", "externalippools"))
+				assert.Equal(t, antreacrds.SchemeGroupVersion.WithResource("externalippools"), actions[0].GetResource())
+				assert.Equal(t, pool.Name, actions[0].(k8stesting.GetAction).GetName())
+			} else {
+				assert.Empty(t, client.Actions())
+			}
+		})
+	}
+}
+
 func TestIPPoolHasIP(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -459,7 +567,7 @@ func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName st
 	exists := controller.IPPoolExists(poolName)
 	require.True(t, exists)
 	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (found bool, err error) {
-		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		eip, err := controller.crdClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

@@ -43,6 +43,7 @@ type IPAllocator interface {
 type SingleIPAllocator struct {
 	// The string format of the IP range. e.g. 10.10.10.0/24, or 10.10.10.10-10.10.10.20.
 	ipRangeStr string
+	ipFamily   utilnet.IPFamily
 
 	mutex sync.RWMutex
 	// base is a cached version of the start IP in the CIDR range as a *big.Int.
@@ -73,6 +74,7 @@ func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator
 
 	allocator := &SingleIPAllocator{
 		ipRangeStr:  cidr.String(),
+		ipFamily:    utilnet.IPFamilyOfCIDR(cidr),
 		base:        base,
 		max:         int(max),
 		allocated:   big.NewInt(0),
@@ -99,6 +101,7 @@ func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
 
 	allocator := &SingleIPAllocator{
 		ipRangeStr: ipRangeStr,
+		ipFamily:   utilnet.IPFamilyOf(startIP),
 		base:       base,
 		max:        int(max),
 		allocated:  big.NewInt(0),
@@ -109,6 +112,11 @@ func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
 
 func (a *SingleIPAllocator) Name() string {
 	return a.ipRangeStr
+}
+
+// IPFamily returns the IP family of the allocator's range.
+func (a *SingleIPAllocator) IPFamily() utilnet.IPFamily {
+	return a.ipFamily
 }
 
 func (a *SingleIPAllocator) checkReserved(ip net.IP) error {
@@ -285,6 +293,19 @@ func (ma MultiIPAllocator) AllocateNext() (net.IP, error) {
 		}
 	}
 	return nil, fmt.Errorf("cannot allocate IP in any range")
+}
+
+// AllocateNextWithFamily allocates the next available IP of the requested family.
+func (ma MultiIPAllocator) AllocateNextWithFamily(family utilnet.IPFamily) (net.IP, error) {
+	for _, a := range ma {
+		if a.IPFamily() != family {
+			continue
+		}
+		if ip, err := a.AllocateNext(); err == nil {
+			return ip, nil
+		}
+	}
+	return nil, fmt.Errorf("cannot allocate IPv%s address in any range", family)
 }
 
 // AllocateRange allocates continuous range of specified size.
