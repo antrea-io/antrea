@@ -83,6 +83,14 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 				return fmt.Errorf("invalid host public key: %w", err)
 			}
 		}
+		// A SupportBundleCollection requires an authSecret to authenticate to the file server.
+		// Reject a missing authSecret on CREATE, and on UPDATE when spec.authentication is changed,
+		// but allow already-stored objects to keep their value so unrelated updates (e.g. metadata)
+		// are not blocked.
+		if (oldBundle == nil || !reflect.DeepEqual(oldBundle.Spec.Authentication, bundle.Spec.Authentication)) &&
+			bundle.Spec.Authentication.AuthSecret == nil {
+			return fmt.Errorf("spec.authentication.authSecret must be specified")
+		}
 		if secretRef := bundle.Spec.Authentication.AuthSecret; secretRef != nil {
 			// Both fields are optional in a SecretReference, but the controller reads the
 			// Secret as a namespaced object. Requiring them keeps the authorization check
