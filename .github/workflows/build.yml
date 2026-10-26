@@ -61,9 +61,6 @@ jobs:
         - platform: linux/arm64
           runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm64
-        - platform: linux/arm/v7
-          runner: oracle-vm-2cpu-8gb-arm64
-          suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: latest
@@ -120,8 +117,8 @@ jobs:
 
   # The build job above defines a matrix (provides support for different platforms). When the build
   # job is skipped, the matrix is not expanded, and status is only reported for the "build" job, and
-  # not for the 3 platform-specific jobs. On the other hand, when the build job is executed, status
-  # is only reported for the 3 platform-specific jobs and not for the parent "build" job.
+  # not for the platform-specific jobs. On the other hand, when the build job is executed, status
+  # is only reported for the platform-specific jobs and not for the parent "build" job.
   # See https://github.com/orgs/community/discussions/9141
   # Because we require a successful build before merging a PR, and we want to account for both of
   # these cases, we introduce a separate "build-status" job below. It will always report a status,
@@ -185,13 +182,11 @@ jobs:
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-amd64:"${DOCKER_TAG}"
     - name: Create and push manifest for agent image
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
 
   push-manifest-flow-aggregator:
@@ -232,7 +227,6 @@ jobs:
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-amd64:"${DOCKER_TAG}"
 
   build-ubi:
@@ -346,9 +340,6 @@ jobs:
         - platform: linux/arm64
           runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm64
-        - platform: linux/arm/v7
-          runner: oracle-vm-2cpu-8gb-arm64
-          suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: latest

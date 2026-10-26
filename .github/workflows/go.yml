@@ -163,7 +163,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
-      # This job builds Antrea and antctl for 9 different GOARCH/GOOS targets in a row, which
+      # This job builds Antrea and antctl for 7 different GOARCH/GOOS targets in a row, which
       # can exhaust the runner's disk with an empty Go build cache.
       # https://github.com/actions/virtual-environments/issues/709
       run: |
@@ -186,14 +186,10 @@ jobs:
       run: GOARCH=amd64 make bin
     - name: Build Antrea binaries for arm64
       run: GOARCH=arm64 make bin
-    - name: Build Antrea binaries for arm
-      run: GOARCH=arm make bin
     - name: Build antctl binary for linux amd64
       run: GOOS=linux GOARCH=amd64 make antctl
     - name: Build antctl binary for linux arm64
       run: GOOS=linux GOARCH=arm64 make antctl
-    - name: Build antctl binary for linux arm
-      run: GOOS=linux GOARCH=arm make antctl
     - name: Build antctl binary for windows amd64
       run: GOOS=windows GOARCH=amd64 make antctl
     - name: Build antctl binary for darwin amd64

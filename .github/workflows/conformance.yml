@@ -52,8 +52,7 @@ on:
         description: >-
           Platform argument to provide when building the Antrea images. It must
           match the runner architecture, as the Kind cluster created by this
-          workflow runs on the runner's native architecture (Kind does not
-          provide arm/v7 node images, so linux/arm/v7 cannot be tested).
+          workflow runs on the runner's native architecture.
         type: choice
         options:
           - "linux/amd64"
