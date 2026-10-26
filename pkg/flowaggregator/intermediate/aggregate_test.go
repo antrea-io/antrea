@@ -666,12 +666,66 @@ func TestInterNodeIngressRejectStats(t *testing.T) {
 				sourceEnd          int64
 				sourcePackets      uint64
 				sourceThroughput   uint64
+				destinationEnd     int64
+				destinationPackets uint64
 			}{
-				{"SourceFirst", false, false, 120, 10, 400},
-				{"DestinationFirstBeforeExport", true, false, 120, 10, 400},
-				{"DestinationFirstAfterExport", true, true, 120, 10, 400},
-				{"SourceWithSameEndTime", true, true, 110, 10, 800},
-				{"SourceWithLowerTotal", true, true, 120, 6, 240},
+				{
+					name: "SourceFirst", sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "DestinationFirstBeforeExport", destinationFirst: true,
+					sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "DestinationFirstAfterExport", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceWithSameEndTime", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 110, sourcePackets: 10, sourceThroughput: 800,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceWithLowerTotal", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 120, sourcePackets: 6, sourceThroughput: 240,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceAtStartTime", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 100, sourcePackets: 10,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SinglePacketRejectSourceFirst", sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SinglePacketRejectDestinationFirst", destinationFirst: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SinglePacketRejectExportBeforeSource", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SameSecondPacketsRejectSourceFirst", sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
+				{
+					name: "SameSecondPacketsRejectDestinationFirst", destinationFirst: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
+				{
+					name: "SameSecondPacketsRejectExportBeforeSource", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					clock := clocktesting.NewFakeClock(time.Now())
@@ -742,7 +796,12 @@ func TestInterNodeIngressRejectStats(t *testing.T) {
 					}
 
 					src := newRecord(true, tc.sourceEnd, tc.sourcePackets, tc.sourcePackets)
-					dst := newRecord(false, 110, 8, 8)
+					dst := newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets)
+					var destinationThroughput, destinationReverseThroughput uint64
+					if tc.destinationEnd > 100 {
+						destinationThroughput = tc.destinationPackets * 100 * 8 / uint64(tc.destinationEnd-100)
+						destinationReverseThroughput = tc.destinationPackets * 20 * 8 / uint64(tc.destinationEnd-100)
+					}
 					key, isIPv4 := getFlowKeyFromRecord(src)
 					first, second := src, dst
 					if tc.destinationFirst {
@@ -755,33 +814,133 @@ func TestInterNodeIngressRejectStats(t *testing.T) {
 					if tc.exportBeforeSource {
 						exported := export()
 						checkNodeStats(exported, true, 0, 0, 0, 0, 0)
-						checkNodeStats(exported, false, 110, 8, 8, 640, 128)
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets,
+							destinationThroughput, destinationReverseThroughput)
 					}
 					ap.addOrUpdateRecordInMap(key, second, isIPv4)
 					require.True(t, agg.ReadyToSend)
+					// Repeating a nonzero delta must not count the first rejected packets twice.
+					ap.addOrUpdateRecordInMap(key,
+						newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets), isIPv4)
 					exported := export()
 					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, tc.sourcePackets,
 						tc.sourceThroughput, tc.sourceThroughput/5)
 					assert.Equal(t, tc.sourceThroughput, exported.Aggregation.Throughput)
 					assert.Equal(t, tc.sourceThroughput/5, exported.Aggregation.ReverseThroughput)
 					if tc.exportBeforeSource {
-						checkNodeStats(exported, false, 110, 8, 0, 0, 0)
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, 0, 0, 0)
 					} else {
-						checkNodeStats(exported, false, 110, 8, 8, 640, 128)
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets,
+							destinationThroughput, destinationReverseThroughput)
 					}
 
-					// An identical Reject re-export must not move the source's end time backwards.
-					ap.addOrUpdateRecordInMap(key, newRecord(false, 110, 8, 0), isIPv4)
+					// An identical Reject re-export must not repeat deltas after export or change the source.
+					ap.addOrUpdateRecordInMap(key,
+						newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets), isIPv4)
 					exported = export()
 					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, 0, 0, 0)
-					checkNodeStats(exported, false, 110, 8, 0, 0, 0)
+					checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, 0, 0, 0)
 
 					// New rejected packets must only change the destination's counters and throughput.
-					ap.addOrUpdateRecordInMap(key, newRecord(false, 125, 12, 4), isIPv4)
+					ap.addOrUpdateRecordInMap(key, newRecord(false, 125, tc.destinationPackets+4, 4), isIPv4)
 					exported = export()
 					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, 0, 0, 0)
-					checkNodeStats(exported, false, 125, 12, 4, 213, 42)
+					checkNodeStats(exported, false, 125, tc.destinationPackets+4, 4,
+						4*100*8/uint64(125-tc.destinationEnd), 4*20*8/uint64(125-tc.destinationEnd))
 				})
+			}
+		})
+	}
+}
+
+func TestAggregateStatsWithDuplicateOrStaleRecords(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		flowType   flowpb.FlowType
+		fromSource bool
+		initialEnd int64
+	}{
+		{"SourceAtStartTime", flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, 100},
+		{"DestinationAtStartTime", flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, 100},
+		{"IntraNodeAtStartTime", flowpb.FlowType_FLOW_TYPE_INTRA_NODE, true, 100},
+		{"SourceWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, 110},
+		{"DestinationWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, 110},
+		{"IntraNodeWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTRA_NODE, true, 110},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ap := newAggregationProcess()
+			newStats := func(total, delta, packetSize uint64) *flowpb.Stats {
+				return &flowpb.Stats{
+					PacketTotalCount: total, PacketDeltaCount: delta,
+					OctetTotalCount: total * packetSize, OctetDeltaCount: delta * packetSize,
+				}
+			}
+			newRecord := func(end int64, total, delta uint64) *flowpb.Flow {
+				var record *flowpb.Flow
+				if tc.fromSource {
+					record = createFlowRecordForSrc(false, tc.flowType, false,
+						flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+				} else {
+					record = createFlowRecordForDst(false, tc.flowType, false,
+						flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+				}
+				record.StartTs.Seconds = 100
+				record.EndTs.Seconds = end
+				record.Stats = newStats(total, delta, 100)
+				record.ReverseStats = newStats(total, delta, 20)
+				return record
+			}
+			first := newRecord(tc.initialEnd, 3, 3)
+			key, isIPv4 := getFlowKeyFromRecord(first)
+			ap.addOrUpdateRecordInMap(key, first, isIPv4)
+			agg := ap.flowKeyRecordMap[*key]
+			for _, afterExport := range []bool{false, true} {
+				if afterExport {
+					require.NoError(t, ap.ResetStatAndThroughputElementsInRecord(agg.Record))
+				}
+				expected := proto.CloneOf(agg.Record)
+				if tc.initialEnd > 100 {
+					ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd-5, 2, 2), isIPv4)
+					assert.True(t, proto.Equal(expected, agg.Record),
+						"a stale record must not change counters, timestamps or throughput (after export=%t): %v",
+						afterExport, agg.Record)
+				}
+				ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd, 3, 3), isIPv4)
+				assert.True(t, proto.Equal(expected, agg.Record),
+					"a duplicate must not count the same delta again (after export=%t): %v", afterExport, agg.Record)
+			}
+
+			ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd+5, 5, 2), isIPv4)
+			assert.Equal(t, tc.initialEnd+5, agg.Record.EndTs.Seconds)
+			assert.True(t, proto.Equal(newStats(5, 2, 100), agg.Record.Stats))
+			assert.True(t, proto.Equal(newStats(5, 2, 20), agg.Record.ReverseStats))
+			assert.Equal(t, uint64(320), agg.Record.Aggregation.Throughput)
+			assert.Equal(t, uint64(64), agg.Record.Aggregation.ReverseThroughput)
+			for _, source := range []bool{true, false} {
+				stats := agg.Record.Aggregation
+				counters, reverseCounters := stats.StatsFromSource, stats.ReverseStatsFromSource
+				end := stats.EndTsFromSource.Seconds
+				throughput, reverseThroughput := stats.ThroughputFromSource, stats.ReverseThroughputFromSource
+				if !source {
+					counters, reverseCounters = stats.StatsFromDestination, stats.ReverseStatsFromDestination
+					end = stats.EndTsFromDestination.Seconds
+					throughput, reverseThroughput = stats.ThroughputFromDestination, stats.ReverseThroughputFromDestination
+				}
+				if source == tc.fromSource || tc.flowType == flowpb.FlowType_FLOW_TYPE_INTRA_NODE {
+					assert.True(t, proto.Equal(newStats(5, 2, 100), counters), "unexpected counters: %v", counters)
+					assert.True(t, proto.Equal(newStats(5, 2, 20), reverseCounters),
+						"unexpected reverse counters: %v", reverseCounters)
+					assert.Equal(t, tc.initialEnd+5, end)
+					assert.Equal(t, uint64(320), throughput)
+					assert.Equal(t, uint64(64), reverseThroughput)
+				} else {
+					assert.True(t, proto.Equal(&flowpb.Stats{}, counters), "the peer has not reported: %v", counters)
+					assert.True(t, proto.Equal(&flowpb.Stats{}, reverseCounters),
+						"the peer has not reported reverse counters: %v", reverseCounters)
+					assert.Zero(t, end)
+					assert.Zero(t, throughput)
+					assert.Zero(t, reverseThroughput)
+				}
 			}
 		})
 	}

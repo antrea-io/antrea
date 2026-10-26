@@ -515,6 +515,9 @@ the Flow Aggregator adds the following fields to the flow records.
 
 ##### IEs from Antrea IE Registry
 
+The per-Node fields listed below may be 0 when only one Node reports an inter-Node flow;
+see [Correlation of Flow Records](#correlation-of-flow-records).
+
 | IPFIX Information Element                 | Field ID | Type        | Description |
 |-------------------------------------------|----------|-------------|-------------|
 | packetTotalCountFromSourceNode            | 120      | unsigned64  | The cumulative number of packets for this flow as reported by the source Node, since the flow started. |
@@ -572,6 +575,15 @@ the missing Pod information from its own Pod cache. If the record from the other
 Node arrives first, the two records are correlated. If it arrives later, only its
 statistics are aggregated: its Kubernetes and NetworkPolicy information is not
 added, e.g., the egress NetworkPolicy of an ingress-rejected flow.
+
+If a Node never reports the flow, its per-Node fields remain 0. For example, the
+`*FromDestinationNode` fields remain 0 for an inter-Node flow denied by an egress
+Drop / Reject rule. Similarly, the `*FromSourceNode` fields typically remain 0 for
+an inter-Node TCP flow denied by an ingress Reject rule, as the source Node usually
+never reports the flow. This also applies to `flowEndSecondsFromSourceNode` and
+`flowEndSecondsFromDestinationNode`: 0 represents the Unix epoch
+(`1970-01-01T00:00:00Z`) when stored as a timestamp in ClickHouse, while S3 stores
+these fields as numeric Unix timestamps with value 0.
 
 ##### Aggregation of Flow Records
 
