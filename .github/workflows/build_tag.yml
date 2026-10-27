@@ -44,9 +44,6 @@ jobs:
         - platform: linux/arm64
           runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm64
-        - platform: linux/arm/v7
-          runner: oracle-vm-2cpu-8gb-arm64
-          suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}
@@ -132,13 +129,11 @@ jobs:
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-amd64:"${DOCKER_TAG}"
     - name: Create and push manifest for agent image
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
 
   push-manifest-flow-aggregator:
@@ -176,7 +171,6 @@ jobs:
       run: |
         docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/flow-aggregator-amd64:"${DOCKER_TAG}"
 
   build-ubi:
@@ -252,9 +246,6 @@ jobs:
         - platform: linux/arm64
           runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm64
-        - platform: linux/arm/v7
-          runner: oracle-vm-2cpu-8gb-arm64
-          suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}

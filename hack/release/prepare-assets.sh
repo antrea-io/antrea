@@ -55,7 +55,6 @@ export CGO_ENABLED=0
 ANTREA_BUILDS=(
     "linux amd64 linux-x86_64"
     "linux arm64 linux-arm64"
-    "linux arm linux-arm"
     "windows amd64 windows-x86_64.exe"
     "darwin amd64 darwin-x86_64"
     "darwin arm64 darwin-arm64"
@@ -73,7 +72,6 @@ done
 ANTREA_AGENT_BUILDS=(
     "linux amd64 linux-x86_64"
     "linux arm64 linux-arm64"
-    "linux arm linux-arm"
     "windows amd64 windows-x86_64.exe"
 )
 

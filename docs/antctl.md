@@ -72,7 +72,7 @@ mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
 ```
 
-For Linux, we also publish binaries for Arm-based systems.
+For Linux, we also publish binaries for arm64 systems.
 
 On Windows, using PowerShell:
 

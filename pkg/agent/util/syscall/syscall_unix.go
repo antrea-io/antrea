@@ -1,6 +1,6 @@
-//go:build linux && (arm || arm64 || amd64)
+//go:build linux && (arm64 || amd64)
 // +build linux
-// +build arm arm64 amd64
+// +build arm64 amd64
 
 // Copyright 2021 Antrea Authors
 //
