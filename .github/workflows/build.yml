@@ -78,13 +78,13 @@ jobs:
         ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull
     - name: Login to Docker Hub
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -167,13 +167,13 @@ jobs:
         driver: ${{ needs.check-env.outputs.docker_driver }}
     - name: Login to Docker Hub
       if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'docker.io' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
       if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'ghcr.io' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -212,13 +212,13 @@ jobs:
         driver: ${{ needs.check-env.outputs.docker_driver }}
     - name: Login to Docker Hub
       if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'docker.io' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
       if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'ghcr.io' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -357,13 +357,13 @@ jobs:
       run: docker run antrea/flow-aggregator --version
     - name: Login to Docker Hub
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
