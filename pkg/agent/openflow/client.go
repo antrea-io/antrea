@@ -134,6 +134,11 @@ type Client interface {
 	// dropTable.
 	InstallPolicyRuleFlows(ofPolicyRule *types.PolicyRule) error
 
+	// ReconcilePolicyRuleFlows atomically replaces the specified conjunctions with the desired rules in one table.
+	// Retained IDs must keep their action, priority, services, and other properties except addresses unchanged.
+	// On failure, installed flows and caches are unchanged. It returns priorities no longer used after success.
+	ReconcilePolicyRuleFlows(previousIDs []uint32, desiredRules []*types.PolicyRule) ([]string, error)
+
 	// BatchInstallPolicyRuleFlows installs multiple flows for NetworkPolicy rules in batch.
 	BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error
 

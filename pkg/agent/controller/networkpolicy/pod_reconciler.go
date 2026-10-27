@@ -520,9 +520,20 @@ func (r *podReconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8
 
 func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16, table uint8) (
 	map[servicesKey]*types.PolicyRule, *podPolicyLastRealized) {
-	lastRealized := newPodPolicyLastRealized(rule)
-	// TODO: Handle the case that the following processing fails or partially succeeds.
+	if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
+		if err := r.fqdnController.addFQDNRule(rule.ID, rule.To.FQDNs, r.getOFPorts(rule.TargetMembers)); err != nil {
+			klog.ErrorS(err, "Error when adding FQDN rule", "ruleID", rule.ID)
+		}
+	}
+	ofRules, lastRealized := r.computeOFRules(rule, ofPriority, table)
 	r.lastRealizeds.Store(rule.ID, lastRealized)
+	return ofRules, lastRealized
+}
+
+// computeOFRules computes the desired service groups without publishing their realization state.
+func (r *podReconciler) computeOFRules(rule *CompletedRule, ofPriority *uint16, table uint8) (
+	map[servicesKey]*types.PolicyRule, *podPolicyLastRealized) {
+	lastRealized := newPodPolicyLastRealized(rule)
 
 	ofRuleByServicesMap := map[servicesKey]*types.PolicyRule{}
 	isIGMP := r.isIGMPRule(rule)
@@ -587,15 +598,6 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 			}
 		}
 	} else {
-		if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
-			// TODO: addFQDNRule installs new conjunctive flows, so maybe it doesn't
-			// belong in computeOFRulesForAdd. The error handling needs to be corrected
-			// as well: if the flows failed to install, there should be a retry
-			// mechanism.
-			if err := r.fqdnController.addFQDNRule(rule.ID, rule.To.FQDNs, r.getOFPorts(rule.TargetMembers)); err != nil {
-				klog.ErrorS(err, "Error when adding FQDN rule", "ruleID", rule.ID)
-			}
-		}
 		ips := r.getIPs(rule.TargetMembers)
 		lastRealized.podIPs = ips
 		from := ipsToOFAddresses(ips)
@@ -635,7 +637,7 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 					Service:       filterUnresolvablePort(rule.Services),
 					Action:        rule.Action,
 					Name:          rule.Name,
-					Priority:      nil,
+					Priority:      ofPriority,
 					TableID:       table,
 					PolicyRef:     rule.SourceRef,
 					EnableLogging: rule.EnableLogging,
@@ -764,6 +766,29 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 	}
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
+	members := newRule.TargetMembers
+	if newRule.Direction == v1beta2.DirectionOut {
+		members = newRule.ToAddresses
+	}
+	membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, members)
+	originalSvcKey := normalizeServices(newRule.Services)
+	if newRule.Direction == v1beta2.DirectionOut &&
+		(!newRule.isAntreaNetworkPolicyRule() || len(newRule.To.IPBlocks) > 0 || len(newRule.To.FQDNs) > 0 || len(newRule.To.ToServices) > 0) {
+		// Keep the same original-services group as computeOFRules, for isolation and non-Pod peers.
+		if _, exists := membersByServicesMap[originalSvcKey]; !exists {
+			membersByServicesMap[originalSvcKey] = v1beta2.NewGroupMemberSet()
+			servicesMap[originalSvcKey] = newRule.Services
+		}
+	}
+	// Only regrouping named ports needs a transaction. Ordinary membership updates must stay
+	// incremental to avoid copying every shared match context's actions under the Openflow lock.
+	if !sets.KeySet(membersByServicesMap).Equal(sets.KeySet(lastRealized.ofIDs)) {
+		for _, svc := range newRule.Services {
+			if svc.Port != nil && svc.Port.Type == intstr.String {
+				return r.updateNamedPortRule(lastRealized, newRule, ofPriority, table)
+			}
+		}
+	}
 	if newRule.Direction == v1beta2.DirectionIn {
 		isRuleAppliedToService := isRuleAppliedToService(newRule.TargetMembers)
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
@@ -771,7 +796,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
 		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
 
-		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			newOFPorts := r.getOFPorts(members)
 			newGroupIDSet := r.getSvcGroupIDs(members)
@@ -827,7 +851,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority, newRule.EnableLogging, len(newRule.From.LabelIdentities) > 0); err != nil {
 					return err
 				}
-				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
 			}
 			lastRealized.podOFPorts[svcKey] = newOFPorts
@@ -844,16 +867,8 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
 
-		memberByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.ToAddresses)
-		// Same as the process in `add`, we must ensure the group for the original services is present
-		// in memberByServicesMap, so that this group won't be removed and its "From" will be updated.
-		originalSvcKey := normalizeServices(newRule.Services)
-		if _, exists := memberByServicesMap[originalSvcKey]; !exists {
-			memberByServicesMap[originalSvcKey] = v1beta2.NewGroupMemberSet()
-			servicesMap[originalSvcKey] = newRule.Services
-		}
 		prevMembersByServicesMap, _ := groupMembersByServices(lastRealized.Services, lastRealized.ToAddresses)
-		for svcKey, members := range memberByServicesMap {
+		for svcKey, members := range membersByServicesMap {
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			if !exists {
 				ofRule := &types.PolicyRule{
@@ -926,7 +941,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 				}
 				// Update the groupID address set if rule installation succeeds.
 				lastRealized.serviceGroupIDs = newGroupIDSet
-				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
 			}
 		}
@@ -948,9 +962,59 @@ func (r *podReconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).InfoS("Installing ofRule", "id", ofRule.FlowID, "direction", ofRule.Direction, "from", len(ofRule.From), "to", len(ofRule.To), "service", len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
 		r.idAllocator.forgetRule(ofRule.FlowID)
-		return fmt.Errorf("error installing ofRule %v: %v", ofRule.FlowID, err)
+		return fmt.Errorf("error installing ofRule %v: %w", ofRule.FlowID, err)
 	}
 	return nil
+}
+
+// updateNamedPortRule reconciles changes to the set of service groups together, including retained groups' members.
+// A rejected update leaves both enforcement and lastRealized unchanged. IDs are allocated once per new group,
+// and old IDs and priorities are released only after the replacement bundle succeeds.
+func (r *podReconciler) updateNamedPortRule(lastRealized *podPolicyLastRealized, rule *CompletedRule, ofPriority *uint16, table uint8) error {
+	if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
+		if err := r.fqdnController.addFQDNRule(rule.ID, rule.To.FQDNs, r.getOFPorts(rule.TargetMembers)); err != nil {
+			return fmt.Errorf("error when adding FQDN rule %s: %w", rule.ID, err)
+		}
+	}
+	ofRules, next := r.computeOFRules(rule, ofPriority, table)
+	var allocatedIDs []uint32
+	committed := false
+	defer func() {
+		if !committed {
+			for _, id := range allocatedIDs {
+				r.idAllocator.forgetRule(id)
+			}
+		}
+	}()
+	var desired []*types.PolicyRule
+	for svcKey, ofRule := range ofRules {
+		if id, found := lastRealized.ofIDs[svcKey]; found {
+			ofRule.FlowID = id
+		} else {
+			if err := r.idAllocator.allocateForRule(ofRule); err != nil {
+				return fmt.Errorf("error allocating Openflow ID: %w", err)
+			}
+			allocatedIDs = append(allocatedIDs, ofRule.FlowID)
+		}
+		next.ofIDs[svcKey] = ofRule.FlowID
+		desired = append(desired, ofRule)
+	}
+	var previousIDs []uint32
+	for _, id := range lastRealized.ofIDs {
+		previousIDs = append(previousIDs, id)
+	}
+	stalePriorities, err := r.ofClient.ReconcilePolicyRuleFlows(previousIDs, desired)
+	if err != nil {
+		return fmt.Errorf("error reconciling Openflow rules for policy %s: %w", rule.SourceRef.ToString(), err)
+	}
+	committed = true
+	for svcKey, id := range lastRealized.ofIDs {
+		if _, retained := next.ofIDs[svcKey]; !retained {
+			r.idAllocator.forgetRule(id)
+		}
+	}
+	*lastRealized = *next
+	return r.releaseOFPriorities(stalePriorities, table)
 }
 
 func (r *podReconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16, enableLogging, isMCNPRule bool) error {
@@ -985,20 +1049,25 @@ func (r *podReconciler) uninstallOFRule(ofID uint32, table uint8) error {
 	if err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
 	}
-	if len(stalePriorities) > 0 {
-		for _, p := range stalePriorities {
-			klog.V(2).InfoS("Releasing stale priority value", "priority", p)
-			priorityNum, err := strconv.ParseUint(p, 10, 16)
-			if err != nil {
-				// Cannot parse the priority str. Theoretically this should never happen.
-				return err
-			}
-			// If there are stalePriorities, priorityAssigners[table] must not be nil.
-			priorityAssigner := r.priorityAssigners[table]
-			priorityAssigner.assigner.release(uint16(priorityNum))
-		}
+	if err := r.releaseOFPriorities(stalePriorities, table); err != nil {
+		return err
 	}
 	r.idAllocator.forgetRule(ofID)
+	return nil
+}
+
+func (r *podReconciler) releaseOFPriorities(stalePriorities []string, table uint8) error {
+	for _, p := range stalePriorities {
+		klog.V(2).InfoS("Releasing stale priority value", "priority", p)
+		priorityNum, err := strconv.ParseUint(p, 10, 16)
+		if err != nil {
+			// Cannot parse the priority str. Theoretically this should never happen.
+			return err
+		}
+		// If there are stalePriorities, priorityAssigners[table] must not be nil.
+		priorityAssigner := r.priorityAssigners[table]
+		priorityAssigner.assigner.release(uint16(priorityNum))
+	}
 	return nil
 }
 

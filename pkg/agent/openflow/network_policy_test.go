@@ -17,6 +17,7 @@ package openflow
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"sort"
 	"strconv"
@@ -199,7 +200,7 @@ func TestConjMatchFlowContextActionCap(t *testing.T) {
 	ctx := newFullConjMatchFlowContext(c.featureNetworkPolicy, match)
 
 	flowChange, err := ctx.addAction(&conjunctiveAction{conjID: maxActionsPerConjMatchFlow, clauseID: 1, nClause: 2})
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrConjMatchFlowActionsExceeded)
 	assert.Nil(t, flowChange)
 	assert.Len(t, ctx.actions, maxActionsPerConjMatchFlow, "conjunctive action must not be added once the per-flow cap is exceeded")
 }
@@ -227,7 +228,7 @@ func TestAddActionToConjunctiveMatchCap(t *testing.T) {
 	clause := conj.newClause(1, 2, mockEgressRuleTable, mockEgressDefaultTable)
 
 	err := c.featureNetworkPolicy.addActionToConjunctiveMatch(clause, match, false, false)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrConjMatchFlowActionsExceeded)
 	assert.Len(t, context.actions, maxActionsPerConjMatchFlow)
 	_, found := clause.matches[matcherKey]
 	assert.False(t, found, "clause must not record the match as added when the cap is exceeded")
@@ -318,7 +319,7 @@ func TestPolicyRuleFlowsActionCap(t *testing.T) {
 		ruleID := uint32(maxActionsPerConjMatchFlow + 1)
 		err := c.InstallPolicyRuleFlows(newRule(ruleID, append(otherAddr, fullAddr...)))
 		require.ErrorContains(t, err, "K8sNetworkPolicy:ns1/np1")
-		require.ErrorContains(t, err, fmt.Sprintf("exceeds the limit of %d actions per flow", maxActionsPerConjMatchFlow))
+		require.ErrorIs(t, err, ErrConjMatchFlowActionsExceeded)
 		assert.Nil(t, c.featureNetworkPolicy.getPolicyRuleConjunction(ruleID))
 		checkContextsUnchanged(t)
 	})
@@ -329,9 +330,152 @@ func TestPolicyRuleFlowsActionCap(t *testing.T) {
 		c.featureNetworkPolicy.policyCache.Add(c.featureNetworkPolicy.calculateActionFlowChangesForRule(rule))
 		err := c.AddPolicyRuleAddress(ruleID, types.SrcAddress, append(otherAddr, fullAddr...), nil, true, false)
 		require.ErrorContains(t, err, "K8sNetworkPolicy:ns1/np1")
-		require.ErrorContains(t, err, fmt.Sprintf("exceeds the limit of %d actions per flow", maxActionsPerConjMatchFlow))
+		require.ErrorIs(t, err, ErrConjMatchFlowActionsExceeded)
 		checkContextsUnchanged(t)
 	})
+}
+
+// TestBatchInstallPolicyRuleFlowsFailureRestoresCache verifies that a failed BatchInstallPolicyRuleFlows restores the
+// conjunctive match flow contexts which existed before the call (e.g. those of the DNS interception conjunction), so
+// that they are still replayed, and drops all the changes made by the batch.
+func TestBatchInstallPolicyRuleFlowsFailureRestoresCache(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		addAllErr error
+		rules     func(newRule func(id uint32, from []types.Address) *types.PolicyRule) []*types.PolicyRule
+		expectErr func(t *testing.T, err error)
+	}{
+		{
+			name: "match flow action cap exceeded",
+			rules: func(newRule func(id uint32, from []types.Address) *types.PolicyRule) []*types.PolicyRule {
+				return []*types.PolicyRule{
+					newRule(maxActionsPerConjMatchFlow+1, parseAddresses([]string{"192.168.1.41", "192.168.1.42"})),
+					newRule(maxActionsPerConjMatchFlow+2, parseAddresses([]string{"192.168.1.40"})),
+				}
+			},
+			expectErr: func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrConjMatchFlowActionsExceeded) },
+		},
+		{
+			name:      "OpenFlow bundle fails",
+			addAllErr: errors.New("fake error"),
+			rules: func(newRule func(id uint32, from []types.Address) *types.PolicyRule) []*types.PolicyRule {
+				return []*types.PolicyRule{newRule(maxActionsPerConjMatchFlow+1, parseAddresses([]string{"192.168.1.41", "192.168.1.42"}))}
+			},
+			expectErr: func(t *testing.T, err error) { assert.ErrorContains(t, err, "fake error") },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := opstest.NewMockOFEntryOperations(ctrl)
+			bridge := mocks.NewMockBridge(ctrl)
+			c := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+			f := c.featureNetworkPolicy
+			f.bridge = bridge
+			f.egressTables = map[uint8]struct{}{EgressRuleTable.GetID(): {}, EgressDefaultTable.GetID(): {}}
+			f.globalConjMatchFlowCache = make(map[string]*conjMatchFlowContext)
+			f.policyCache = cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc})
+
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+			bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			require.NoError(t, c.NewDNSPacketInConjunction(1))
+			dnsContexts := maps.Clone(f.globalConjMatchFlowCache)
+			require.Len(t, dnsContexts, 2)
+
+			// A context shared with a rule of the batch, and a full context.
+			sharedAddr := parseAddresses([]string{"192.168.1.41"})
+			sharedMatch := generateAddressConjMatch(EgressRuleTable.GetID(), sharedAddr[0], types.SrcAddress, nil)
+			sharedActions := []*conjunctiveAction{{conjID: 1000, clauseID: 1, nClause: 2}}
+			sharedFlow := getFlowModMessage(f.conjunctiveMatchFlow(sharedMatch.tableID, sharedMatch.matchPairs, sharedMatch.priority, sharedActions), binding.AddMessage)
+			sharedCtx := &conjMatchFlowContext{
+				conjunctiveMatch:     sharedMatch,
+				actions:              map[uint32]*conjunctiveAction{1000: sharedActions[0]},
+				featureNetworkPolicy: f,
+				flow:                 sharedFlow,
+			}
+			fullMatch := generateAddressConjMatch(EgressRuleTable.GetID(), parseAddresses([]string{"192.168.1.40"})[0], types.SrcAddress, nil)
+			fullCtx := newFullConjMatchFlowContext(f, fullMatch)
+			f.globalConjMatchFlowCache[sharedMatch.generateGlobalMapKey()] = sharedCtx
+			f.globalConjMatchFlowCache[fullMatch.generateGlobalMapKey()] = fullCtx
+			existingContexts := maps.Clone(f.globalConjMatchFlowCache)
+
+			newRule := func(id uint32, from []types.Address) *types.PolicyRule {
+				return &types.PolicyRule{
+					Direction: v1beta2.DirectionOut,
+					From:      from,
+					To:        parseAddresses([]string{"0.0.0.0/0"}),
+					FlowID:    id,
+					TableID:   EgressRuleTable.GetID(),
+					PolicyRef: &v1beta2.NetworkPolicyReference{Type: v1beta2.K8sNetworkPolicy, Namespace: "ns1", Name: "np1", UID: "id1"},
+				}
+			}
+			if tc.addAllErr != nil {
+				m.EXPECT().AddAll(gomock.Any()).Return(tc.addAllErr).Times(1)
+			}
+			tc.expectErr(t, c.BatchInstallPolicyRuleFlows(tc.rules(newRule)))
+
+			assert.Equal(t, existingContexts, f.globalConjMatchFlowCache)
+			for key, ctx := range dnsContexts {
+				assert.Contains(t, replayFlowStrings(f), getFlowStrings([]*openflow15.FlowMod{ctx.flow})[0], "flow of DNS context %s must be replayed", key)
+			}
+			assert.Len(t, sharedCtx.actions, 1)
+			assert.Same(t, sharedFlow, sharedCtx.flow)
+			assert.Len(t, fullCtx.actions, maxActionsPerConjMatchFlow)
+			assert.Len(t, f.policyCache.List(), 1, "only the DNS conjunction should be in policyCache")
+		})
+	}
+}
+
+// TestDropFlowLoggingChangeIsReplayed verifies that when a rule changes the logging requirement of an existing default
+// drop flow, the modified drop flow is cached so that replay doesn't restore the previous logging behavior.
+func TestDropFlowLoggingChangeIsReplayed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := opstest.NewMockOFEntryOperations(ctrl)
+	bridge := mocks.NewMockBridge(ctrl)
+	c := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+	f := c.featureNetworkPolicy
+	f.bridge = bridge
+	f.egressTables = map[uint8]struct{}{EgressRuleTable.GetID(): {}, EgressDefaultTable.GetID(): {}}
+	f.globalConjMatchFlowCache = make(map[string]*conjMatchFlowContext)
+	f.policyCache = cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc})
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).AnyTimes()
+
+	from := parseAddresses([]string{"192.168.1.40"})
+	match := generateAddressConjMatch(EgressRuleTable.GetID(), from[0], types.SrcAddress, nil)
+	expectedDropFlow := func(enableLogging bool) string {
+		return getFlowStrings([]*openflow15.FlowMod{getFlowModMessage(f.defaultDropFlow(EgressDefaultTable.ofTable, match.matchPairs, enableLogging), binding.AddMessage)})[0]
+	}
+	newRule := func(id uint32, enableLogging bool) *types.PolicyRule {
+		return &types.PolicyRule{
+			Direction:     v1beta2.DirectionOut,
+			From:          from,
+			To:            parseAddresses([]string{"0.0.0.0/0"}),
+			FlowID:        id,
+			TableID:       EgressRuleTable.GetID(),
+			EnableLogging: enableLogging,
+			PolicyRef:     &v1beta2.NetworkPolicyReference{Type: v1beta2.K8sNetworkPolicy, Namespace: "ns1", Name: "np1", UID: "id1"},
+		}
+	}
+
+	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	require.NoError(t, c.InstallPolicyRuleFlows(newRule(1, false)))
+	require.Contains(t, replayFlowStrings(f), expectedDropFlow(false))
+
+	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(addFlows, modFlows, delFlows []*openflow15.FlowMod) {
+		assert.Contains(t, getFlowStrings(modFlows), expectedDropFlow(true))
+	}).Return(nil).Times(1)
+	require.NoError(t, c.InstallPolicyRuleFlows(newRule(2, true)))
+	ctx := f.globalConjMatchFlowCache[match.generateGlobalMapKey()]
+	require.NotNil(t, ctx)
+	assert.True(t, ctx.dropFlowEnableLogging)
+	replayed := replayFlowStrings(f)
+	assert.Contains(t, replayed, expectedDropFlow(true))
+	assert.NotContains(t, replayed, expectedDropFlow(false))
+}
+
+func replayFlowStrings(f *featureNetworkPolicy) []string {
+	return getFlowStrings(f.replayFlows())
 }
 
 func TestInstallPolicyRuleFlows(t *testing.T) {

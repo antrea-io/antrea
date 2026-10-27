@@ -956,9 +956,22 @@ func TestReconcileWithTransientError(t *testing.T) {
 			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 	}
-	for _, policyRule := range policyRules {
-		mockOFClient.EXPECT().InstallPolicyRuleFlows(newPolicyRulesMatcher(policyRule)).Return(nil).Times(1)
-	}
+	mockOFClient.EXPECT().ReconcilePolicyRuleFlows(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(previous []uint32, desired []*types.PolicyRule) ([]string, error) {
+			assert.Len(t, desired, len(policyRules))
+			for _, expected := range policyRules {
+				found := false
+				for _, actual := range desired {
+					if newPolicyRulesMatcher(expected).Matches(actual) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "missing expected rule: %v", expected)
+			}
+			return nil, nil
+		})
+
 	err = r.Reconcile(egressRule)
 	assert.NoError(t, err)
 	// Ensure the openflow IDs are persistent in podPolicyLastRealized and are not released to idAllocator upon success.
@@ -1329,7 +1342,7 @@ func TestReconcilerUpdate(t *testing.T) {
 				priority = nil
 			}
 			if tt.expectUninstall {
-				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any())
+				mockOFClient.EXPECT().ReconcilePolicyRuleFlows(gomock.Any(), gomock.Any()).Return(nil, nil)
 			}
 			if len(tt.expectedAddedFrom) > 0 {
 				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority, false, tt.isMCNPRule)

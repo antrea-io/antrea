@@ -454,6 +454,9 @@ type conjunctiveAction struct {
 // that ceiling.
 const maxActionsPerConjMatchFlow = 4000
 
+// ErrConjMatchFlowActionsExceeded is returned when adding a conjunctive action would exceed maxActionsPerConjMatchFlow.
+var ErrConjMatchFlowActionsExceeded = fmt.Errorf("exceeds the limit of %d actions per flow", maxActionsPerConjMatchFlow)
+
 // conjMatchFlowContext generates conjunctive match flow entries for conjunctions share the same match conditions.
 // One conjMatchFlowContext is responsible for one specific conjunctive match flow entry. As the match condition
 // of the flow entry can be shared by different conjunctions, the realized Openflow entry might have multiple
@@ -552,7 +555,7 @@ func (ctx *conjMatchFlowContext) addAction(action *conjunctiveAction) (*flowChan
 }
 
 func newConjMatchFlowCapError(conjID uint32, matcherKey string) error {
-	return fmt.Errorf("cannot add conjunctive action for conjunction %d on OpenFlow match (%s): exceeds the limit of %d actions per flow", conjID, matcherKey, maxActionsPerConjMatchFlow)
+	return fmt.Errorf("cannot add conjunctive action for conjunction %d on OpenFlow match (%s): %w", conjID, matcherKey, ErrConjMatchFlowActionsExceeded)
 }
 
 func (ctx *conjMatchFlowContext) addDenyAllRule(ruleID uint32) {
@@ -657,7 +660,7 @@ func (c *conjMatchFlowContextChange) updateContextStatus() {
 	// Update conjMatchFlowContext.dropFlow.
 	if c.dropFlow != nil {
 		switch c.dropFlow.changeType {
-		case insertion:
+		case insertion, modification:
 			c.context.dropFlow = c.dropFlow.flow
 		case deletion:
 			c.context.dropFlow = nil
@@ -1255,7 +1258,13 @@ func (f *featureNetworkPolicy) calculateActionFlowChangesForRule(rule *types.Pol
 		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", ruleOfID)
 		return nil
 	}
-	conj = &policyRuleConjunction{
+	return f.newPolicyRuleConjunction(rule)
+}
+
+// newPolicyRuleConjunction builds a conjunction without consulting or modifying the installed rule cache.
+func (f *featureNetworkPolicy) newPolicyRuleConjunction(rule *types.PolicyRule) *policyRuleConjunction {
+	ruleOfID := rule.FlowID
+	conj := &policyRuleConjunction{
 		id:           ruleOfID,
 		npRef:        rule.PolicyRef,
 		ruleName:     rule.Name,
@@ -1301,11 +1310,16 @@ func (f *featureNetworkPolicy) calculateMatchFlowChangesForRule(conj *policyRule
 // Unlike calculateMatchFlowChangesForRule, it updates the context status directly and doesn't calculate flow changes.
 // It's used in initial batch install where we first add all rules then calculates flows change based on final state.
 func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunction, rule *types.PolicyRule) error {
+	return conj.forEachMatch(rule, f.ipProtocols, f.addActionToConjunctiveMatch)
+}
+
+// forEachMatch visits each match required by rule, including repeated matches from overlapping addresses or services.
+func (conj *policyRuleConjunction) forEachMatch(rule *types.PolicyRule, ipProtocols []binding.Protocol, addMatch func(*clause, *conjunctiveMatch, bool, bool) error) error {
 	isMCNPRule := containsLabelIdentityAddress(rule.From)
 	if conj.fromClause != nil {
 		for _, addr := range rule.From {
 			match := generateAddressConjMatch(conj.fromClause.ruleTable.GetID(), addr, types.SrcAddress, rule.Priority)
-			if err := f.addActionToConjunctiveMatch(conj.fromClause, match, rule.EnableLogging, isMCNPRule); err != nil {
+			if err := addMatch(conj.fromClause, match, rule.EnableLogging, isMCNPRule); err != nil {
 				return err
 			}
 		}
@@ -1313,16 +1327,16 @@ func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunc
 	if conj.toClause != nil {
 		for _, addr := range rule.To {
 			match := generateAddressConjMatch(conj.toClause.ruleTable.GetID(), addr, types.DstAddress, rule.Priority)
-			if err := f.addActionToConjunctiveMatch(conj.toClause, match, rule.EnableLogging, isMCNPRule); err != nil {
+			if err := addMatch(conj.toClause, match, rule.EnableLogging, isMCNPRule); err != nil {
 				return err
 			}
 		}
 	}
 	if conj.serviceClause != nil {
 		for _, eachService := range rule.Service {
-			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols)
+			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, ipProtocols)
 			for _, match := range matches {
-				if err := f.addActionToConjunctiveMatch(conj.serviceClause, match, rule.EnableLogging, isMCNPRule); err != nil {
+				if err := addMatch(conj.serviceClause, match, rule.EnableLogging, isMCNPRule); err != nil {
 					return err
 				}
 			}
@@ -1379,8 +1393,8 @@ func (f *featureNetworkPolicy) addActionToConjunctiveMatch(clause *clause, match
 
 // BatchInstallPolicyRuleFlows installs flows for NetworkPolicy rules in case of agent restart. It calculates and
 // accumulates all Openflow entry updates required and installs all of them on OVS bridge in one bundle.
-// It resets the global conjunctive match flow cache upon failure, and should NOT be used after any rule is installed
-// via the InstallPolicyRuleFlows method. Otherwise the cache would be out of sync.
+// It restores the global conjunctive match flow cache to its pre-call state upon failure, and should NOT be used after
+// any rule is installed via the InstallPolicyRuleFlows method. Otherwise the cache would be out of sync.
 func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
@@ -1388,15 +1402,17 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 	var allFlowMessages []*openflow15.FlowMod
 	var conjunctions []*policyRuleConjunction
 
+	// Contexts already in the cache (e.g. those of the DNS interception conjunction) are realized on OVS and must
+	// survive a failed batch install, as nothing else would recreate them.
+	restoreCache := c.featureNetworkPolicy.snapshotConjMatchFlowCache()
 	for _, rule := range ofPolicyRules {
 		conj := c.featureNetworkPolicy.calculateActionFlowChangesForRule(rule)
+		conjunctions = append(conjunctions, conj)
 		if err := c.featureNetworkPolicy.addRuleToConjunctiveMatch(conj, rule); err != nil {
-			// Reset the global conjunctive match flow cache since it may have been partially updated.
-			c.featureNetworkPolicy.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
+			restoreCache(conjunctions)
 			return fmt.Errorf("error calculating conjunctive match flows for %s: %w", conj.policyRuleString(), err)
 		}
 		allFlowMessages = append(allFlowMessages, append(conj.actionFlows, conj.metricFlows...)...)
-		conjunctions = append(conjunctions, conj)
 	}
 
 	for _, ctx := range c.featureNetworkPolicy.globalConjMatchFlowCache {
@@ -1418,9 +1434,9 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 
 	// Send the changed Openflow entries to the OVS bridge.
 	if err := c.ofEntryOperations.AddAll(allFlowMessages); err != nil {
-		// Reset the global conjunctive match flow cache since the OpenFlow bundle, which contains
+		// Restore the global conjunctive match flow cache since the OpenFlow bundle, which contains
 		// all the match flows to be installed, was not applied successfully.
-		c.featureNetworkPolicy.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
+		restoreCache(conjunctions)
 		return err
 	}
 	// Update conjMatchFlowContexts as the expected status.
@@ -1429,6 +1445,40 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 		c.featureNetworkPolicy.policyCache.Add(conj)
 	}
 	return nil
+}
+
+// snapshotConjMatchFlowCache records the current globalConjMatchFlowCache and returns a function which restores it,
+// undoing the changes made to it by addRuleToConjunctiveMatch for the provided conjunctions and the match flows
+// recomputed in BatchInstallPolicyRuleFlows.
+func (f *featureNetworkPolicy) snapshotConjMatchFlowCache() func(conjunctions []*policyRuleConjunction) {
+	cache := make(map[string]*conjMatchFlowContext, len(f.globalConjMatchFlowCache))
+	flows := make(map[string]*openflow15.FlowMod, len(f.globalConjMatchFlowCache))
+	for key, ctx := range f.globalConjMatchFlowCache {
+		cache[key] = ctx
+		flows[key] = ctx.flow
+	}
+	return func(conjunctions []*policyRuleConjunction) {
+		for _, conj := range conjunctions {
+			if conj == nil {
+				continue
+			}
+			for _, clause := range []*clause{conj.fromClause, conj.toClause, conj.serviceClause} {
+				if clause == nil {
+					continue
+				}
+				for key := range clause.matches {
+					if ctx, found := cache[key]; found {
+						delete(ctx.actions, conj.id)
+						ctx.delDenyAllRule(conj.id)
+					}
+				}
+			}
+		}
+		for key, ctx := range cache {
+			ctx.flow = flows[key]
+		}
+		f.globalConjMatchFlowCache = cache
+	}
 }
 
 // applyConjunctiveMatchFlows installs OpenFlow entries on the OVS bridge, and then updates the conjMatchFlowContext.

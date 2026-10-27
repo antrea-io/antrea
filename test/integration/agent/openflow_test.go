@@ -574,6 +574,96 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkOVSFlowMetrics(t, c)
 }
 
+// TestReconcileNetworkPolicyFlowsAtCap exercises the atomic replacement against OVS with full IPv4 and IPv6
+// source matches. A rejected update must preserve the original enforcement, and a successful replacement must
+// preserve isolation and survive replay.
+func TestReconcileNetworkPolicyFlowsAtCap(t *testing.T) {
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
+	require.NoError(t, ofTestUtils.PrepareOVSBridge(br))
+	t.Cleanup(func() {
+		assert.NoError(t, c.Disconnect())
+		assert.NoError(t, ofTestUtils.DeleteOVSBridge(br))
+		ofClient.CleanOFTableCache()
+		ofClient.ResetOFTable()
+	})
+	config := prepareConfiguration(true, true, false)
+	_, err := c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
+	require.NoError(t, err)
+
+	const actionCap = 4000
+	protocol := v1beta2.ProtocolTCP
+	makeRule := func(id uint32, port int, ofPort int32) *types.PolicyRule {
+		p := intstr.FromInt(port)
+		return &types.PolicyRule{
+			FlowID: id, Direction: v1beta2.DirectionIn, TableID: ofClient.IngressRuleTable.GetID(),
+			From:      prepareIPAddresses([]string{"192.168.1.40", "2001:db8::40"}),
+			To:        []types.Address{ofClient.NewOFPortAddress(ofPort)},
+			Service:   []v1beta2.Service{{Protocol: &protocol, Port: &p}},
+			PolicyRef: &v1beta2.NetworkPolicyReference{Type: v1beta2.K8sNetworkPolicy, Namespace: "ns1", Name: "named-port"},
+		}
+	}
+	rules := make([]*types.PolicyRule, actionCap)
+	for i := range rules {
+		rules[i] = makeRule(uint32(i+1), 80, 2)
+	}
+	rules[0] = makeRule(1, 80, 1)
+	require.NoError(t, c.BatchInstallPolicyRuleFlows(rules))
+	checkTarget := func(id uint32) {
+		t.Helper()
+		// Full conjunction lists exceed the default bufio.Scanner token size used by DumpFlows.
+		dump, err := ovsCtlClient.RunOfctlCmd("dump-flows", "table="+ingressRuleTable, "--names")
+		require.NoError(t, err)
+		assert.Contains(t, string(dump), fmt.Sprintf("conj_id=%d,ip", id), "replacement action flow must be installed")
+		if id != 1 {
+			assert.NotContains(t, string(dump), "conj_id=1,", "old action flow must be removed")
+		}
+		flows := strings.Split(string(dump), "\n")
+		foundTarget := false
+		for _, flow := range flows {
+			if strings.Contains(flow, "priority=200,reg1=0x1 ") {
+				assert.Contains(t, flow, fmt.Sprintf("actions=conjunction(%d,2/3)", id))
+				foundTarget = true
+			}
+		}
+		assert.True(t, foundTarget, "missing target Pod match")
+		for _, src := range []string{"nw_src=192.168.1.40", "ipv6_src=2001:db8::40"} {
+			found := false
+			for _, flow := range flows {
+				if strings.Contains(flow, src+" ") {
+					assert.Equal(t, actionCap, strings.Count(flow, "conjunction("))
+					found = true
+				}
+			}
+			assert.True(t, found, "missing source flow for %s", src)
+		}
+		flows, err = ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ingressDefaultTable)
+		require.NoError(t, err)
+		assert.True(t, ofTestUtils.OfctlFlowMatch(flows, ingressDefaultTable, &ofTestUtils.ExpectFlow{
+			MatchStr: "priority=200,reg1=0x1", ActStr: "drop",
+		}), "target Pod must remain isolated")
+	}
+	checkTarget(1)
+	replacement := makeRule(actionCap+1, 8080, 1)
+	// Adding first fails at the real limit; replacing the old contribution succeeds.
+	require.ErrorIs(t, c.InstallPolicyRuleFlows(replacement), ofClient.ErrConjMatchFlowActionsExceeded)
+	stale, err := c.ReconcilePolicyRuleFlows([]uint32{1}, []*types.PolicyRule{replacement})
+	require.NoError(t, err)
+	assert.Empty(t, stale)
+	checkTarget(replacement.FlowID)
+
+	// Genuine growth beyond the cap must leave the successful replacement intact.
+	extra := makeRule(actionCap+2, 443, 3)
+	_, err = c.ReconcilePolicyRuleFlows([]uint32{replacement.FlowID}, []*types.PolicyRule{replacement, extra})
+	require.ErrorIs(t, err, ofClient.ErrConjMatchFlowActionsExceeded)
+	checkTarget(replacement.FlowID)
+	require.NoError(t, ofTestUtils.OfctlDeleteFlows(ovsCtlClient))
+	c.ReplayFlows()
+	checkTarget(replacement.FlowID)
+	checkOVSFlowMetrics(t, c)
+}
+
 func TestIPv6ConnectivityFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()

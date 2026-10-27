@@ -716,6 +716,21 @@ func (mr *MockClientMockRecorder) ReassignFlowPriorities(updates, table any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignFlowPriorities", reflect.TypeOf((*MockClient)(nil).ReassignFlowPriorities), updates, table)
 }
 
+// ReconcilePolicyRuleFlows mocks base method.
+func (m *MockClient) ReconcilePolicyRuleFlows(previousIDs []uint32, desiredRules []*types.PolicyRule) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReconcilePolicyRuleFlows", previousIDs, desiredRules)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReconcilePolicyRuleFlows indicates an expected call of ReconcilePolicyRuleFlows.
+func (mr *MockClientMockRecorder) ReconcilePolicyRuleFlows(previousIDs, desiredRules any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconcilePolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).ReconcilePolicyRuleFlows), previousIDs, desiredRules)
+}
+
 // RegisterPacketInHandler mocks base method.
 func (m *MockClient) RegisterPacketInHandler(packetHandlerReason uint8, packetInHandler openflow.PacketInHandler) {
 	m.ctrl.T.Helper()
