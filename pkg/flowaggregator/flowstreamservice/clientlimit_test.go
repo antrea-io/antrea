@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -171,34 +171,41 @@ func TestStreamInterceptor_StreamCapIsPerClientIPAndPreAuthentication(t *testing
 // limiter: the slot is held until the handler returns, so long-lived streams accumulate against the
 // cap rather than only their rate of opening being limited.
 func TestStreamInterceptor_StreamSlotHeldForStreamLifetime(t *testing.T) {
-	a := newTestAuthenticator(t, map[string]authenticationv1.TokenReviewStatus{
-		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
-	})
-	ctx := peer.NewContext(contextWithAuthHeader("Bearer good-token"), &peer.Peer{Addr: fakeAddr("10.244.1.7:40003")})
+	synctest.Test(t, func(t *testing.T) {
+		// Unlike newTestAuthenticator, this helper runs the authenticator and stops it on cleanup,
+		// which a synctest bubble needs: it cannot exit while the client CA controller's queue
+		// goroutines are still blocked.
+		a := newAuthenticatorWithClientCA(t, newTestCA(t).certPEM, map[string]authenticationv1.TokenReviewStatus{
+			"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
+		})
+		ctx := peer.NewContext(contextWithAuthHeader("Bearer good-token"), &peer.Peer{Addr: fakeAddr("10.244.1.7:40003")})
 
-	inHandler := make(chan struct{})
-	finish := make(chan struct{})
-	go func() {
-		_ = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{},
-			func(any, grpc.ServerStream) error {
-				close(inHandler)
-				<-finish
-				return nil
-			})
-	}()
+		finish := make(chan struct{})
+		handlerCalled := false
+		var interceptorErr error
+		go func() {
+			interceptorErr = a.StreamInterceptor(nil, &fakeServerStream{ctx: ctx}, &grpc.StreamServerInfo{},
+				func(any, grpc.ServerStream) error {
+					handlerCalled = true
+					<-finish
+					return nil
+				})
+		}()
 
-	<-inHandler
-	a.streamLimiter.mu.Lock()
-	held := a.streamLimiter.total
-	a.streamLimiter.mu.Unlock()
-	assert.Equal(t, 1, held, "the slot should still be held while the handler runs")
+		synctest.Wait()
+		require.True(t, handlerCalled, "the handler should be running, interceptor returned: %v", interceptorErr)
+		a.streamLimiter.mu.Lock()
+		held := a.streamLimiter.total
+		a.streamLimiter.mu.Unlock()
+		assert.Equal(t, 1, held, "the slot should still be held while the handler runs")
 
-	close(finish)
-	assert.Eventually(t, func() bool {
+		close(finish)
+		synctest.Wait()
+		require.NoError(t, interceptorErr)
 		a.streamLimiter.mu.Lock()
 		defer a.streamLimiter.mu.Unlock()
-		return a.streamLimiter.total == 0
-	}, time.Second, 10*time.Millisecond, "the slot should be released when the handler returns")
+		assert.Zero(t, a.streamLimiter.total, "the slot should be released when the handler returns")
+	})
 }
 
 // TestStreamLimitsValidate pins the relationship the caps rely on, now that both are operator-settable:
