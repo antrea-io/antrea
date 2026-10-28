@@ -356,6 +356,22 @@ mockgen:
 	@echo "===> Updating generated mock code <==="
 	$(CURDIR)/hack/update-codegen.sh mockgen
 
+# Recompiles the eBPF host datapath programs and regenerates the Go file holding their instructions. Needs
+# clang, and is deliberately kept out of "codegen": the instructions clang emits depend on its version, so
+# regenerating them on every build would make the tree dirty on any machine with a different one. The
+# generated file is committed, and pkg/agent/ebpf/objects_linux_test.go fails when the C was changed
+# without running this.
+.PHONY: bpf-objects
+bpf-objects:
+	@echo "===> Compiling the eBPF host datapath programs <==="
+	clang -O2 -g -target bpfel -c $(CURDIR)/pkg/agent/ebpf/bpf/host_datapath.bpf.c -o $(CURDIR)/pkg/agent/ebpf/bpf/host_datapath.o
+	$(GO) run $(CURDIR)/hack/gen-bpf-objects \
+		-obj $(CURDIR)/pkg/agent/ebpf/bpf/host_datapath.o \
+		-src $(CURDIR)/pkg/agent/ebpf/bpf/host_datapath.bpf.c \
+		-package ebpf \
+		-out $(CURDIR)/pkg/agent/ebpf/objects_linux.go
+	rm -f $(CURDIR)/pkg/agent/ebpf/bpf/host_datapath.o
+
 ### Docker images ###
 
 # This target is for development only. It assumes that "make bin" has been run previously and will

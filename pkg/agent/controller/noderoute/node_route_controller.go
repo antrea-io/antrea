@@ -36,6 +36,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/ipseccertificate"
+	"antrea.io/antrea/v2/pkg/agent/ebpf"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/route"
@@ -101,6 +102,15 @@ type Controller struct {
 	// eventHandlerRegistration.HasSynced will be used to track whether even handlers have been
 	// called for the initial list.
 	eventHandlerRegistration cache.ResourceEventHandlerRegistration
+	// ebpfClient mirrors the routes to the remote Pod CIDRs into the eBPF host datapath, which forwards to
+	// them instead of the host network stack. It is nil unless the EBPFHostDataPath feature gate is on.
+	ebpfClient ebpf.Interface
+}
+
+// SetEBPFHostDataPath makes the Controller mirror the routes to the remote Pod CIDRs into the eBPF host
+// datapath (the EBPFHostDataPath feature gate). It must be called before Run.
+func (c *Controller) SetEBPFHostDataPath(ebpfClient ebpf.Interface) {
+	c.ebpfClient = ebpfClient
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -509,6 +519,13 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		if err := c.routeClient.DeleteRoutes(podCIDR); err != nil {
 			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 		}
+		// Deleting a CIDR which was never added is not an error, so this does not have to repeat the
+		// condition addNodeRoute added it under.
+		if c.ebpfClient != nil {
+			if err := c.ebpfClient.DeletePodRoute(podCIDR); err != nil {
+				return fmt.Errorf("failed to delete the eBPF route to Node %s: %v", nodeName, err)
+			}
+		}
 	}
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
@@ -667,11 +684,24 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 				return err
 			}
 			peerGatewayIPs.IPv6 = peerGatewayIP
+			if c.ebpfClient != nil && c.networkConfig.NeedsDirectRoutingToPeer(peerNodeIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr) {
+				if err := c.ebpfClient.AddPodRoute(peerPodCIDR, peerNodeIPs.IPv6); err != nil {
+					return err
+				}
+			}
 		} else {
 			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv4, peerGatewayIP); err != nil {
 				return err
 			}
 			peerGatewayIPs.IPv4 = peerGatewayIP
+			// The eBPF host datapath forwards to the same peer the route above points to, so it is
+			// only given the CIDRs that route covers. It comes before the route and falls back to
+			// it, so the route stays installed either way.
+			if c.ebpfClient != nil && c.networkConfig.NeedsDirectRoutingToPeer(peerNodeIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr) {
+				if err := c.ebpfClient.AddPodRoute(peerPodCIDR, peerNodeIPs.IPv4); err != nil {
+					return err
+				}
+			}
 		}
 	}
 

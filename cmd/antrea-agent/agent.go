@@ -49,6 +49,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/controller/serviceexternalip"
 	"antrea.io/antrea/v2/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/v2/pkg/agent/controller/trafficcontrol"
+	"antrea.io/antrea/v2/pkg/agent/ebpf"
 	"antrea.io/antrea/v2/pkg/agent/externalnode"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	flowexporteroptions "antrea.io/antrea/v2/pkg/agent/flowexporter/options"
@@ -114,6 +115,55 @@ var (
 var ipv4Localhost = net.ParseIP("127.0.0.1")
 
 // run starts Antrea agent with the given options and waits for termination signal.
+// loadEBPFHostDataPath reads what the eBPF host datapath needs from the Node configuration and loads it. It
+// refuses the traffic encapsulation modes where the Pod traffic between two Nodes does not go through the
+// interfaces it attaches to, rather than attaching to them and forwarding nothing.
+func loadEBPFHostDataPath(networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, localPodIPs func() []net.IP) (ebpf.Interface, error) {
+	if networkConfig.TrafficEncapMode != config.TrafficEncapModeNoEncap &&
+		networkConfig.TrafficEncapMode != config.TrafficEncapModeHybrid {
+		return nil, fmt.Errorf("the eBPF host datapath forwards what is routed between Nodes, which the %s mode does not do",
+			networkConfig.TrafficEncapMode)
+	}
+	if nodeConfig.PodIPv4CIDR == nil && nodeConfig.PodIPv6CIDR == nil {
+		return nil, fmt.Errorf("the Node has no Pod CIDR")
+	}
+	transport, err := net.InterfaceByName(nodeConfig.NodeTransportInterfaceName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting the transport interface %s: %w", nodeConfig.NodeTransportInterfaceName, err)
+	}
+	gateway, err := net.InterfaceByName(nodeConfig.GatewayConfig.Name)
+	if err != nil {
+		return nil, fmt.Errorf("error getting the gateway interface %s: %w", nodeConfig.GatewayConfig.Name, err)
+	}
+	client := ebpf.NewLoader()
+	var nodeIPv4 net.IP
+	var nodeIPv6 net.IP
+	if nodeConfig.NodeTransportIPv4Addr != nil {
+		nodeIPv4 = nodeConfig.NodeTransportIPv4Addr.IP
+	}
+	if nodeConfig.NodeTransportIPv6Addr != nil {
+		nodeIPv6 = nodeConfig.NodeTransportIPv6Addr.IP
+	}
+	if err := client.Load(ebpf.Config{
+		TransportName:    transport.Name,
+		TransportIfIndex: transport.Index,
+		TransportMTU:     transport.MTU,
+		GatewayName:      gateway.Name,
+		GatewayIfIndex:   gateway.Index,
+		GatewayMTU:       gateway.MTU,
+		LocalPodCIDR:     nodeConfig.PodIPv4CIDR,
+		GatewayIPv4:      nodeConfig.GatewayConfig.IPv4,
+		NodeIPv4:         nodeIPv4,
+		LocalPodIPv6CIDR: nodeConfig.PodIPv6CIDR,
+		GatewayIPv6:      nodeConfig.GatewayConfig.IPv6,
+		NodeIPv6:         nodeIPv6,
+		LocalPodIPs:      localPodIPs,
+	}); err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 func run(o *Options) error {
 	klog.InfoS("Starting Antrea Agent", "version", version.GetFullVersion())
 
@@ -372,6 +422,32 @@ func run(o *Options) error {
 		ipsecCertController = ipseccertificate.NewIPSecCertificateController(k8sClient, ovsBridgeClient, nodeConfig.Name)
 	}
 
+	// The eBPF host datapath forwards the traffic between the Pods of two Nodes instead of the host network
+	// stack. It only comes before the routes the route client installs, which stay installed and keep
+	// forwarding whatever it does not handle, so failing to load it costs performance and nothing else.
+	// That is why this does not stop the Agent: an alpha datapath which a kernel will not take must not
+	// keep a Node from running.
+	var ebpfClient ebpf.Interface
+	if features.DefaultFeatureGate.Enabled(features.EBPFHostDataPath) && o.nodeType == config.K8sNode {
+		client, err := loadEBPFHostDataPath(networkConfig, nodeConfig, func() []net.IP {
+			var ips []net.IP
+			for _, iface := range ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface) {
+				ips = append(ips, iface.IPs...)
+			}
+			return ips
+		})
+		if err != nil {
+			klog.ErrorS(err, "Failed to load the eBPF host datapath, the host network stack keeps forwarding the traffic between Pods")
+		} else {
+			ebpfClient = client
+			defer ebpfClient.Close()
+			go ebpfClient.Run(stopCh)
+			if *o.config.EnablePrometheusMetrics {
+				metrics.InitializeEBPFHostDataPathMetrics(ebpfClient)
+			}
+		}
+	}
+
 	var nodeRouteController *noderoute.Controller
 	if o.nodeType == config.K8sNode {
 		nodeRouteController = noderoute.NewNodeRouteController(
@@ -387,6 +463,9 @@ func run(o *Options) error {
 			ipsecCertController,
 			flowRestoreCompleteWait,
 		)
+		if ebpfClient != nil {
+			nodeRouteController.SetEBPFHostDataPath(ebpfClient)
+		}
 	}
 
 	// podUpdateChannel is a channel for receiving Pod updates from CNIServer and

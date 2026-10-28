@@ -183,6 +183,10 @@ const (
 	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
 	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
 
+	// alpha: v2.6
+	// Forward the traffic between the Pods of two Nodes with eBPF instead of the host network stack.
+	EBPFHostDataPath featuregate.Feature = "EBPFHostDataPath"
+
 	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
@@ -250,12 +254,14 @@ var (
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:            {Default: false, PreRelease: featuregate.Alpha},
 		AntreaNodeConfig:              {Default: true, PreRelease: featuregate.Beta},
+		EBPFHostDataPath:              {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
 	// When adding a new feature gate that applies to the Antrea Agent, please also add it here.
 	AgentGates = sets.New(
 		AntreaIPAM,
+		EBPFHostDataPath,
 		AntreaNodeConfig,
 		AntreaPolicy,
 		AntreaProxy,
@@ -341,6 +347,7 @@ var (
 		NodeLatencyMonitor:          {},
 		PacketCapture:               {},
 		NFTablesHostNetworkMode:     {},
+		EBPFHostDataPath:            {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

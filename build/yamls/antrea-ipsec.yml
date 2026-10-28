@@ -5968,7 +5968,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1222b20c1ffcc94b768711d678b6df45b75a4d85e17c2a34a46405ba0176abff
+        checksum/config: 02bad56c782f10f6f81abd6c08507a514a1f7eefedb0ea0eddd808c6b66876c8
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6260,7 +6260,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1222b20c1ffcc94b768711d678b6df45b75a4d85e17c2a34a46405ba0176abff
+        checksum/config: 02bad56c782f10f6f81abd6c08507a514a1f7eefedb0ea0eddd808c6b66876c8
       labels:
         app: antrea
         component: antrea-controller

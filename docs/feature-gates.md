@@ -65,6 +65,7 @@ edit the Agent configuration in the
 | `NodeNetworkPolicy`             | Agent              | `false` | Alpha      | v1.15         | N/A          | N/A        | Yes                |                                                        |
 | `BGPPolicy`                     | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
 | `NodeLatencyMonitor`            | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
+| `EBPFHostDataPath`              | Agent              | `false` | Alpha      | v2.8          | N/A          | N/A        | No                 |                                                        |
 | `PacketCapture`                 | Agent              | `false` | Alpha      | v2.2          | N/A          | N/A        | No                 |                                                        |
 | `NFTablesHostNetworkMode`       | Agent              | `false` | Alpha      | v2.5          | N/A          | N/A        | Yes                |                                                        |
 | `AntreaNodeConfig`              | Agent              | `true`  | Beta       | N/A           | v2.7         | N/A        | No                 | Configures the secondary network OVS bridge per Node.  |
@@ -464,6 +465,42 @@ policies interact with Antrea-native tiers.
 #### Requirements for this Feature
 
 This feature is only supported for Linux Nodes at the moment.
+
+### EBPFHostDataPath
+
+`EBPFHostDataPath` forwards the traffic between the Pods of two Nodes with eBPF instead of the host network
+stack. It supports IPv4-only, IPv6-only and dual-stack Nodes. It replaces one thing only: the routes to the remote Pod CIDRs which Antrea installs in noEncap and
+hybrid modes. A packet of a local Pod bound for a remote Pod, and the packets coming back, are sent straight
+from one interface to the other instead of going through routing and netfilter.
+
+Nothing else moves out of the host network stack. The masquerade of the traffic leaving the cluster, Egress,
+Service handling and the Node network policies stay in iptables and in the OVS pipeline, and so does every
+packet which is not a cross-Node Pod packet.
+
+Those routes are still installed while this runs, and the datapath falls back to them for anything it cannot
+handle, so a Node forwards the same traffic whether the feature is enabled or not. Failing to load the
+programs is logged and does not stop the Agent.
+
+When enabled, the datapath starts with redirects disabled. It enables them after the first successful
+managed-neighbor reconciliation and pauses them if a later reconciliation fails. Packets then continue through
+the host network stack until reconciliation succeeds. The `antrea_agent_ebpf_host_datapath_packets_total` metric
+reports forwarded, returned, missed, passed, and other packet counts.
+
+Two things behave differently once it forwards, and both follow from the packets no longer going through
+the host network stack:
+
+- Rules in the netfilter `FORWARD` chain no longer apply to the traffic between the Pods of two Nodes. A Node
+  which restricts that traffic there has to restrict it elsewhere. Antrea's own rules are not affected: the
+  ones it puts there accept that traffic unconditionally.
+- The connections do not appear in conntrack, so `conntrack -L` does not list them and the counters of the
+  iptables rules they used to traverse do not move.
+
+#### Requirements for this Feature
+
+This feature is only supported for Linux Nodes, for IPv4, and in the noEncap and hybrid traffic modes. The
+Nodes need a kernel 4.18 or later. A kernel 6.6 or later is used through a BPF link, which the kernel detaches
+on its own; an older one is used through a traffic control filter, which the Agent removes when it starts and
+when it stops.
 
 ### EgressTrafficShaping
 
