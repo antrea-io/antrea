@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -2375,4 +2376,102 @@ func sliceEqual(a, b interface{}) bool {
 
 func (m policyRuleMatcher) String() string {
 	return fmt.Sprintf("is equal to %v", m.ofPolicyRule)
+}
+
+func TestReconcilerEgressNamedPortPriority(t *testing.T) {
+	for _, kind := range []string{"IPBlock", "FQDN", "ToServices"} {
+		for _, peer := range []string{"none", "resolved", "unresolved"} {
+			for _, service := range []v1beta2.Service{serviceTCP8080, serviceTCP} {
+				t.Run(fmt.Sprintf("%s/%s/%s", kind, peer, normalizeServices([]v1beta2.Service{service})), func(t *testing.T) {
+					prepareMockTables()
+					ctrl := gomock.NewController(t)
+					client := openflowtest.NewMockClient(ctrl)
+					store := interfacestore.NewInterfaceStore()
+					for i := 1; i <= 2; i++ {
+						name := fmt.Sprintf("pod%d", i)
+						store.AddInterface(&interfacestore.InterfaceConfig{
+							InterfaceName:            util.GenerateContainerInterfaceName(name, "ns1", name),
+							IPs:                      []net.IP{net.ParseIP(fmt.Sprintf("2.2.2.%d", i))},
+							ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: name, PodNamespace: "ns1", ContainerID: name},
+							OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: int32(i)},
+						})
+					}
+					r := newTestReconciler(t, ctrl, store, client, true, true)
+					defer r.idAllocator.deleteQueue.ShutDown()
+					original := &CompletedRule{
+						rule: &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, Services: []v1beta2.Service{serviceHTTP, service},
+							SourceRef: &cnp1, PolicyPriority: &policyPriority, TierPriority: &tierPriority},
+						TargetMembers: appliedToGroup1,
+					}
+					if peer != "none" {
+						member := newAddressGroupMember("1.1.1.1")
+						if peer == "resolved" {
+							member.Ports = []v1beta2.NamedPort{{Name: "http", Protocol: protocolTCP, Port: 80}}
+						}
+						original.ToAddresses = v1beta2.NewGroupMemberSet(member)
+					}
+					var expectedPeer types.Address
+					switch kind {
+					case "IPBlock":
+						original.To.IPBlocks = []v1beta2.IPBlock{{CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(net.ParseIP("10.0.0.0")), PrefixLength: 8}}}
+						expectedPeer = openflow.NewIPNetAddress(*newCIDR("10.0.0.0/8"))
+					case "FQDN":
+						original.To.FQDNs = []string{"test.antrea.io"}
+						f, dnsClient := newMockFQDNController(t, ctrl, nil, nil, 0)
+						r.fqdnController = f
+						addCalls := 1
+						if peer == "none" {
+							addCalls++
+							dnsClient.EXPECT().DeleteAddressFromDNSConjunction(gomock.Any(), gomock.Any()).Return(nil)
+						}
+						dnsClient.EXPECT().AddAddressToDNSConjunction(gomock.Any(), gomock.Any()).Return(nil).Times(addCalls)
+						f.addFQDNSelector(original.ID, original.To.FQDNs)
+						resolveFQDNForTest(f, "test.antrea.io", dnsMeta{responseIPs: map[string]ipWithExpiration{"10.20.0.1": {ip: net.ParseIP("10.20.0.1")}}})
+						expectedPeer = openflow.NewIPAddress(net.ParseIP("10.20.0.1"))
+					case "ToServices":
+						original.To.ToServices = []v1beta2.ServiceReference{{Namespace: "ns1", Name: "svc1"}}
+						for _, counter := range r.groupCounters {
+							counter.AllocateIfNotExist(proxy.ServicePortName{NamespacedName: k8stypes.NamespacedName{Namespace: "ns1", Name: "svc1"}, Port: "http", Protocol: v1.ProtocolTCP}, true)
+						}
+						expectedPeer = openflow.NewServiceGroupIDAddress(1)
+					}
+					count := 1
+					if peer == "resolved" {
+						count++
+					}
+					installed := map[uint32]*types.PolicyRule{}
+					var originalGroup *types.PolicyRule
+					client.EXPECT().InstallPolicyRuleFlows(gomock.Any()).DoAndReturn(func(ofRule *types.PolicyRule) error {
+						require.NotNil(t, ofRule.Priority, "all clauses and action flows must use the assigned native-policy priority")
+						expected, registered := r.priorityAssigners[r.getOFRuleTable(original)].assigner.getOFPriority(types.Priority{
+							TierPriority: tierPriority, PolicyPriority: policyPriority, RulePriority: original.Priority,
+						})
+						require.True(t, registered)
+						assert.Equal(t, expected, *ofRule.Priority)
+						installed[ofRule.FlowID] = ofRule
+						if len(ofRule.Service) == 1 {
+							originalGroup = ofRule
+							assert.Equal(t, []v1beta2.Service{service}, ofRule.Service)
+							assert.Contains(t, ofRule.To, expectedPeer)
+						}
+						return nil
+					}).Times(count)
+					require.NoError(t, r.Reconcile(original))
+					require.NotNil(t, originalGroup, "non-Pod peers must have an original-services group")
+					if peer != "none" {
+						return
+					}
+
+					// Changing appliedTo Pods must add and remove addresses at the priority used on installation.
+					updated := *original
+					updated.TargetMembers = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod2", "ns1"))
+					for id, ofRule := range installed {
+						client.EXPECT().AddPolicyRuleAddress(id, types.SrcAddress, []types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))}, ofRule.Priority, false, false).Return(nil)
+						client.EXPECT().DeletePolicyRuleAddress(id, types.SrcAddress, []types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.1"))}, ofRule.Priority).Return(nil)
+					}
+					require.NoError(t, r.Reconcile(&updated))
+				})
+			}
+		}
+	}
 }
