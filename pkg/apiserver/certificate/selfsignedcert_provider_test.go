@@ -16,6 +16,8 @@ package certificate
 
 import (
 	"context"
+	"errors"
+	"math"
 	"net"
 	"os"
 	"testing"
@@ -28,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -55,6 +58,7 @@ func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset
 		TLSSecretName:     tlsSecretName,
 		SelfSignedCertDir: t.TempDir(),
 		MinValidDuration:  minValidDuration,
+		CertReadyTimeout:  10 * time.Second,
 		ServiceName:       testServiceName,
 		PairName:          testPairName,
 	}
@@ -318,4 +322,124 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
+}
+
+// failSecretGets makes the first n GETs of a Secret fail the way they do while the API is not reachable yet.
+func failSecretGets(client *fakeclientset.Clientset, n int) {
+	client.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if n > 0 {
+			n--
+			return true, nil, errors.New("dial tcp 10.96.0.1:443: connect: connection refused")
+		}
+		return false, nil, nil
+	})
+}
+
+func secretCreates(client *fakeclientset.Clientset) int {
+	n := 0
+	for _, action := range client.Actions() {
+		if action.Matches("create", "secrets") {
+			n++
+		}
+	}
+	return n
+}
+
+// A Secret that cannot be read must not be treated as missing: the existing certificate is kept and no Secret is
+// created over it.
+func TestSelfSignedCertProviderRotateSecretGetError(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(existing)
+	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90)
+	require.Equal(t, testOneYearCert, p.CurrentCABundleContent())
+
+	failSecretGets(client, 1)
+	client.ClearActions()
+	err := p.rotateSelfSignedCertificate()
+	require.ErrorContains(t, err, "connection refused")
+	assert.Equal(t, testOneYearCert, p.CurrentCABundleContent(), "the serving certificate must not change")
+	assert.Zero(t, secretCreates(client), "no Secret may be created when the existing one could not be read")
+}
+
+// At startup, a Secret that cannot be read yet is retried until it can, rather than failing the provider.
+func TestSelfSignedCertProviderStartupSecretGetError(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	defer func(d time.Duration) { selfSignedCertInitRetryInterval = d }(selfSignedCertInitRetryInterval)
+	selfSignedCertInitRetryInterval = 10 * time.Millisecond
+
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(existing)
+	failSecretGets(client, 3)
+	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90)
+	assert.Equal(t, testOneYearCert, p.CurrentCABundleContent(), "the persisted certificate must be used once it can be read")
+	assert.Zero(t, secretCreates(client))
+}
+
+// When the Secret stays unreadable, startup fails with an error saying it timed out and why.
+//
+// This is the message an operator sees in antrea-controller's crash log, and the last read error
+// alone ("connection refused") does not say that it was retried or for how long.
+func TestSelfSignedCertProviderStartupSecretGetErrorTimeout(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	defer func(d time.Duration) { selfSignedCertInitRetryInterval = d }(selfSignedCertInitRetryInterval)
+	selfSignedCertInitRetryInterval = 10 * time.Millisecond
+
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(existing)
+	failSecretGets(client, math.MaxInt)
+
+	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+	caConfig := &CAConfig{
+		TLSSecretName:     testSecretName,
+		SelfSignedCertDir: t.TempDir(),
+		MinValidDuration:  time.Hour * 24 * 90,
+		CertReadyTimeout:  50 * time.Millisecond,
+		ServiceName:       testServiceName,
+		PairName:          testPairName,
+	}
+	_, err := newSelfSignedCertProvider(client, secureServing, caConfig)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "timed out after 50ms")
+	assert.ErrorContains(t, err, "connection refused", "the underlying read error must be kept")
+	assert.Zero(t, secretCreates(client), "no Secret may be created when the existing one could never be read")
+}
+
+// An invalid Secret is still replaced, as before.
+func TestSelfSignedCertProviderStartupInvalidSecret(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       []byte("invalid"),
+			corev1.TLSPrivateKeyKey: []byte("invalid"),
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(existing)
+	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90)
+	gotSecret, err := client.CoreV1().Secrets(testSecretNamespace).Get(context.TODO(), testSecretName, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, p.CurrentCABundleContent(), gotSecret.Data[corev1.TLSCertKey])
 }
