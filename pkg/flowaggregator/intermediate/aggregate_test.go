@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	clocktesting "k8s.io/utils/clock/testing"
 
@@ -419,6 +420,606 @@ func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
 	runCorrelationAndCheckResult(t, ap, clock, record1, record2, false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true)
 	// Cleanup the flowKeyMap in aggregation process.
 	ap.deleteFlowKeyFromMap(*flowKey1)
+}
+
+func TestInterNodeIngressDenyArrivalOrder(t *testing.T) {
+	for _, isIPv6 := range []bool{false, true} {
+		name := "IPv4"
+		if isIPv6 {
+			name = "IPv6"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name             string
+				action           flowpb.NetworkPolicyRuleAction
+				destinationFirst bool
+				destinationOnly  bool
+			}{
+				{"RejectSourceFirst", flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT, false, false},
+				{"RejectDestinationFirst", flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT, true, false},
+				{"RejectDestinationOnly", flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT, true, true},
+				{"DropSourceFirst", flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, false, false},
+				{"DropDestinationFirst", flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, true, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					clock := clocktesting.NewFakeClock(time.Now())
+					ap, err := initAggregationProcessWithClock(AggregationInput{
+						RecordChan:            make(chan *flowpb.Flow),
+						WorkerNum:             1,
+						ActiveExpiryTimeout:   testActiveExpiry,
+						InactiveExpiryTimeout: testInactiveExpiry,
+					}, clock)
+					require.NoError(t, err)
+					src := createFlowRecordForSrc(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false,
+						flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+					dst := createFlowRecordForDst(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, tc.action)
+					dst.K8S.IngressNetworkPolicyName = "deny-policy"
+					dst.K8S.IngressNetworkPolicyNamespace = "namespace"
+					dst.K8S.IngressNetworkPolicyRuleName = "deny-rule"
+					dst.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+					key, isIPv4 := getFlowKeyFromRecord(src)
+					first, second := src, dst
+					if tc.destinationFirst {
+						first, second = dst, src
+					}
+					ap.addOrUpdateRecordInMap(key, first, isIPv4)
+					agg := ap.flowKeyRecordMap[*key]
+					standaloneReject := tc.destinationFirst && tc.action == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+					assert.Equal(t, standaloneReject, agg.ReadyToSend)
+					if !tc.destinationFirst {
+						// Repeated source records must still wait for the destination. The deny
+						// record must complete the flow even with an older end timestamp.
+						next := createFlowRecordForSrc(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true,
+							flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+						ap.addOrUpdateRecordInMap(key, next, isIPv4)
+						assert.False(t, agg.ReadyToSend)
+						clock.Step(testActiveExpiry)
+						require.NoError(t, ap.ForAllExpiredFlowRecordsDo(func(FlowKey, *AggregationFlowRecord) error {
+							t.Error("a source-only flow must not be exported")
+							return nil
+						}))
+					}
+					if !tc.destinationOnly {
+						clock.Step(10 * time.Millisecond)
+						ap.addOrUpdateRecordInMap(key, second, isIPv4)
+					}
+					assert.True(t, agg.ReadyToSend, "a deny record must complete the pending flow")
+					assert.False(t, agg.PriorityQueueItem.activeExpireTime.After(clock.Now()),
+						"the completed flow must be scheduled for immediate export")
+					if !tc.destinationFirst {
+						assert.True(t, agg.areCorrelatedFieldsFilled)
+						assert.Equal(t, "pod1", agg.Record.K8S.SourcePodName)
+						assert.Equal(t, "pod2", agg.Record.K8S.DestinationPodName)
+					} else if tc.destinationOnly {
+						assert.False(t, agg.areCorrelatedFieldsFilled, "a standalone reject still needs Pod metadata enrichment")
+					}
+
+					// A later source update must not undo readiness or lose the ingress policy.
+					if !tc.destinationOnly {
+						next := createFlowRecordForSrc(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true,
+							flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+						ap.addOrUpdateRecordInMap(key, next, isIPv4)
+					}
+					exports := 0
+					callback := func(flowKey FlowKey, record *AggregationFlowRecord) error {
+						exports++
+						assert.Equal(t, *key, flowKey)
+						assert.Equal(t, tc.action, record.Record.K8S.IngressNetworkPolicyRuleAction)
+						assert.Equal(t, "deny-policy", record.Record.K8S.IngressNetworkPolicyName)
+						assert.Equal(t, "namespace", record.Record.K8S.IngressNetworkPolicyNamespace)
+						assert.Equal(t, "deny-rule", record.Record.K8S.IngressNetworkPolicyRuleName)
+						assert.Equal(t, flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP,
+							record.Record.K8S.IngressNetworkPolicyType)
+						return nil
+					}
+					require.NoError(t, ap.ForAllExpiredFlowRecordsDo(callback))
+					assert.Equal(t, 1, exports, "the flow must be exported immediately")
+					for i := 0; i <= MaxRetries; i++ {
+						clock.Step(testInactiveExpiry)
+						require.NoError(t, ap.ForAllExpiredFlowRecordsDo(callback))
+					}
+					assert.Equal(t, 1, exports, "the flow must be exported before eviction, without duplicate exports")
+					assert.Zero(t, ap.GetNumFlows())
+				})
+			}
+		})
+	}
+}
+
+func TestPendingFlowCompletedByEgressDeny(t *testing.T) {
+	for _, action := range []flowpb.NetworkPolicyRuleAction{
+		flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP,
+		flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT,
+	} {
+		t.Run(action.String(), func(t *testing.T) {
+			clock := clocktesting.NewFakeClock(time.Now())
+			ap, err := initAggregationProcessWithClock(AggregationInput{
+				RecordChan:            make(chan *flowpb.Flow),
+				WorkerNum:             1,
+				ActiveExpiryTimeout:   testActiveExpiry,
+				InactiveExpiryTimeout: testInactiveExpiry,
+			}, clock)
+			require.NoError(t, err)
+			src := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false,
+				flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+			key, isIPv4 := getFlowKeyFromRecord(src)
+			ap.addOrUpdateRecordInMap(key, src, isIPv4)
+			deny := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, action)
+			ap.addOrUpdateRecordInMap(key, deny, isIPv4)
+			agg := ap.flowKeyRecordMap[*key]
+			assert.True(t, agg.ReadyToSend, "a same-Node deny record must also complete the pending flow")
+			assert.Equal(t, action, agg.Record.K8S.EgressNetworkPolicyRuleAction)
+			assert.Equal(t, clock.Now(), agg.PriorityQueueItem.activeExpireTime)
+			assert.False(t, agg.areCorrelatedFieldsFilled, "the destination metadata still needs enrichment")
+		})
+	}
+}
+
+// TestPendingFlowCompletedByPeerDenyStats verifies that a deny record which completes the other
+// half of an inter-Node flow only updates the stats of its own Node, and that later records from
+// the pending Node are still aggregated.
+func TestPendingFlowCompletedByPeerDenyStats(t *testing.T) {
+	newSrc := func(isUpdatedRecord bool, action flowpb.NetworkPolicyRuleAction) *flowpb.Flow {
+		return createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, isUpdatedRecord, action)
+	}
+	newDst := func(isUpdatedRecord bool, action flowpb.NetworkPolicyRuleAction) *flowpb.Flow {
+		return createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, isUpdatedRecord, action)
+	}
+	noAction := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION
+	reject := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	for _, tc := range []struct {
+		name string
+		// pending is the first record, which waits for its peer, and update is a later record
+		// from the same Node. deny is the record from the peer Node which completes the flow.
+		pending, deny, update *flowpb.Flow
+		pendingFromSrc        bool
+	}{
+		{
+			name:           "IngressRejectCompletesSource",
+			pending:        newSrc(false, noAction),
+			deny:           newDst(true, reject),
+			update:         newSrc(true, noAction),
+			pendingFromSrc: true,
+		},
+		{
+			name:           "EgressRejectCompletesDestination",
+			pending:        newDst(false, noAction),
+			deny:           newSrc(true, reject),
+			update:         newDst(true, noAction),
+			pendingFromSrc: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := clocktesting.NewFakeClock(time.Now())
+			ap, err := initAggregationProcessWithClock(AggregationInput{
+				RecordChan:            make(chan *flowpb.Flow),
+				WorkerNum:             1,
+				ActiveExpiryTimeout:   testActiveExpiry,
+				InactiveExpiryTimeout: testInactiveExpiry,
+			}, clock)
+			require.NoError(t, err)
+			pendingStats := &flowpb.Stats{
+				PacketTotalCount: tc.pending.Stats.PacketTotalCount,
+				OctetTotalCount:  tc.pending.Stats.OctetTotalCount,
+			}
+			denyStats := &flowpb.Stats{
+				PacketTotalCount: tc.deny.Stats.PacketTotalCount,
+				PacketDeltaCount: tc.deny.Stats.PacketDeltaCount,
+				OctetTotalCount:  tc.deny.Stats.OctetTotalCount,
+				OctetDeltaCount:  tc.deny.Stats.OctetDeltaCount,
+			}
+			updateStats := &flowpb.Stats{
+				PacketTotalCount: tc.update.Stats.PacketTotalCount,
+				PacketDeltaCount: tc.update.Stats.PacketDeltaCount,
+				OctetTotalCount:  tc.update.Stats.OctetTotalCount,
+				OctetDeltaCount:  tc.update.Stats.OctetDeltaCount,
+			}
+			pendingEnd, denyEnd, updateEnd := tc.pending.EndTs.Seconds, tc.deny.EndTs.Seconds, tc.update.EndTs.Seconds
+			// The record from the pending Node is aggregated only if it is newer than the
+			// deny record, which would be skipped if the deny record had set its end time.
+			require.Equal(t, denyEnd, updateEnd)
+
+			key, isIPv4 := getFlowKeyFromRecord(tc.pending)
+			ap.addOrUpdateRecordInMap(key, tc.pending, isIPv4)
+			ap.addOrUpdateRecordInMap(key, tc.deny, isIPv4)
+			agg := ap.flowKeyRecordMap[*key]
+			require.True(t, agg.ReadyToSend)
+
+			// sides returns the aggregated stats and end time of the pending Node, then
+			// those of the peer Node.
+			sides := func() (*flowpb.Stats, int64, *flowpb.Stats, int64) {
+				aggregation := agg.Record.Aggregation
+				if tc.pendingFromSrc {
+					return aggregation.StatsFromSource, aggregation.EndTsFromSource.Seconds,
+						aggregation.StatsFromDestination, aggregation.EndTsFromDestination.Seconds
+				}
+				return aggregation.StatsFromDestination, aggregation.EndTsFromDestination.Seconds,
+					aggregation.StatsFromSource, aggregation.EndTsFromSource.Seconds
+			}
+			ownStats, ownEnd, peerStats, peerEnd := sides()
+			assert.Equal(t, pendingStats, ownStats, "the deny record must not overwrite the stats of the pending Node")
+			assert.Equal(t, pendingEnd, ownEnd)
+			assert.Equal(t, denyStats, peerStats)
+			assert.Equal(t, denyEnd, peerEnd)
+
+			ap.addOrUpdateRecordInMap(key, tc.update, isIPv4)
+			ownStats, ownEnd, peerStats, peerEnd = sides()
+			assert.Equal(t, updateStats, ownStats, "a later record from the pending Node must still be aggregated")
+			assert.Equal(t, updateEnd, ownEnd)
+			assert.Equal(t, denyStats, peerStats)
+			assert.Equal(t, denyEnd, peerEnd)
+		})
+	}
+}
+
+func TestInterNodeIngressRejectStats(t *testing.T) {
+	for _, isIPv6 := range []bool{false, true} {
+		name := "IPv4"
+		if isIPv6 {
+			name = "IPv6"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name               string
+				destinationFirst   bool
+				exportBeforeSource bool
+				sourceEnd          int64
+				sourcePackets      uint64
+				sourceThroughput   uint64
+				destinationEnd     int64
+				destinationPackets uint64
+			}{
+				{
+					name: "SourceFirst", sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "DestinationFirstBeforeExport", destinationFirst: true,
+					sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "DestinationFirstAfterExport", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 120, sourcePackets: 10, sourceThroughput: 400,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceWithSameEndTime", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 110, sourcePackets: 10, sourceThroughput: 800,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceWithLowerTotal", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 120, sourcePackets: 6, sourceThroughput: 240,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SourceAtStartTime", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 100, sourcePackets: 10,
+					destinationEnd: 110, destinationPackets: 8,
+				},
+				{
+					name: "SinglePacketRejectSourceFirst", sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SinglePacketRejectDestinationFirst", destinationFirst: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SinglePacketRejectExportBeforeSource", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 1,
+				},
+				{
+					name: "SameSecondPacketsRejectSourceFirst", sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
+				{
+					name: "SameSecondPacketsRejectDestinationFirst", destinationFirst: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
+				{
+					name: "SameSecondPacketsRejectExportBeforeSource", destinationFirst: true, exportBeforeSource: true,
+					sourceEnd: 105, sourcePackets: 10, sourceThroughput: 1600,
+					destinationEnd: 100, destinationPackets: 3,
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					clock := clocktesting.NewFakeClock(time.Now())
+					ap, err := initAggregationProcessWithClock(AggregationInput{
+						RecordChan:            make(chan *flowpb.Flow),
+						WorkerNum:             1,
+						ActiveExpiryTimeout:   testActiveExpiry,
+						InactiveExpiryTimeout: time.Minute,
+					}, clock)
+					require.NoError(t, err)
+					newStats := func(total, delta, packetSize uint64) *flowpb.Stats {
+						return &flowpb.Stats{
+							PacketTotalCount: total, PacketDeltaCount: delta,
+							OctetTotalCount: total * packetSize, OctetDeltaCount: delta * packetSize,
+						}
+					}
+					newRecord := func(source bool, end int64, total, delta uint64) *flowpb.Flow {
+						var record *flowpb.Flow
+						if source {
+							record = createFlowRecordForSrc(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false,
+								flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+						} else {
+							record = createFlowRecordForDst(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false,
+								flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+						}
+						record.StartTs.Seconds = 100
+						record.EndTs.Seconds = end
+						record.Stats = newStats(total, delta, 100)
+						record.ReverseStats = newStats(total, delta, 20)
+						return record
+					}
+					checkNodeStats := func(record *flowpb.Flow, source bool, end int64,
+						total, delta, throughput, reverseThroughput uint64) {
+						t.Helper()
+						agg := record.Aggregation
+						stats, reverseStats := agg.StatsFromSource, agg.ReverseStatsFromSource
+						endTs := agg.EndTsFromSource
+						actualThroughput := agg.ThroughputFromSource
+						actualReverseThroughput := agg.ReverseThroughputFromSource
+						if !source {
+							stats, reverseStats = agg.StatsFromDestination, agg.ReverseStatsFromDestination
+							endTs = agg.EndTsFromDestination
+							actualThroughput = agg.ThroughputFromDestination
+							actualReverseThroughput = agg.ReverseThroughputFromDestination
+						}
+						assert.True(t, proto.Equal(newStats(total, delta, 100), stats),
+							"unexpected stats (source=%t): %v", source, stats)
+						assert.True(t, proto.Equal(newStats(total, delta, 20), reverseStats),
+							"unexpected reverse stats (source=%t): %v", source, reverseStats)
+						assert.Equal(t, end, endTs.Seconds)
+						assert.Equal(t, throughput, actualThroughput)
+						assert.Equal(t, reverseThroughput, actualReverseThroughput)
+					}
+					export := func() *flowpb.Flow {
+						t.Helper()
+						clock.Step(testActiveExpiry)
+						var exported *flowpb.Flow
+						require.NoError(t, ap.ForAllExpiredFlowRecordsDo(func(_ FlowKey, record *AggregationFlowRecord) error {
+							// Model metadata enrichment and the counter reset in sendAggregatedRecord.
+							record.Record.K8S.SourcePodName = "pod1"
+							record.Record.K8S.DestinationPodName = "pod2"
+							ap.SetCorrelatedFieldsFilled(record, true)
+							exported = proto.CloneOf(record.Record)
+							return ap.ResetStatAndThroughputElementsInRecord(record.Record)
+						}))
+						require.NotNil(t, exported, "the updated flow must be exported")
+						return exported
+					}
+
+					src := newRecord(true, tc.sourceEnd, tc.sourcePackets, tc.sourcePackets)
+					dst := newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets)
+					var destinationThroughput, destinationReverseThroughput uint64
+					if tc.destinationEnd > 100 {
+						destinationThroughput = tc.destinationPackets * 100 * 8 / uint64(tc.destinationEnd-100)
+						destinationReverseThroughput = tc.destinationPackets * 20 * 8 / uint64(tc.destinationEnd-100)
+					}
+					key, isIPv4 := getFlowKeyFromRecord(src)
+					first, second := src, dst
+					if tc.destinationFirst {
+						first, second = dst, src
+					}
+					ap.addOrUpdateRecordInMap(key, first, isIPv4)
+					agg := ap.flowKeyRecordMap[*key]
+					// The Node which has not reported yet must have no stats.
+					checkNodeStats(agg.Record, tc.destinationFirst, 0, 0, 0, 0, 0)
+					if tc.exportBeforeSource {
+						exported := export()
+						checkNodeStats(exported, true, 0, 0, 0, 0, 0)
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets,
+							destinationThroughput, destinationReverseThroughput)
+					}
+					ap.addOrUpdateRecordInMap(key, second, isIPv4)
+					require.True(t, agg.ReadyToSend)
+					// Repeating a nonzero delta must not count the first rejected packets twice.
+					ap.addOrUpdateRecordInMap(key,
+						newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets), isIPv4)
+					exported := export()
+					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, tc.sourcePackets,
+						tc.sourceThroughput, tc.sourceThroughput/5)
+					assert.Equal(t, tc.sourceThroughput, exported.Aggregation.Throughput)
+					assert.Equal(t, tc.sourceThroughput/5, exported.Aggregation.ReverseThroughput)
+					if tc.exportBeforeSource {
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, 0, 0, 0)
+					} else {
+						checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets,
+							destinationThroughput, destinationReverseThroughput)
+					}
+
+					// An identical Reject re-export must not repeat deltas after export or change the source.
+					ap.addOrUpdateRecordInMap(key,
+						newRecord(false, tc.destinationEnd, tc.destinationPackets, tc.destinationPackets), isIPv4)
+					exported = export()
+					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, 0, 0, 0)
+					checkNodeStats(exported, false, tc.destinationEnd, tc.destinationPackets, 0, 0, 0)
+
+					// New rejected packets must only change the destination's counters and throughput.
+					ap.addOrUpdateRecordInMap(key, newRecord(false, 125, tc.destinationPackets+4, 4), isIPv4)
+					exported = export()
+					checkNodeStats(exported, true, tc.sourceEnd, tc.sourcePackets, 0, 0, 0)
+					checkNodeStats(exported, false, 125, tc.destinationPackets+4, 4,
+						4*100*8/uint64(125-tc.destinationEnd), 4*20*8/uint64(125-tc.destinationEnd))
+				})
+			}
+		})
+	}
+}
+
+func TestAggregateStatsWithDuplicateOrStaleRecords(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		flowType   flowpb.FlowType
+		fromSource bool
+		initialEnd int64
+	}{
+		{"SourceAtStartTime", flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, 100},
+		{"DestinationAtStartTime", flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, 100},
+		{"IntraNodeAtStartTime", flowpb.FlowType_FLOW_TYPE_INTRA_NODE, true, 100},
+		{"SourceWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, 110},
+		{"DestinationWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, 110},
+		{"IntraNodeWithStaleRecord", flowpb.FlowType_FLOW_TYPE_INTRA_NODE, true, 110},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ap := newAggregationProcess()
+			newStats := func(total, delta, packetSize uint64) *flowpb.Stats {
+				return &flowpb.Stats{
+					PacketTotalCount: total, PacketDeltaCount: delta,
+					OctetTotalCount: total * packetSize, OctetDeltaCount: delta * packetSize,
+				}
+			}
+			newRecord := func(end int64, total, delta uint64) *flowpb.Flow {
+				var record *flowpb.Flow
+				if tc.fromSource {
+					record = createFlowRecordForSrc(false, tc.flowType, false,
+						flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+				} else {
+					record = createFlowRecordForDst(false, tc.flowType, false,
+						flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+				}
+				record.StartTs.Seconds = 100
+				record.EndTs.Seconds = end
+				record.Stats = newStats(total, delta, 100)
+				record.ReverseStats = newStats(total, delta, 20)
+				return record
+			}
+			first := newRecord(tc.initialEnd, 3, 3)
+			key, isIPv4 := getFlowKeyFromRecord(first)
+			ap.addOrUpdateRecordInMap(key, first, isIPv4)
+			agg := ap.flowKeyRecordMap[*key]
+			for _, afterExport := range []bool{false, true} {
+				if afterExport {
+					require.NoError(t, ap.ResetStatAndThroughputElementsInRecord(agg.Record))
+				}
+				expected := proto.CloneOf(agg.Record)
+				if tc.initialEnd > 100 {
+					ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd-5, 2, 2), isIPv4)
+					assert.True(t, proto.Equal(expected, agg.Record),
+						"a stale record must not change counters, timestamps or throughput (after export=%t): %v",
+						afterExport, agg.Record)
+				}
+				ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd, 3, 3), isIPv4)
+				assert.True(t, proto.Equal(expected, agg.Record),
+					"a duplicate must not count the same delta again (after export=%t): %v", afterExport, agg.Record)
+			}
+
+			ap.addOrUpdateRecordInMap(key, newRecord(tc.initialEnd+5, 5, 2), isIPv4)
+			assert.Equal(t, tc.initialEnd+5, agg.Record.EndTs.Seconds)
+			assert.True(t, proto.Equal(newStats(5, 2, 100), agg.Record.Stats))
+			assert.True(t, proto.Equal(newStats(5, 2, 20), agg.Record.ReverseStats))
+			assert.Equal(t, uint64(320), agg.Record.Aggregation.Throughput)
+			assert.Equal(t, uint64(64), agg.Record.Aggregation.ReverseThroughput)
+			for _, source := range []bool{true, false} {
+				stats := agg.Record.Aggregation
+				counters, reverseCounters := stats.StatsFromSource, stats.ReverseStatsFromSource
+				end := stats.EndTsFromSource.Seconds
+				throughput, reverseThroughput := stats.ThroughputFromSource, stats.ReverseThroughputFromSource
+				if !source {
+					counters, reverseCounters = stats.StatsFromDestination, stats.ReverseStatsFromDestination
+					end = stats.EndTsFromDestination.Seconds
+					throughput, reverseThroughput = stats.ThroughputFromDestination, stats.ReverseThroughputFromDestination
+				}
+				if source == tc.fromSource || tc.flowType == flowpb.FlowType_FLOW_TYPE_INTRA_NODE {
+					assert.True(t, proto.Equal(newStats(5, 2, 100), counters), "unexpected counters: %v", counters)
+					assert.True(t, proto.Equal(newStats(5, 2, 20), reverseCounters),
+						"unexpected reverse counters: %v", reverseCounters)
+					assert.Equal(t, tc.initialEnd+5, end)
+					assert.Equal(t, uint64(320), throughput)
+					assert.Equal(t, uint64(64), reverseThroughput)
+				} else {
+					assert.True(t, proto.Equal(&flowpb.Stats{}, counters), "the peer has not reported: %v", counters)
+					assert.True(t, proto.Equal(&flowpb.Stats{}, reverseCounters),
+						"the peer has not reported reverse counters: %v", reverseCounters)
+					assert.Zero(t, end)
+					assert.Zero(t, throughput)
+					assert.Zero(t, reverseThroughput)
+				}
+			}
+		})
+	}
+}
+
+func TestDenyFlowStats(t *testing.T) {
+	const (
+		drop         = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		reject       = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+		interNode    = flowpb.FlowType_FLOW_TYPE_INTER_NODE
+		intraNode    = flowpb.FlowType_FLOW_TYPE_INTRA_NODE
+		toExternal   = flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL
+		fromExternal = flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL
+	)
+	for _, tc := range []struct {
+		name             string
+		flowType         flowpb.FlowType
+		action           flowpb.NetworkPolicyRuleAction
+		ingress          bool
+		fromExternalPeer bool
+		sourceOnly       bool
+	}{
+		{"InterNodeEgressDrop", interNode, drop, false, false, true},
+		{"InterNodeEgressReject", interNode, reject, false, false, true},
+		{"IntraNodeEgressReject", intraNode, reject, false, false, false},
+		{"IntraNodeIngressReject", intraNode, reject, true, false, false},
+		{"ToExternalEgressReject", toExternal, reject, false, false, false},
+		{"FromExternalIngressReject", fromExternal, reject, true, false, false},
+		{"InterNodeFromExternalEgressReject", fromExternal, reject, false, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ap := newAggregationProcess()
+			for _, updated := range []bool{false, true} {
+				var record *flowpb.Flow
+				if tc.ingress {
+					record = createFlowRecordForDst(false, tc.flowType, updated, tc.action)
+				} else {
+					record = createFlowRecordForSrc(false, tc.flowType, updated, tc.action)
+				}
+				if tc.fromExternalPeer {
+					record.K8S.SourcePodName = ""
+					record.ProxySnatIp = gatewayIP
+					record.ProxySnatPort = 52391
+				}
+				key, isIPv4 := getFlowKeyFromRecord(record)
+				expectedStats, expectedReverseStats := proto.CloneOf(record.Stats), proto.CloneOf(record.ReverseStats)
+				end := record.EndTs.Seconds
+				ap.addOrUpdateRecordInMap(key, record, isIPv4)
+				agg := ap.flowKeyRecordMap[*key]
+				require.True(t, agg.ReadyToSend)
+				stats := agg.Record.Aggregation
+				assert.True(t, proto.Equal(expectedStats, stats.StatsFromSource),
+					"unexpected source stats: %v", stats.StatsFromSource)
+				assert.True(t, proto.Equal(expectedReverseStats, stats.ReverseStatsFromSource),
+					"unexpected source reverse stats: %v", stats.ReverseStatsFromSource)
+				assert.Equal(t, end, stats.EndTsFromSource.Seconds)
+				assert.NotZero(t, stats.ThroughputFromSource)
+				assert.NotZero(t, stats.ReverseThroughputFromSource)
+				if tc.sourceOnly {
+					assert.True(t, proto.Equal(&flowpb.Stats{}, stats.StatsFromDestination),
+						"destination has not reported: %v", stats.StatsFromDestination)
+					assert.True(t, proto.Equal(&flowpb.Stats{}, stats.ReverseStatsFromDestination),
+						"destination has not reported: %v", stats.ReverseStatsFromDestination)
+					assert.Zero(t, stats.EndTsFromDestination.Seconds)
+					assert.Zero(t, stats.ThroughputFromDestination)
+					assert.Zero(t, stats.ReverseThroughputFromDestination)
+				} else {
+					assert.True(t, proto.Equal(expectedStats, stats.StatsFromDestination),
+						"unexpected destination stats: %v", stats.StatsFromDestination)
+					assert.True(t, proto.Equal(expectedReverseStats, stats.ReverseStatsFromDestination),
+						"unexpected destination reverse stats: %v", stats.ReverseStatsFromDestination)
+					assert.Equal(t, end, stats.EndTsFromDestination.Seconds)
+					assert.Equal(t, stats.ThroughputFromSource, stats.ThroughputFromDestination)
+					assert.Equal(t, stats.ReverseThroughputFromSource, stats.ReverseThroughputFromDestination)
+				}
+				require.NoError(t, ap.ResetStatAndThroughputElementsInRecord(agg.Record))
+			}
+		})
+	}
 }
 
 func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {

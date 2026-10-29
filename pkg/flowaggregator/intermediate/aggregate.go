@@ -350,29 +350,40 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	defer a.mutex.Unlock()
 
 	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
+	// An inter-Node record only reports its own Node's stats, even when a deny action
+	// lets it be exported without waiting for the peer Node.
+	perNodeStats := record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)
 
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
 		readyToSend := aggregationRecord.ReadyToSend
-		if correlationRequired {
-			// Do correlation of records if record belongs to inter-node flow and
-			// records from source and destination node are not received.
-			if !readyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
+		// Records are only correlated while the entry is waiting for its peer. An entry
+		// created by a record which needs no correlation is ready (and exported) right
+		// away, so a later record from the other Node only contributes its stats, and
+		// its K8s / NetworkPolicy metadata is not merged. Merging it would change the
+		// metadata between successive exports of the same flow.
+		if !readyToSend {
+			sameNode := areRecordsFromSameNode(record, aggregationRecord.Record)
+			// A record that needs no correlation can complete a pending flow, even when
+			// the first record required a peer. Merge its metadata too, including any deny
+			// policy information, before making the flow ready to export.
+			if !correlationRequired || !sameNode {
 				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
-				aggregationRecord.areCorrelatedFieldsFilled = true
+				aggregationRecord.areCorrelatedFieldsFilled = !sameNode
 			}
-			// Aggregation of incoming flow record with existing by updating stats
-			// and flow timestamps.
+		}
+		if perNodeStats {
+			// Update only the reporting Node's stats and timestamps, including for
+			// later deny records received after the flow is ready to export.
 			if isRecordFromSrc(record) {
 				a.aggregateRecords(record, aggregationRecord.Record, true, false)
 			} else {
 				a.aggregateRecords(record, aggregationRecord.Record, false, true)
 			}
 		} else {
-			// For flows that do not need correlation, just do aggregation of the
-			// flow record with existing record by updating the stats and flow timestamps.
+			// A single-Node record supplies the stats and timestamps for both sides.
 			a.aggregateRecords(record, aggregationRecord.Record, true, true)
 		}
 		aggregationRecord.updatedSinceLastExport = true
@@ -387,7 +398,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	} else {
 		record.Aggregation = &flowpb.Aggregation{}
 		// Add all the new stat fields and initialize them.
-		if correlationRequired {
+		if perNodeStats {
 			if isRecordFromSrc(record) {
 				a.addFieldsForStatsAggregation(record, true, false)
 				a.addFieldsForThroughputCalculation(record, true, false)
@@ -438,10 +449,11 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
 }
 
-// correlateRecords correlate the incomingRecord with existingRecord using correlation fields.
-// This is called for the two halves of an inter-Node flow (regular inter-Node flows, as well as
-// inter-Node "from external" flows). Each field is copied only when set on the incoming record,
-// so the two halves can be correlated regardless of the order in which they are received.
+// correlateRecords merges correlation fields from incomingRecord into existingRecord.
+// It is called for the two halves of an inter-Node flow (including inter-Node "from external"
+// flows), or when a deny record from the same Node completes a pending flow. Each field is
+// copied only when set on the incoming record, so the two halves can be correlated regardless
+// of the order in which they are received.
 func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *flowpb.Flow) {
 	if sourcePodName := incomingRecord.K8S.SourcePodName; sourcePodName != "" {
 		existingRecord.K8S.SourcePodName = sourcePodName
@@ -550,16 +562,16 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 		}
 		// Update the flowEndSecondsFromSource/DestinationNode fields, and compute
 		// the time difference between the incoming record and the last record.
+		var firstFromNode bool
 		if fillSrcStats {
-			prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, true, incomingVal)
+			prevFlowEndSeconds, firstFromNode = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, true, incomingVal)
 		}
 		if fillDstStats {
-			prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, false, incomingVal)
+			prevFlowEndSeconds, firstFromNode = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, false, incomingVal)
 		}
-		// Skip the aggregation process if the incoming record is not the latest
-		// from its coming node; for intra-node flows. Also to avoid to assign
-		// zero value to flowEndSecondsDiff.
-		if incomingVal <= prevFlowEndSeconds {
+		// Skip duplicate or older records from a Node that has already reported.
+		// A Node's first record may start and end in the same second and still carry stats.
+		if !firstFromNode && incomingVal <= prevFlowEndSeconds {
 			klog.V(4).InfoS("The incoming record doesn't have the latest flowEndSeconds", "previous value", prevFlowEndSeconds, "incoming value", incomingVal, "from source node", fillSrcStats, "from destination node", fillDstStats)
 			return
 		}
@@ -732,23 +744,25 @@ func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Fl
 }
 
 // updateFlowEndSecondsFromNodes updates the value of flowEndSecondsFromSourceNode
-// or flowEndSecondsFromDestinationNode, returning the previous value before update.
-func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, existingRecord *flowpb.Flow, isSrc bool, incomingVal int64) int64 {
-	existingVal := existingRecord.Aggregation.EndTsFromSource.Seconds
+// or flowEndSecondsFromDestinationNode. It returns the previous end time (or the start
+// time for a Node's first record) and whether this is the first record from that Node.
+func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, existingRecord *flowpb.Flow, isSrc bool, incomingVal int64) (int64, bool) {
+	endTs := existingRecord.Aggregation.EndTsFromSource
 	if !isSrc {
-		existingVal = existingRecord.Aggregation.EndTsFromDestination.Seconds
+		endTs = existingRecord.Aggregation.EndTsFromDestination
 	}
-	// When the incoming record is the first record from its node, the existingVal of the field
-	// is zero, we set it by flowStartSeconds. time_diff = flowEndSeconds - flowStartSeconds
-	if existingVal == 0 {
+	existingVal := endTs.Seconds
+	firstFromNode := existingVal == 0
+	if firstFromNode {
+		// Measure the first throughput interval from this Node's flow start time.
 		existingVal = incomingRecord.StartTs.Seconds
 	}
-	if isSrc {
-		existingRecord.Aggregation.EndTsFromSource.Seconds = incomingVal
-	} else {
-		existingRecord.Aggregation.EndTsFromDestination.Seconds = incomingVal
+	// A stale record must not move the end time backwards, or a later duplicate could
+	// be accepted and its delta counters counted again.
+	if firstFromNode || incomingVal > existingVal {
+		endTs.Seconds = incomingVal
 	}
-	return existingVal
+	return existingVal, firstFromNode
 }
 
 // isSourceNodeFromExternalFlow returns true for the ingress-Node half of an inter-Node
@@ -819,8 +833,9 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 // isCorrelationRequired returns true when the record is one half of a flow whose two halves are
 // observed on different Nodes and must be correlated: a regular inter-Node flow, or the
 // ingress-Node half of an inter-Node "from external" flow (see isSourceNodeFromExternalFlow).
-// It returns false when the flow was dropped or rejected by a network policy rule, as the two
-// halves are then not expected to correlate.
+// Egress Drop / Reject and ingress Reject records do not require a peer record: egress denial
+// prevents the flow from reaching the destination Node, and an ingress rejection may end the
+// connection before the source Node observes it. Ingress Drop records still require correlation.
 func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
 	if record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP ||
 		record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT ||
