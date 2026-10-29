@@ -40,6 +40,7 @@ import (
 	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
@@ -83,7 +84,7 @@ type ExternalIPAllocator interface {
 	AllocateIPFromPool(externalIPPool string) (net.IP, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
-	// IPPoolHasIP checks whether the IP pool contains the given IP.
+	// IPPoolHasIP checks whether the IP pool contains the given IP and it is not the subnet gateway.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
 	UpdateIPAllocation(externalIPPool string, ip net.IP) error
@@ -106,8 +107,10 @@ type ExternalIPPoolController struct {
 	externalIPPoolListerSynced cache.InformerSynced
 
 	// ipAllocatorMap is a map from ExternalIPPool name to MultiIPAllocator.
-	ipAllocatorMap   map[string]ipallocator.MultiIPAllocator
-	ipAllocatorMutex sync.RWMutex
+	ipAllocatorMap map[string]ipallocator.MultiIPAllocator
+	// deletedIPAllocatorMap retains outstanding leases until consumers release them or the pool is recreated.
+	deletedIPAllocatorMap map[string]ipallocator.MultiIPAllocator
+	ipAllocatorMutex      sync.RWMutex
 
 	// ipAllocatorInitialized stores a boolean value, which tracks if the ipAllocatorMap has been initialized
 	// with the full list of ExternalIPPool.
@@ -135,6 +138,7 @@ func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolIn
 		),
 		ipAllocatorInitialized: &atomic.Value{},
 		ipAllocatorMap:         make(map[string]ipallocator.MultiIPAllocator),
+		deletedIPAllocatorMap:  make(map[string]ipallocator.MultiIPAllocator),
 	}
 	externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -200,6 +204,10 @@ func (c *ExternalIPPoolController) Run(stopCh <-chan struct{}) {
 // Currently it's assumed that only new ranges will be added and existing ranges should not be deleted.
 // TODO: Use validation webhook to ensure it.
 func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.ExternalIPPool) bool {
+	return c.syncIPAllocator(ipPool, false)
+}
+
+func (c *ExternalIPPoolController) syncIPAllocator(ipPool *antreacrds.ExternalIPPool, recreated bool) bool {
 	changed := false
 	c.ipAllocatorMutex.Lock()
 	defer c.ipAllocatorMutex.Unlock()
@@ -207,10 +215,26 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 	existingIPRanges := sets.New[string]()
 	multiIPAllocator, exists := c.ipAllocatorMap[ipPool.Name]
 	if !exists {
+		multiIPAllocator = c.deletedIPAllocatorMap[ipPool.Name]
+		delete(c.deletedIPAllocatorMap, ipPool.Name)
+	}
+	var previousIPs []net.IP
+	if recreated || !exists {
+		for _, allocator := range multiIPAllocator {
+			previousIPs = append(previousIPs, allocator.AllocatedIPs()...)
+		}
+		exists = false
+	}
+	if !exists {
 		multiIPAllocator = ipallocator.MultiIPAllocator{}
 		changed = true
 	} else {
 		existingIPRanges.Insert(multiIPAllocator.Names()...)
+	}
+
+	var gatewayIPs []net.IP
+	if ipPool.Spec.SubnetInfo != nil {
+		gatewayIPs = append(gatewayIPs, net.ParseIP(ipPool.Spec.SubnetInfo.Gateway))
 	}
 
 	for idx := range ipPool.Spec.IPRanges {
@@ -228,8 +252,8 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(ipNet.String()) {
 					return nil, nil
 				}
-				// Don't use the IPv4 network's broadcast address.
-				var reservedIPs []net.IP
+				// Don't allocate the subnet gateway or the IPv4 network's broadcast address.
+				reservedIPs := gatewayIPs
 				if utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 				}
@@ -238,7 +262,7 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil
 				}
-				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
+				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End), gatewayIPs...)
 			}
 		}()
 		if err != nil {
@@ -252,6 +276,12 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 		multiIPAllocator = append(multiIPAllocator, ipAllocator)
 		changed = true
 	}
+	// Preserve valid leases when replacing a pool; new reservations and removed ranges take precedence.
+	for _, ip := range previousIPs {
+		if err := multiIPAllocator.AllocateIP(ip); err != nil {
+			klog.V(2).InfoS("Skipping invalid IP allocation after ExternalIPPool recreation", "pool", ipPool.Name, "ip", ip, "reason", err)
+		}
+	}
 	c.ipAllocatorMap[ipPool.Name] = multiIPAllocator
 	c.queue.Add(ipPool.Name)
 	return changed
@@ -261,6 +291,9 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 func (c *ExternalIPPoolController) deleteIPAllocator(poolName string) {
 	c.ipAllocatorMutex.Lock()
 	defer c.ipAllocatorMutex.Unlock()
+	if allocator, exists := c.ipAllocatorMap[poolName]; exists && allocator.Used() > 0 {
+		c.deletedIPAllocatorMap[poolName] = allocator
+	}
 	delete(c.ipAllocatorMap, poolName)
 }
 
@@ -275,11 +308,34 @@ func (c *ExternalIPPoolController) getIPAllocator(poolName string) (ipallocator.
 // AllocateIPFromPool allocates an IP from the the given IP pool.
 func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (net.IP, error) {
 	c.handlersWaitGroup.Wait()
-	ipAllocator, exists := c.getIPAllocator(ipPoolName)
+	if !c.IPPoolExists(ipPoolName) {
+		return nil, ErrExternalIPPoolNotFound
+	}
+	var excludedIPs []net.IP
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		// Egresses may declare an IP before their first allocation reconciliation. Read the API directly so
+		// informer delays cannot let an automatic Egress or Service allocation take one of these IPs.
+		egresses, err := c.crdClient.CrdV1beta1().Egresses().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list Egresses before allocating from ExternalIPPool %s: %w", ipPoolName, err)
+		}
+		for i := range egresses.Items {
+			egress := &egresses.Items[i]
+			if egress.Spec.ExternalIPPool != ipPoolName {
+				continue
+			}
+			if ip := net.ParseIP(egress.Spec.EgressIP); ip != nil {
+				excludedIPs = append(excludedIPs, ip)
+			}
+		}
+	}
+	c.ipAllocatorMutex.RLock()
+	defer c.ipAllocatorMutex.RUnlock()
+	ipAllocator, exists := c.ipAllocatorMap[ipPoolName]
 	if !exists {
 		return nil, ErrExternalIPPoolNotFound
 	}
-	ip, err := ipAllocator.AllocateNext()
+	ip, err := ipAllocator.AllocateNext(excludedIPs...)
 	if err != nil {
 		return ip, err
 	}
@@ -289,7 +345,9 @@ func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (net.IP
 
 // UpdateIPAllocation sets the IP in the specified ExternalIPPool.
 func (c *ExternalIPPoolController) UpdateIPAllocation(poolName string, ip net.IP) error {
-	ipAllocator, exists := c.getIPAllocator(poolName)
+	c.ipAllocatorMutex.RLock()
+	defer c.ipAllocatorMutex.RUnlock()
+	ipAllocator, exists := c.ipAllocatorMap[poolName]
 	if !exists {
 		return ErrExternalIPPoolNotFound
 	}
@@ -342,8 +400,18 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 
 // ReleaseIP releases the IP to the pool.
 func (c *ExternalIPPoolController) ReleaseIP(poolName string, ip net.IP) error {
-	allocator, exists := c.getIPAllocator(poolName)
+	c.ipAllocatorMutex.Lock()
+	defer c.ipAllocatorMutex.Unlock()
+	allocator, exists := c.ipAllocatorMap[poolName]
 	if !exists {
+		if deletedAllocator, retained := c.deletedIPAllocatorMap[poolName]; retained {
+			if err := deletedAllocator.Release(ip); err != nil {
+				klog.V(2).InfoS("Failed to release IP from deleted ExternalIPPool", "pool", poolName, "ip", ip, "reason", err)
+			}
+			if deletedAllocator.Used() == 0 {
+				delete(c.deletedIPAllocatorMap, poolName)
+			}
+		}
 		return ErrExternalIPPoolNotFound
 	}
 	if err := allocator.Release(ip); err != nil {
@@ -356,6 +424,13 @@ func (c *ExternalIPPoolController) ReleaseIP(poolName string, ip net.IP) error {
 func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool {
 	allocator, exists := c.getIPAllocator(poolName)
 	if !exists {
+		return false
+	}
+	pool, err := c.externalIPPoolLister.Get(poolName)
+	if err != nil {
+		return false
+	}
+	if pool.Spec.SubnetInfo != nil && ip.Equal(net.ParseIP(pool.Spec.SubnetInfo.Gateway)) {
 		return false
 	}
 	return allocator.Has(ip)
@@ -403,10 +478,12 @@ func (c *ExternalIPPoolController) addExternalIPPool(obj interface{}) {
 
 // updateExternalIPPool processes ExternalIPPool UPDATE events. It updates the IPAllocator for the pool and triggers
 // reconciliation of consumers that refer to the pool if the IPAllocator changes.
-func (c *ExternalIPPoolController) updateExternalIPPool(_, cur interface{}) {
+func (c *ExternalIPPoolController) updateExternalIPPool(old, cur interface{}) {
+	oldPool := old.(*antreacrds.ExternalIPPool)
 	pool := cur.(*antreacrds.ExternalIPPool)
 	klog.InfoS("Processing ExternalIPPool UPDATE event", "pool", pool.Name, "ipRanges", pool.Spec.IPRanges)
-	if c.createOrUpdateIPAllocator(pool) {
+	// A relist can report a deleted and recreated pool as an UPDATE event.
+	if c.syncIPAllocator(pool, oldPool.UID != pool.UID) {
 		for _, h := range c.handlers {
 			h(pool.Name)
 		}

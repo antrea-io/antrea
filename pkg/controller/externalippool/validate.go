@@ -75,6 +75,18 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
+		oldSubnetInfo, newSubnetInfo := oldObj.Spec.SubnetInfo, newObj.Spec.SubnetInfo
+		if (oldSubnetInfo == nil) != (newSubnetInfo == nil) {
+			return newAdmissionResponseForErr(fmt.Errorf("subnetInfo cannot be added or removed"))
+		}
+		if oldSubnetInfo != nil {
+			if oldSubnetInfo.Gateway != newSubnetInfo.Gateway {
+				return newAdmissionResponseForErr(fmt.Errorf("gateway is immutable"))
+			}
+			if oldSubnetInfo.PrefixLength != newSubnetInfo.PrefixLength {
+				return newAdmissionResponseForErr(fmt.Errorf("prefixLength is immutable"))
+			}
+		}
 		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
 			msg = err.Error()
 			allowed = false

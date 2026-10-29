@@ -25,9 +25,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
@@ -216,6 +218,181 @@ func TestAddService(t *testing.T) {
 			assert.True(t, controller.externalIPAllocator.IPPoolExists(ipPool))
 			if externalIP != "" {
 				assert.True(t, controller.externalIPAllocator.IPPoolHasIP(ipPool, net.ParseIP(externalIP)))
+			}
+		})
+	}
+}
+
+func TestServiceIPv6GatewayBeyondSupportedRange(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	gateway := "fd00:0:0:1::1"
+	pool := newExternalIPPool("wide-ipv6-pool", "fd00::/48", "", "")
+	pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: gateway, PrefixLength: 48}
+	svc := newService("gateway-svc", "test", corev1.ServiceTypeLoadBalancer, gateway, pool.Name)
+	controller := newController([]runtime.Object{svc}, []runtime.Object{pool})
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+
+	err := controller.syncService(apimachinerytypes.NamespacedName{Namespace: svc.Namespace, Name: svc.Name})
+	require.NoError(t, err)
+	updated, err := controller.client.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Empty(t, updated.Status.LoadBalancer.Ingress, "the subnet gateway must not become a Service external IP")
+}
+
+func TestRecreateExternalIPPoolWithNewGateway(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		gateway         string
+		newGateway      string
+		initialIPs      []string
+		wantIPs         []string
+		pendingEgressIP string
+		cidr            string
+		wantErr         bool
+		failStatusOnce  bool
+	}{
+		{
+			name: "single allocation", gateway: "192.0.2.2", newGateway: "192.0.2.1",
+			initialIPs: []string{"192.0.2.1"}, wantIPs: []string{"192.0.2.2"},
+		},
+		{
+			name: "multiple allocations with unchanged gateway", gateway: "192.0.2.6", newGateway: "192.0.2.6",
+			initialIPs: []string{"192.0.2.1", "192.0.2.2"}, wantIPs: []string{"192.0.2.1", "192.0.2.2"},
+		},
+		{
+			name: "multiple allocations with new gateway", gateway: "192.0.2.6", newGateway: "192.0.2.1",
+			initialIPs: []string{"192.0.2.1", "192.0.2.2"}, wantIPs: []string{"192.0.2.3", "192.0.2.2"},
+		},
+		{
+			name: "new gateway with pending Egress", gateway: "192.0.2.6", newGateway: "192.0.2.1",
+			initialIPs: []string{"192.0.2.1"}, wantIPs: []string{"192.0.2.3"}, pendingEgressIP: "192.0.2.2",
+		},
+		{
+			name: "new gateway with pool exhausted by pending Egress", gateway: "192.0.2.6", newGateway: "192.0.2.1",
+			initialIPs: []string{"192.0.2.1"}, wantIPs: []string{""}, pendingEgressIP: "192.0.2.2",
+			cidr: "192.0.2.0/30", wantErr: true, failStatusOnce: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			cidr := tt.cidr
+			if cidr == "" {
+				cidr = "192.0.2.0/29"
+			}
+			pool := newExternalIPPool("pool", cidr, "", "")
+			pool.UID = "old"
+			pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: tt.gateway, PrefixLength: 29}
+			services := []*corev1.Service{
+				newService("svc-a", "test", corev1.ServiceTypeLoadBalancer, "", pool.Name),
+				newService("svc-b", "test", corev1.ServiceTypeLoadBalancer, "", pool.Name),
+			}[:len(tt.initialIPs)]
+			var objects []runtime.Object
+			for _, svc := range services {
+				objects = append(objects, svc)
+			}
+			crdObjects := []runtime.Object{pool}
+			if tt.pendingEgressIP != "" {
+				crdObjects = append(crdObjects, &antreacrds.Egress{
+					ObjectMeta: metav1.ObjectMeta{Name: "pending-egress"},
+					Spec: antreacrds.EgressSpec{
+						EgressIP: tt.pendingEgressIP, ExternalIPPool: pool.Name,
+					},
+				})
+			}
+			controller := newController(objects, crdObjects)
+			// The fake client can overwrite a recreated pool's spec when updating an old pool's status.
+			controller.crdClient.(*fakeversioned.Clientset).PrependReactor("update", "externalippools",
+				func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if action.GetSubresource() == "status" {
+						return true, action.(k8stesting.UpdateAction).GetObject(), nil
+					}
+					return false, nil, nil
+				})
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+			controller.restoreIPAllocations(nil)
+			for i, svc := range services {
+				key := apimachinerytypes.NamespacedName{Namespace: svc.Namespace, Name: svc.Name}
+				require.NoError(t, controller.syncService(key))
+				require.Eventually(t, func() bool {
+					cached, err := controller.serviceLister.Services(svc.Namespace).Get(svc.Name)
+					return err == nil && getServiceExternalIP(cached) == tt.initialIPs[i]
+				}, time.Second, 10*time.Millisecond)
+			}
+
+			// Process both pool events before reconciling Services, as when work items coalesce.
+			require.NoError(t, controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{}))
+			require.Eventually(t, func() bool {
+				return !controller.externalIPAllocator.IPPoolExists(pool.Name)
+			}, time.Second, 10*time.Millisecond)
+			recreated := pool.DeepCopy()
+			recreated.UID = "new"
+			recreated.Spec.SubnetInfo.Gateway = tt.newGateway
+			_, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), recreated, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				return controller.externalIPAllocator.IPPoolExists(pool.Name)
+			}, time.Second, 10*time.Millisecond)
+			require.False(t, controller.externalIPAllocator.IPPoolHasIP(pool.Name, net.ParseIP(tt.newGateway)))
+			require.Error(t, controller.externalIPAllocator.UpdateIPAllocation(pool.Name, net.ParseIP(tt.newGateway)))
+
+			if tt.failStatusOnce {
+				failStatus := true
+				controller.client.(*fake.Clientset).PrependReactor("update", "services",
+					func(action k8stesting.Action) (bool, runtime.Object, error) {
+						if action.GetSubresource() == "status" && failStatus {
+							failStatus = false
+							return true, nil, assert.AnError
+						}
+						return false, nil, nil
+					})
+				svc := services[0]
+				key := apimachinerytypes.NamespacedName{Namespace: svc.Namespace, Name: svc.Name}
+				require.ErrorIs(t, controller.syncService(key), assert.AnError)
+				_, allocated := controller.getExternalIPAllocation(key)
+				require.False(t, allocated, "the next retry must clear status after the allocation cache was removed")
+				unchanged, err := controller.client.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				require.Equal(t, tt.newGateway, getServiceExternalIP(unchanged))
+			}
+
+			var ips []string
+			for _, svc := range services {
+				key := apimachinerytypes.NamespacedName{Namespace: svc.Namespace, Name: svc.Name}
+				if err := controller.syncService(key); tt.wantErr {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+				updated, err := controller.client.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				ips = append(ips, getServiceExternalIP(updated))
+			}
+			assert.Equal(t, tt.wantIPs, ips)
+			if tt.pendingEgressIP != "" {
+				pendingIP := net.ParseIP(tt.pendingEgressIP)
+				require.NoError(t, controller.externalIPAllocator.UpdateIPAllocation(pool.Name, pendingIP),
+					"repairing a Service must preserve a pending Egress's explicit IP")
+				require.NoError(t, controller.externalIPAllocator.ReleaseIP(pool.Name, pendingIP))
+			}
+			for _, ip := range ips {
+				if ip == "" {
+					continue
+				}
+				require.Error(t, controller.externalIPAllocator.UpdateIPAllocation(pool.Name, net.ParseIP(ip)),
+					"consumer IP %s must remain allocated after pool recreation", ip)
 			}
 		})
 	}

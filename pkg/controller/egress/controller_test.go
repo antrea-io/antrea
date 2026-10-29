@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -600,6 +601,101 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
 
+func TestRecreateExternalIPPoolWithNewGateway(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		gateway    string
+		newGateway string
+		initialIPs []string
+		wantIPs    []string
+	}{
+		{
+			name: "single allocation", gateway: "192.0.2.1", newGateway: "192.0.2.2",
+			initialIPs: []string{"192.0.2.2"}, wantIPs: []string{"192.0.2.1"},
+		},
+		{
+			name: "multiple allocations with unchanged gateway", gateway: "192.0.2.6", newGateway: "192.0.2.6",
+			initialIPs: []string{"192.0.2.1", "192.0.2.2"}, wantIPs: []string{"192.0.2.1", "192.0.2.2"},
+		},
+		{
+			name: "multiple allocations with new gateway", gateway: "192.0.2.6", newGateway: "192.0.2.1",
+			initialIPs: []string{"192.0.2.1", "192.0.2.2"}, wantIPs: []string{"192.0.2.3", "192.0.2.2"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			pool := newExternalIPPool("pool", "192.0.2.0/29", "", "")
+			pool.UID = "old"
+			pool.Spec.SubnetInfo = &v1beta1.SubnetInfo{Gateway: tt.gateway, PrefixLength: 29}
+			egresses := []*v1beta1.Egress{
+				newEgress("egress-a", "", pool.Name, nil, nil, nil),
+				newEgress("egress-b", "", pool.Name, nil, nil, nil),
+			}[:len(tt.initialIPs)]
+			objects := []runtime.Object{pool}
+			for _, egress := range egresses {
+				objects = append(objects, egress)
+			}
+			c := newController(nil, objects)
+			// The fake client does not enforce resource versions. Prevent a stale status
+			// update from replacing the recreated pool's spec, which a real API server rejects.
+			c.crdClient.(*fakeversioned.Clientset).PrependReactor("update", "externalippools",
+				func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if action.GetSubresource() == "status" {
+						return true, action.(k8stesting.UpdateAction).GetObject(), nil
+					}
+					return false, nil, nil
+				})
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.externalIPAllocator.HasSynced))
+			c.restoreIPAllocations(egresses)
+			for i, egress := range egresses {
+				ip, updated, err := c.syncEgressIP(egress)
+				require.NoError(t, err)
+				require.Equal(t, tt.initialIPs[i], ip.String())
+				egresses[i] = updated
+			}
+
+			// Process both pool events before reconciling Egresses, as when work items coalesce.
+			require.NoError(t, c.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{}))
+			require.Eventually(t, func() bool {
+				return !c.externalIPAllocator.IPPoolExists(pool.Name)
+			}, time.Second, 10*time.Millisecond)
+			recreated := pool.DeepCopy()
+			recreated.UID = "new"
+			recreated.Spec.SubnetInfo.Gateway = tt.newGateway
+			_, err := c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), recreated, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				return c.externalIPAllocator.IPPoolExists(pool.Name)
+			}, time.Second, 10*time.Millisecond)
+			require.False(t, c.externalIPAllocator.IPPoolHasIP(pool.Name, net.ParseIP(tt.newGateway)))
+			require.Error(t, c.externalIPAllocator.UpdateIPAllocation(pool.Name, net.ParseIP(tt.newGateway)))
+
+			var ips []string
+			for _, egress := range egresses {
+				ip, updated, err := c.syncEgressIP(egress)
+				require.NoError(t, err)
+				assert.Equal(t, ip.String(), updated.Spec.EgressIP)
+				allocatedIP, allocatedPool, exists := c.getIPAllocation(egress.Name)
+				require.True(t, exists)
+				assert.Equal(t, ip, allocatedIP)
+				assert.Equal(t, pool.Name, allocatedPool)
+				ips = append(ips, ip.String())
+			}
+			assert.Equal(t, tt.wantIPs, ips)
+			for _, ip := range ips {
+				require.Error(t, c.externalIPAllocator.UpdateIPAllocation(pool.Name, net.ParseIP(ip)),
+					"consumer IP %s must remain allocated after pool recreation", ip)
+			}
+		})
+	}
+}
+
 func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string
@@ -952,4 +1048,260 @@ func TestDeleteEgress_Tombstone(t *testing.T) {
 		Key: egress.Name,
 		Obj: egress,
 	})
+}
+
+func TestSyncUntrackedEgressAfterPoolRecreation(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		cidr         string
+		gateway      string
+		egressIP     string
+		newGateway   string
+		pendingIP    string
+		wantIP       string
+		prefixLength int32
+		concurrent   bool
+		uncached     bool
+		wantErr      bool
+	}{
+		{
+			name: "IPv4", cidr: "192.168.1.144/28", gateway: "192.168.1.145",
+			egressIP: "192.168.1.146", newGateway: "192.168.1.146", prefixLength: 28,
+			wantIP: "192.168.1.145",
+		},
+		{
+			name: "IPv6", cidr: "2001:db8::/124", gateway: "2001:db8::1",
+			egressIP: "2001:0db8:0000:0000:0000:0000:0000:0002", newGateway: "2001:db8::2", prefixLength: 124,
+			wantIP: "2001:db8::1",
+		},
+		{
+			name: "IPv4 with another pending Egress", cidr: "192.0.2.0/29", gateway: "192.0.2.6",
+			egressIP: "192.0.2.1", newGateway: "192.0.2.1", pendingIP: "192.0.2.2", prefixLength: 29,
+			wantIP: "192.0.2.3",
+		},
+		{
+			name: "IPv6 with another pending Egress", cidr: "2001:db8::/125", gateway: "2001:db8::6",
+			egressIP: "2001:db8::1", newGateway: "2001:db8::1", pendingIP: "2001:db8::2", prefixLength: 125,
+			wantIP: "2001:db8::3",
+		},
+		{
+			name: "IPv4 with concurrent reconciliation", cidr: "192.0.2.0/29", gateway: "192.0.2.6",
+			egressIP: "192.0.2.1", newGateway: "192.0.2.1", pendingIP: "192.0.2.2", prefixLength: 29,
+			wantIP: "192.0.2.3", concurrent: true,
+		},
+		{
+			name: "IPv6 with concurrent reconciliation", cidr: "2001:db8::/125", gateway: "2001:db8::6",
+			egressIP: "2001:db8::1", newGateway: "2001:db8::1", pendingIP: "2001:db8::2", prefixLength: 125,
+			wantIP: "2001:db8::3", concurrent: true,
+		},
+		{
+			name: "IPv4 with pending Egress absent from informer", cidr: "192.0.2.0/29", gateway: "192.0.2.6",
+			egressIP: "192.0.2.1", newGateway: "192.0.2.1", pendingIP: "192.0.2.2", prefixLength: 29,
+			wantIP: "192.0.2.3", uncached: true,
+		},
+		{
+			name: "IPv4 with pool exhausted by pending Egress", cidr: "192.0.2.0/30", gateway: "192.0.2.6",
+			egressIP: "192.0.2.1", newGateway: "192.0.2.1", pendingIP: "192.0.2.2", prefixLength: 29,
+			wantErr: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := newExternalIPPool("pool", tt.cidr, "", "")
+			pool.UID = "old"
+			pool.Spec.SubnetInfo = &v1beta1.SubnetInfo{Gateway: tt.gateway, PrefixLength: tt.prefixLength}
+			c := newController(nil, []runtime.Object{pool})
+			// Prevent stale status updates from replacing the recreated pool in the fake client.
+			c.crdClient.(*fakeversioned.Clientset).PrependReactor("update", "externalippools",
+				func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if action.GetSubresource() == "status" {
+						return true, action.(k8stesting.UpdateAction).GetObject(), nil
+					}
+					return false, nil, nil
+				})
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.externalIPAllocator.HasSynced))
+			c.externalIPAllocator.RestoreIPAllocations(nil)
+
+			createEgress := func(name, ip string) *v1beta1.Egress {
+				egress := newEgress(name, ip, pool.Name, nil, nil, nil)
+				response := c.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+					Operation: admv1.Create,
+					Object:    runtime.RawExtension{Raw: marshal(egress)},
+				}})
+				require.True(t, response.Allowed, "the explicit IP must be valid before the pool is recreated")
+				egress, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+				require.NoError(t, err)
+				require.Eventually(t, func() bool {
+					_, err := c.egressLister.Get(name)
+					return err == nil
+				}, time.Second, 10*time.Millisecond)
+				return egress
+			}
+			egress := createEgress("egress", tt.egressIP)
+			var pending *v1beta1.Egress
+			if tt.pendingIP != "" {
+				pending = createEgress("pending-egress", tt.pendingIP)
+			}
+
+			// Recreate the pool before the Egress's first allocation reconciliation.
+			require.NoError(t, c.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{}))
+			require.Eventually(t, func() bool {
+				return !c.externalIPAllocator.IPPoolExists(pool.Name)
+			}, time.Second, 10*time.Millisecond)
+			recreated := pool.DeepCopy()
+			recreated.UID = "new"
+			recreated.Spec.SubnetInfo.Gateway = tt.newGateway
+			_, err := c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), recreated, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				return c.externalIPAllocator.IPPoolExists(pool.Name) &&
+					!c.externalIPAllocator.IPPoolHasIP(pool.Name, net.ParseIP(tt.egressIP))
+			}, time.Second, 10*time.Millisecond)
+			_, _, exists := c.getIPAllocation(egress.Name)
+			require.False(t, exists)
+			if tt.uncached {
+				require.NoError(t, c.crdInformerFactory.Crd().V1beta1().Egresses().Informer().GetIndexer().Delete(pending))
+				_, err := c.egressLister.Get(pending.Name)
+				require.Error(t, err)
+			}
+
+			var ip, pendingIP net.IP
+			var updated, updatedPending *v1beta1.Egress
+			if tt.concurrent {
+				type syncResult struct {
+					name   string
+					ip     net.IP
+					egress *v1beta1.Egress
+					err    error
+				}
+				start := make(chan struct{})
+				results := make(chan syncResult, 2)
+				for _, candidate := range []*v1beta1.Egress{egress, pending} {
+					go func(candidate *v1beta1.Egress) {
+						<-start
+						ip, updated, err := c.syncEgressIP(candidate)
+						results <- syncResult{name: candidate.Name, ip: ip, egress: updated, err: err}
+					}(candidate)
+				}
+				close(start)
+				for i := 0; i < 2; i++ {
+					select {
+					case result := <-results:
+						require.NoError(t, result.err, "concurrent reconciliation of %s must succeed", result.name)
+						if result.name == egress.Name {
+							ip, updated = result.ip, result.egress
+						} else {
+							pendingIP, updatedPending = result.ip, result.egress
+						}
+					case <-time.After(5 * time.Second):
+						t.Fatal("Timed out waiting for concurrent Egress reconciliation")
+					}
+				}
+			} else {
+				ip, updated, err = c.syncEgressIP(egress)
+				if tt.wantErr {
+					require.Error(t, err)
+					for i := 0; i < 2; i++ {
+						require.Empty(t, updated.Spec.EgressIP)
+						ip, updated, err = c.syncEgressIP(updated)
+						require.Error(t, err, "retries after clearing the gateway must preserve the pending IP")
+					}
+				} else {
+					require.NoError(t, err)
+				}
+				if pending != nil {
+					pendingIP, updatedPending, err = c.syncEgressIP(pending)
+					require.NoError(t, err, "repairing the gateway Egress must preserve the other Egress's valid IP")
+				}
+			}
+			stored, err := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			allocatedIP, allocatedPool, exists := c.getIPAllocation(egress.Name)
+			var egresses []*v1beta1.Egress
+			if tt.wantErr {
+				require.Nil(t, ip)
+				require.Empty(t, stored.Spec.EgressIP, "an exhausted pool must not leave the gateway in the Egress spec")
+				require.False(t, exists)
+			} else {
+				assert.Equal(t, tt.wantIP, ip.String())
+				assert.Equal(t, ip.String(), updated.Spec.EgressIP)
+				assert.Equal(t, ip.String(), stored.Spec.EgressIP)
+				require.True(t, exists)
+				assert.True(t, ip.Equal(allocatedIP))
+				assert.Equal(t, pool.Name, allocatedPool)
+				egresses = append(egresses, updated)
+			}
+			require.Error(t, c.externalIPAllocator.UpdateIPAllocation(pool.Name, net.ParseIP(tt.newGateway)))
+			if pending != nil {
+				assert.Equal(t, tt.pendingIP, pendingIP.String())
+				assert.False(t, ip.Equal(pendingIP), "distinct admitted Egresses must retain distinct addresses")
+				egresses = append(egresses, updatedPending)
+			}
+			for _, egress := range egresses {
+				retriedIP, _, err := c.syncEgressIP(egress)
+				require.NoError(t, err)
+				assert.Equal(t, egress.Spec.EgressIP, retriedIP.String(), "retries must preserve each Egress's allocation")
+			}
+			for _, egress := range egresses {
+				require.NoError(t, c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{}))
+				require.Eventually(t, func() bool {
+					_, err := c.egressLister.Get(egress.Name)
+					return err != nil
+				}, time.Second, 10*time.Millisecond)
+				require.NoError(t, c.syncEgress(egress.Name))
+				_, _, exists := c.getIPAllocation(egress.Name)
+				require.False(t, exists)
+				releasedIP := net.ParseIP(egress.Spec.EgressIP)
+				require.NoError(t, c.externalIPAllocator.UpdateIPAllocation(pool.Name, releasedIP),
+					"deleting an Egress must release its allocation")
+				require.NoError(t, c.externalIPAllocator.ReleaseIP(pool.Name, releasedIP))
+			}
+		})
+	}
+}
+
+func TestSyncUntrackedEgressGatewayFailures(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		verb     string
+		resource string
+	}{
+		{name: "pool lookup", verb: "get", resource: "externalippools"},
+		{name: "clear gateway", verb: "patch", resource: "egresses"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := newExternalIPPool("pool", "192.168.1.144/28", "", "")
+			pool.Spec.SubnetInfo = &v1beta1.SubnetInfo{Gateway: "192.168.1.145", PrefixLength: 28}
+			egress := newEgress("egress", pool.Spec.SubnetInfo.Gateway, pool.Name, nil, nil, nil)
+			c := newController(nil, []runtime.Object{pool, egress})
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.externalIPAllocator.HasSynced))
+			c.externalIPAllocator.RestoreIPAllocations(nil)
+			c.crdClient.(*fakeversioned.Clientset).PrependReactor(tt.verb, tt.resource,
+				func(k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("%s failed", tt.name)
+				})
+
+			_, updated, err := c.syncEgressIP(egress)
+			require.ErrorContains(t, err, tt.name+" failed")
+			assert.Equal(t, egress.Spec.EgressIP, updated.Spec.EgressIP)
+			_, _, exists := c.getIPAllocation(egress.Name)
+			assert.False(t, exists)
+			ip, err := c.externalIPAllocator.AllocateIPFromPool(pool.Name)
+			require.NoError(t, err)
+			assert.Equal(t, "192.168.1.146", ip.String(), "failed reconciliation must not allocate another IP")
+		})
+	}
 }
