@@ -119,6 +119,9 @@ func TestWebhookGatewayEvents(t *testing.T) {
 		},
 	}
 
+	updateReqWithWrongNamespaceSA := updateReqWithInvalidSA.DeepCopy()
+	updateReqWithWrongNamespaceSA.UserInfo.Username = "system:serviceaccount:other-namespace:antrea-agent"
+
 	newReqCopy := newReq.DeepCopy()
 	invalidReq := admission.Request{
 		AdmissionRequest: *newReqCopy,
@@ -156,6 +159,12 @@ func TestWebhookGatewayEvents(t *testing.T) {
 			name:            "failed to update a Gateway with other ServiceAccount",
 			existingGateway: existingGateway,
 			req:             updateReqWithInvalidSA,
+			isAllowed:       false,
+		},
+		{
+			name:            "failed to update a Gateway with ServiceAccount from other Namespace",
+			existingGateway: existingGateway,
+			req:             admission.Request{AdmissionRequest: *updateReqWithWrongNamespaceSA},
 			isAllowed:       false,
 		},
 		{

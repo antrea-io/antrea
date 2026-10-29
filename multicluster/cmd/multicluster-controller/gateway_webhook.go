@@ -56,10 +56,13 @@ func (v *gatewayValidator) Handle(ctx context.Context, req admission.Request) ad
 	// Gateway can only be updated or created by antrea-mc-controller
 	if req.Operation == admissionv1.Update || req.Operation == admissionv1.Create {
 		ui := req.UserInfo
-		_, saName, err := serviceaccount.SplitUsername(ui.Username)
+		saNamespace, saName, err := serviceaccount.SplitUsername(ui.Username)
 		if err != nil {
 			klog.ErrorS(err, "Error getting ServiceAccount name", "Gateway", req.Namespace+"/"+req.Name)
 			return admission.Errored(http.StatusBadRequest, err)
+		}
+		if saNamespace != v.namespace {
+			return admission.Denied(fmt.Sprintf("ServiceAccount %q is not in Namespace %q", ui.Username, v.namespace))
 		}
 		if saName != mcControllerSAName && saName != antreaAgentSAName {
 			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("Gateway can only be created or updated by Antrea Agent or Multi-cluster Controller"))
