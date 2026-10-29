@@ -835,13 +835,10 @@ func (c *Controller) syncRule(key string) error {
 			c.fqdnController.notifyRuleUpdate(key, err)
 		}
 	}
-	if err != nil {
-		return err
-	}
 	if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
+		c.statusManager.SetRuleRealization(key, rule.PolicyUID, err)
 	}
-	return nil
+	return err
 }
 
 // syncRules calls the reconciler to sync all the rules after watchers complete full sync.
@@ -895,13 +892,13 @@ func (c *Controller) syncRules(keys []string) error {
 	if c.statusManagerEnabled {
 		for _, rule := range allPodRules {
 			if v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
+				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID, nil)
 			}
 		}
 		if c.nodeNetworkPolicyEnabled {
 			for _, rule := range allNodeRules {
 				if v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-					c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
+					c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID, nil)
 				}
 			}
 		}

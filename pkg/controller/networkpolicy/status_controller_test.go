@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -365,6 +366,53 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 		DesiredNodesRealized: 2,
 		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
+}
+
+func TestAntreaNetworkPolicyRealizationFailureRecovery(t *testing.T) {
+	for _, ref := range []*controlplane.NetworkPolicyReference{
+		newAntreaNetworkPolicyReference("ns1", "policy1"),
+		newAntreaClusterNetworkPolicyReference("policy1"),
+	} {
+		t.Run(string(ref.Type), func(t *testing.T) {
+			policy := newInternalNetworkPolicy("policy1", 1, []string{"node1", "node2"}, ref)
+			c, _, _, policyStore, statusControl := newTestStatusController()
+			t.Cleanup(c.queue.ShutDown)
+			require.NoError(t, policyStore.Create(policy))
+			require.NoError(t, c.UpdateStatus(newNetworkPolicyStatus(policy.Name, "node2", 1, "")))
+			for _, step := range []struct {
+				name          string
+				message       string
+				expectedPhase crdv1beta1.NetworkPolicyPhase
+				currentNodes  int32
+			}{
+				{"realized", "", crdv1beta1.NetworkPolicyRealized, 2},
+				{"address update failed", "address update failed", crdv1beta1.NetworkPolicyFailed, 1},
+				{"retry succeeded", "", crdv1beta1.NetworkPolicyRealized, 2},
+			} {
+				t.Run(step.name, func(t *testing.T) {
+					require.NoError(t, c.UpdateStatus(newNetworkPolicyStatus(policy.Name, "node1", 1, step.message)))
+					require.NoError(t, c.syncHandler(policy.Name))
+					status := statusControl.getAntreaNetworkPolicyStatus()
+					if ref.Type == controlplane.AntreaClusterNetworkPolicy {
+						status = statusControl.getAntreaClusterNetworkPolicyStatus()
+					}
+					require.NotNil(t, status)
+					conditions := GenerateNetworkPolicyCondition(nil)
+					if step.message != "" {
+						conditions = generateRealizationFailureConditions(1, `"node1":"address update failed"`)
+					}
+					expectedStatus := crdv1beta1.NetworkPolicyStatus{
+						Phase:                step.expectedPhase,
+						ObservedGeneration:   1,
+						CurrentNodesRealized: step.currentNodes,
+						DesiredNodesRealized: 2,
+						Conditions:           conditions,
+					}
+					assert.True(t, NetworkPolicyStatusEqual(expectedStatus, *status), "expected %+v, got %+v", expectedStatus, *status)
+				})
+			}
+		})
+	}
 }
 
 func TestDeleteAntreaNetworkPolicy(t *testing.T) {
