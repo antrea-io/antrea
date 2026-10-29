@@ -417,14 +417,23 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdateNS(t *testing.T) {
 
 	// Update NS label to match the Stretched NetworkPolicy selector.
 	if err = data.updateNamespace(eastCluster, multiClusterTestNamespace, func(ns *corev1.Namespace) { ns.Labels["foo"] = "bar" }); err != nil {
-		t.Errorf("Failure -- fail to update multiClusterTestNamespace: %v", err)
+		t.Fatalf("Failure -- fail to update multiClusterTestNamespace: %v", err)
 	}
 
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
-
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	// Namespace label propagation and policy realization span multiple clusters.
+	// The API update can complete before the new selector is enforced on traffic.
+	require.Eventually(t, func() bool {
+		for _, client := range []string{eastGwClientName, eastRegularClientName} {
+			connectivity := data.probeFromPodInCluster(
+				eastCluster, multiClusterTestNamespace, client, "client", westExpSvcIP,
+				mcWestClusterTestService, 80, corev1.ProtocolTCP,
+			)
+			if connectivity != antreae2e.Dropped {
+				return false
+			}
+		}
+		return true
+	}, defaultTimeout, time.Second, "Both clients must be dropped after the Namespace label update")
 
 	// Revert Namespace Label update.
 	if err = data.updateNamespace(eastCluster, multiClusterTestNamespace, func(ns *corev1.Namespace) { delete(ns.Labels, "foo") }); err != nil {

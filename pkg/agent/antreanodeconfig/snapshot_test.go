@@ -38,3 +38,15 @@ func TestSnapshotDeepCopy(t *testing.T) {
 		assert.NotSame(t, s.AntreaNodeConfig, cp.AntreaNodeConfig)
 	})
 }
+
+func TestSnapshotIgnoresStatusUpdates(t *testing.T) {
+	cfg := &crdv1alpha1.AntreaNodeConfig{ObjectMeta: metav1.ObjectMeta{Name: "anc", UID: "uid", Generation: 1}}
+	before := NewSnapshot(cfg, nil)
+	cfg.ResourceVersion = "2"
+	cfg.Finalizers = []string{"cleanup"}
+	cfg.Status.ObservedGeneration = 1
+	cfg.Status.Conditions = []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue}}
+	assert.Equal(t, before, NewSnapshot(cfg, nil))
+	cfg.Generation++
+	assert.NotEqual(t, before, NewSnapshot(cfg, nil))
+}

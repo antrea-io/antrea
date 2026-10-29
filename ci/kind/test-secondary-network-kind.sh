@@ -44,10 +44,14 @@ ANTREA_CHART="$THIS_DIR/../../build/charts/antrea"
 SECONDARY_OVS_BRIDGES_JSON='[{"bridgeName":"br-secondary","physicalInterfaces":["eth1"]}]'
 
 TIMEOUT="5m"
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"
 # Antrea is deployed by this script. Do not deploy it again in the test.
 ANTREA_LOG_DIR="${ANTREA_LOG_DIR:-${PWD}/log}"
 mkdir -p "$ANTREA_LOG_DIR"
 TEST_OPTIONS=(--logs-export-dir="$ANTREA_LOG_DIR" --deploy-antrea=false)
+if [[ -n "${KUBECONFIG:-}" ]]; then
+  TEST_OPTIONS+=(--kind.kubeconfig="$KUBECONFIG")
+fi
 # Subnets for extra Docker bridge networks: eth1 (static bridge), eth2 & eth3 (VLAN-tagged bridges).
 EXTRA_NETWORKS="20.20.20.0/24 20.20.21.0/24 20.20.22.0/24"
 
@@ -64,12 +68,12 @@ function quit {
     exit $result
   fi
   echoerr "Cleaning testbed"
-  $TESTBED_CMD destroy kind
+  $TESTBED_CMD destroy "$KIND_CLUSTER_NAME"
 }
 
 function cleanup_stale_kind {
   echoerr "Cleaning up stale kind cluster and Docker networks if any"
-  $TESTBED_CMD destroy kind 2>/dev/null || true
+  $TESTBED_CMD destroy "$KIND_CLUSTER_NAME" 2>/dev/null || true
 }
 
 while [[ $# -gt 0 ]]
@@ -101,7 +105,7 @@ esac
 done
 
 if [[ $cleanup_only == "true" ]];then
-  $TESTBED_CMD destroy kind
+  $TESTBED_CMD destroy "$KIND_CLUSTER_NAME"
   exit 0
 fi
 
@@ -116,7 +120,7 @@ printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 function setup_cluster {
   args=$1
   echo "creating test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind --ip-family dual $args"
+  eval "timeout 600 $TESTBED_CMD create \"$KIND_CLUSTER_NAME\" --ip-family dual $args"
 }
 
 function docker_bridge_for_network {
@@ -306,7 +310,7 @@ function run_test_with_antreanodeconfigs {
 
   echo "Verifying static bridge configuration takes precedence over AntreaNodeConfig and traffic still works"
   go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network \
-    -run='^(TestSecondaryOVSBridgeName|TestVLANNetwork)$' -expected-secondary-bridge-name=br-secondary -provider=kind "${TEST_OPTIONS[@]}"
+    -run='^(TestSecondaryOVSBridgeName|TestVLANNetwork|TestAntreaNodeConfigStaticOverride)$' -expected-secondary-bridge-name=br-secondary -provider=kind "${TEST_OPTIONS[@]}"
 
   echo "Removing the static secondary bridge configuration so AntreaNodeConfig takes effect"
   set_secondary_network_static_bridge_config '[]'
@@ -329,6 +333,9 @@ function run_test_with_antreanodeconfigs {
 
   echo "Removing the static secondary bridge configuration for further AntreaNodeConfig tests"
   set_secondary_network_static_bridge_config '[]'
+  echo "Verifying AntreaNodeConfig status, drain, failure, and deletion reporting"
+  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network \
+    -run='^TestAntreaNodeConfigStatus$' -provider=kind "${TEST_OPTIONS[@]}"
   echo "Applying AntreaNodeConfig for a secondary OVS bridge without an uplink"
   kubectl apply -f "$ANTREA_NODE_CONFIG_NO_UPLINK_YAML"
   sleep 10
@@ -345,6 +352,14 @@ function run_test_with_antreanodeconfigs {
   sleep 10
   go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network \
     -run='^TestNodePoolsVLANNetwork$' -provider=kind "${TEST_OPTIONS[@]}"
+
+  echo "Cleaning up NodePool configurations before testing disabled SecondaryNetwork status"
+  kubectl delete -f "$ANTREA_NODE_CONFIGS_NODEPOOL_YAML"
+  helm upgrade antrea "$ANTREA_CHART" --namespace kube-system --reuse-values \
+    --set featureGates.SecondaryNetwork=false
+  kubectl rollout status --timeout=5m daemonset.apps/antrea-agent -n kube-system
+  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network \
+    -run='^TestAntreaNodeConfigDisabledStatus$' -provider=kind "${TEST_OPTIONS[@]}"
 }
 
 echo "======== Testing Antrea-native secondary network support =========="

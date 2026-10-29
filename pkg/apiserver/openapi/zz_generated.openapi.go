@@ -89,6 +89,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.AntreaAgentInfoList{}.OpenAPIModelName():                  schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
 		v1beta1.AntreaControllerInfo{}.OpenAPIModelName():                 schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		v1beta1.AntreaControllerInfoList{}.OpenAPIModelName():             schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName():          schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref),
 		v1beta1.AppliedTo{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
 		v1beta1.Bandwidth{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
 		v1beta1.ClusterGroup{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
@@ -147,6 +148,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.PeerService{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_PeerService(ref),
 		v1beta1.PodOwner{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_PodOwner(ref),
 		v1beta1.Rule{}.OpenAPIModelName():                                 schema_pkg_apis_crd_v1beta1_Rule(ref),
+		v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName():               schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref),
 		v1beta1.Source{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_Source(ref),
 		v1beta1.StatefulSetOwner{}.OpenAPIModelName():                     schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
 		v1beta1.SubnetInfo{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
@@ -2960,11 +2962,17 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Ref:         ref(v1beta1.NetworkInfo{}.OpenAPIModelName()),
 						},
 					},
+					"nodeConfigStatus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeConfigStatus reports the effective AntreaNodeConfig and secondary network realization.",
+							Ref:         ref(v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3158,6 +3166,56 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 		},
 		Dependencies: []string{
 			v1beta1.AntreaControllerInfo{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization. An empty ConfigUID means that the report does not identify a selected configuration, including when configuration support is disabled or the Agent is initializing.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nodeUID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeUID identifies the Node incarnation reporting this status.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigName is the name of the selected AntreaNodeConfig, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configUID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigUID identifies the selected AntreaNodeConfig incarnation, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastHeartbeatTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastHeartbeatTime is updated whenever this report is published.",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"secondaryNetwork": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecondaryNetwork reports realization of the selected secondary network configuration.",
+							Ref:         ref(v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"nodeUID", "lastHeartbeatTime"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -5847,6 +5905,50 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 		},
 		Dependencies: []string{
 			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.L7Protocol{}.OpenAPIModelName(), v1beta1.NetworkPolicyPeer{}.OpenAPIModelName(), v1beta1.NetworkPolicyPort{}.OpenAPIModelName(), v1beta1.NetworkPolicyProtocol{}.OpenAPIModelName(), v1beta1.PeerService{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SecondaryNetworkStatus describes secondary network configuration realization on a Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"currentBridge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"desiredBridge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DesiredBridge is the desired secondary OVS bridge, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions includes Ready with the configuration generation observed by this feature.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"conditions"},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 

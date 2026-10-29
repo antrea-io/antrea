@@ -72,15 +72,37 @@ func (provider *KindProvider) enableKubectlOnControlPlane() error {
 func NewKindProvider(configPath string) (ProviderInterface, error) {
 	provider := &KindProvider{}
 	// Run docker ps to fetch control-plane Node name
-	rc, stdout, _, err := exec.RunDockerPsFilterCommand("name=control-plane")
+	filter := "name=control-plane"
+	clusterName := os.Getenv("KIND_CLUSTER_NAME")
+	if clusterName != "" {
+		filter = "name=" + clusterName + "-control-plane$"
+	}
+	rc, stdout, _, err := exec.RunDockerPsFilterCommand(filter)
 	if err != nil || rc != 0 {
 		return nil, fmt.Errorf("Error when running docker ps filter command: %s", stdout)
 	}
-	slicedOutput := strings.Fields(stdout)
-	provider.controlPlaneNodeName = slicedOutput[len(slicedOutput)-1]
+	provider.controlPlaneNodeName, err = kindControlPlaneNodeName(stdout, clusterName)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := provider.enableKubectlOnControlPlane(); err != nil {
 		return nil, err
 	}
 	return provider, nil
+}
+
+func kindControlPlaneNodeName(stdout, clusterName string) (string, error) {
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	if len(lines) < 2 || (clusterName != "" && len(lines) != 2) {
+		return "", fmt.Errorf("expected a Kind control-plane container, docker ps returned %d rows", len(lines)-1)
+	}
+	// Multi-cluster tests intentionally run several Kind clusters and address
+	// their Nodes explicitly. Preserve the default of using the last match
+	// when no particular cluster was requested.
+	fields := strings.Fields(lines[len(lines)-1])
+	if len(fields) == 0 {
+		return "", fmt.Errorf("missing Kind control-plane container name")
+	}
+	return fields[len(fields)-1], nil
 }
