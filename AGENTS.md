@@ -133,6 +133,9 @@ Follow the guidelines from [How to Write a Git Commit Message](https://cbea.ms/g
 
 ### Commit Requirements
 
+- **Run the linter locally before every commit**: A change is not ready for commit
+  until `make golangci` passes, including its Linux and Windows checks. Fix all
+  reported issues and rerun it after any subsequent code changes.
 - **All commits must be signed**: Use `git commit -s` to sign your commits
 - **Clear descriptions**: Write clear, concise commit messages
 - **Atomic commits**: Each commit should represent a single logical change

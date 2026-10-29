@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -52,6 +53,7 @@ import (
 type fakeStream struct {
 	ctx       context.Context
 	responses []*flowpb.GetFlowsResponse
+	sendErr   error
 	// onSend, if set, runs synchronously from within Send, letting a test inject work (e.g.
 	// producing more items) at an exact point in GetFlows' execution, such as right as the
 	// handshake response goes out.
@@ -61,7 +63,11 @@ type fakeStream struct {
 func newFakeStream(ctx context.Context) *fakeStream { return &fakeStream{ctx: ctx} }
 
 func (f *fakeStream) Send(r *flowpb.GetFlowsResponse) error {
-	f.responses = append(f.responses, r)
+	if f.sendErr != nil {
+		return f.sendErr
+	}
+	// Retain what was sent, even when the service reuses its batch slice on the next read.
+	f.responses = append(f.responses, proto.Clone(r).(*flowpb.GetFlowsResponse))
 	if onSend := f.onSend; onSend != nil {
 		onSend(r)
 	}

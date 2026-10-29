@@ -497,6 +497,11 @@ func (x *ResumeToken) GetSequenceNumber() int64 {
 }
 
 // GetFlowsResponse carries a batch of flow records from the server.
+// The complete serialized protobuf response is at most 4 MiB, so clients can use
+// the default gRPC receive limit. Some space is reserved for response metadata.
+// An individual authorized flow whose encoded entry exceeds the remaining byte
+// budget is skipped and counted in dropped_count; it does not count towards the
+// request's max_count.
 type GetFlowsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The matching flow records. Empty in the first response of every stream,
@@ -506,7 +511,8 @@ type GetFlowsResponse struct {
 	Flows []*Flow `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
 	// Number of flows dropped because the consumer fell behind and the ring
 	// buffer wrapped around, or because a resume request named a
-	// sequence_number that had already fallen out of the ring buffer.
+	// sequence_number that had already fallen out of the ring buffer, or because
+	// an individual authorized flow exceeded the flow byte budget.
 	// Cumulative since the start of the stream.
 	//
 	// A 0 is a confirmed "nothing was lost" only once records have been
@@ -525,7 +531,7 @@ type GetFlowsResponse struct {
 	// authorization and the client's own filters also remove records from
 	// flows without those being drops, so a client comparing sequence-number
 	// deltas against the length of flows cannot tell a redacted or filtered-out
-	// record from an evicted one.
+	// record from a dropped one.
 	DroppedCount uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
 	// The ring-buffer position accounted for as of this response: every
 	// record up to and including it was either sent in flows, counted in
