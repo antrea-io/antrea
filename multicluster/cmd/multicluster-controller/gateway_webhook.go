@@ -39,9 +39,12 @@ const (
 
 // Gateway validator
 type gatewayValidator struct {
-	Client    client.Client
-	decoder   admission.Decoder
+	Client  client.Client
+	decoder admission.Decoder
+	// namespace is the Namespace of antrea-mc-controller.
 	namespace string
+	// antreaNamespace is the Namespace of antrea-agent.
+	antreaNamespace string
 }
 
 // Handle handles admission requests.
@@ -61,11 +64,19 @@ func (v *gatewayValidator) Handle(ctx context.Context, req admission.Request) ad
 			klog.ErrorS(err, "Error getting ServiceAccount name", "Gateway", req.Namespace+"/"+req.Name)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if saNamespace != v.namespace {
-			return admission.Denied(fmt.Sprintf("ServiceAccount %q is not in Namespace %q", ui.Username, v.namespace))
-		}
-		if saName != mcControllerSAName && saName != antreaAgentSAName {
+		// Each allowed ServiceAccount must be in its own expected Namespace, so that a
+		// same-named ServiceAccount in another Namespace cannot create or update Gateways.
+		var expectedNamespace string
+		switch saName {
+		case mcControllerSAName:
+			expectedNamespace = v.namespace
+		case antreaAgentSAName:
+			expectedNamespace = v.antreaNamespace
+		default:
 			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("Gateway can only be created or updated by Antrea Agent or Multi-cluster Controller"))
+		}
+		if saNamespace != expectedNamespace {
+			return admission.Denied(fmt.Sprintf("ServiceAccount %q is not in Namespace %q", ui.Username, expectedNamespace))
 		}
 	}
 	return admission.Allowed("")

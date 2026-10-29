@@ -18,10 +18,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -56,7 +58,11 @@ type Options struct {
 	ClusterCalimCRDAvailable bool
 	// WebhookConfig contains the controllers webhook configuration
 	WebhookConfig mcsv1alpha1.ControllerWebhook
+	// The Namespace in which Antrea Agent is running.
+	AntreaNamespace string
 }
+
+const defaultAntreaNamespace = "kube-system"
 
 func newOptions() *Options {
 	return &Options{
@@ -100,6 +106,12 @@ func (o *Options) complete(args []string) error {
 			o.EndpointIPType = ctrlConfig.EndpointIPType
 		}
 		o.EnableStretchedNetworkPolicy = ctrlConfig.EnableStretchedNetworkPolicy
+		if ctrlConfig.AntreaNamespace != "" {
+			if errs := validation.IsDNS1123Label(ctrlConfig.AntreaNamespace); len(errs) > 0 {
+				return fmt.Errorf("invalid antreaNamespace: %s, %s", ctrlConfig.AntreaNamespace, strings.Join(errs, "; "))
+			}
+			o.AntreaNamespace = ctrlConfig.AntreaNamespace
+		}
 		klog.InfoS("Using config from file", "config", o.configFile)
 	} else {
 		klog.InfoS("Using default config")
@@ -120,6 +132,7 @@ func (o *Options) setDefaults() {
 		},
 		HealthProbeBindAddress: ":8080",
 	}
+	o.AntreaNamespace = defaultAntreaNamespace
 }
 
 func (o *Options) loadConfig(data []byte, multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {

@@ -62,9 +62,10 @@ func runMember(o *Options) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-gateway",
 		&webhook.Admission{Handler: &gatewayValidator{
-			Client:    mgrClient,
-			decoder:   admission.NewDecoder(mgr.GetScheme()),
-			namespace: podNamespace,
+			Client:          mgrClient,
+			decoder:         admission.NewDecoder(mgr.GetScheme()),
+			namespace:       podNamespace,
+			antreaNamespace: o.AntreaNamespace,
 		}},
 	)
 
