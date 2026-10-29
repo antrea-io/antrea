@@ -2974,6 +2974,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 
 	expectedFlows = append(expectedFlows, replayedFlows...)
 
+	bridge.EXPECT().ResetFlowTableStatus()
 	bridge.EXPECT().DeleteGroupAll().Return(nil).Times(1)
 	bridge.EXPECT().DeleteMeterAll().Return(nil).Times(1)
 
@@ -3034,9 +3035,78 @@ func Test_client_ReplayFlows(t *testing.T) {
 		expectNewMeter(uint32(meterCfg.id), meterCfg.rate, meterCfg.rate*2, ofctrl.MeterPktps, false)
 	}
 
-	fc.ReplayFlows()
+	require.NoError(t, fc.ReplayFlows())
 	assert.ElementsMatch(t, expectedFlows, actualFlows)
 	assert.ElementsMatch(t, expectedGroups, actualGroups)
+}
+
+// Test_client_ReplayFlowsError verifies that ReplayFlows reports a failure of any replay step,
+// so that the caller retries, while still replaying the remaining entries.
+func Test_client_ReplayFlowsError(t *testing.T) {
+	replayErr := ofctrl.ErrBundleCommitReplyTimeout
+	for _, tc := range []struct {
+		name string
+		// failDefaultFlows makes the installation of the default flows fail, which aborts
+		// initialize before the initial groups and flows of features are installed.
+		failDefaultFlows bool
+		// failFeatureFlowsIndex is the index in activatedFeatures of the feature whose flow
+		// replay fails, or -1.
+		failFeatureFlowsIndex int
+		expectedErrString     string
+	}{
+		{
+			name:                  "default flows installation fails",
+			failDefaultFlows:      true,
+			failFeatureFlowsIndex: -1,
+			expectedErrString:     "failed to install default flows",
+		},
+		{
+			name:                  "feature flows replay fails",
+			failFeatureFlowsIndex: 0,
+			expectedErrString:     "failed to replay feature PodConnectivity flows",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := opstest.NewMockOFEntryOperations(ctrl)
+			bridge := ovsoftest.NewMockBridge(ctrl)
+			fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge)
+			defer resetPipelines()
+			numFeatures := len(fc.activatedFeatures)
+			require.Equal(t, "PodConnectivity", fc.activatedFeatures[0].getFeatureName())
+
+			// OVS meters are disabled in the fake client, so no meter is deleted or installed.
+			bridge.EXPECT().ResetFlowTableStatus()
+			bridge.EXPECT().DeleteGroupAll().Return(nil)
+			var calls []any
+			if tc.failDefaultFlows {
+				calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(replayErr))
+				// initialize returns before installing the initial groups of features, so only
+				// the replayed groups are installed.
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(numFeatures)
+			} else {
+				calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(nil))
+				for range numFeatures {
+					calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(nil))
+				}
+				// The initial and the replayed groups of every feature are installed.
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(2 * numFeatures)
+			}
+			for i := range numFeatures {
+				// Every feature replays its flows, even after a previous step failed.
+				err := error(nil)
+				if i == tc.failFeatureFlowsIndex {
+					err = replayErr
+				}
+				calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(err))
+			}
+			gomock.InOrder(calls...)
+
+			err := fc.ReplayFlows()
+			require.ErrorIs(t, err, replayErr)
+			assert.ErrorContains(t, err, tc.expectedErrString)
+		})
+	}
 }
 
 func TestCachedFlowIsDrop(t *testing.T) {

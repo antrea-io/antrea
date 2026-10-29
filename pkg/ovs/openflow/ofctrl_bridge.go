@@ -392,14 +392,21 @@ func (b *OFBridge) TLVMapEnabledOnSwitch() bool {
 // Initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) Initialize() {
 	b.Lock()
-	defer b.Unlock()
-
 	for id, table := range b.tableCache {
 		table.Table = ofctrl.NewTable(id, b.getOFSwitch())
-		// reset flow counts, which is needed for reconnections
+	}
+	b.Unlock()
+	b.ResetFlowTableStatus()
+}
+
+// ResetFlowTableStatus resets cached flow counts and their metrics before a full replay.
+func (b *OFBridge) ResetFlowTableStatus() {
+	b.Lock()
+	defer b.Unlock()
+
+	for _, table := range b.tableCache {
 		table.ResetStatus()
 	}
-
 	metrics.OVSTotalFlowCount.Set(0)
 }
 
