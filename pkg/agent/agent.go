@@ -79,6 +79,10 @@ const (
 	ovsTunnelMaxMTU = 65000
 	// staleFlowDeleteRetryInterval is the wait between DeleteStaleFlows attempts on error.
 	staleFlowDeleteRetryInterval = 2 * time.Second
+	// replayFlowsInitialRetryDelay and replayFlowsMaxRetryDelay bound the exponential backoff
+	// between ReplayFlows attempts on error.
+	replayFlowsInitialRetryDelay = 1 * time.Second
+	replayFlowsMaxRetryDelay     = 30 * time.Second
 )
 
 var (
@@ -590,41 +594,81 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		persistRoundNum(roundInfo.RoundNum, i.ovsBridgeClient, 1*time.Second, maxRetryForRoundNumSave)
 	}()
 
-	go func() {
-		for {
-			if _, ok := <-ofConnCh; !ok {
+	go i.replayFlowsOnReconnection(ofConnCh, i.restoreOVSConfigsAfterReplay)
+
+	return nil
+}
+
+// replayFlowsOnReconnection replays the flows, groups and meters cached by the OpenFlow client
+// every time ofConnCh notifies a reconnection to OVS, and then calls afterReplay. It returns when
+// ofConnCh or stopCh is closed.
+//
+// A replay can fail part way, e.g. if OVS is too slow to acknowledge a bundle before it times
+// out. Because ReplayFlows starts by deleting all groups and meters, a failed replay can leave
+// OVS without entries that are never installed again otherwise, such as the NetworkPolicy
+// logging groups, which would cause all subsequent installations of flows referencing them to
+// fail. Failed replays are therefore retried with exponential backoff until one succeeds. A new
+// reconnection resets the backoff, since it triggers a full replay anyway.
+func (i *Initializer) replayFlowsOnReconnection(ofConnCh <-chan struct{}, afterReplay func()) {
+	var retryCh <-chan time.Time
+	retryDelay := replayFlowsInitialRetryDelay
+	replay := func() {
+		if err := i.ofClient.ReplayFlows(); err != nil {
+			klog.ErrorS(err, "Flow replay failed, will retry", "retryDelay", retryDelay)
+			retryCh = time.After(retryDelay)
+			retryDelay = min(2*retryDelay, replayFlowsMaxRetryDelay)
+			return
+		}
+		klog.Info("Flow replay completed")
+		retryCh = nil
+	}
+	for {
+		select {
+		case _, ok := <-ofConnCh:
+			if !ok {
 				return
 			}
 			klog.Info("Replaying OF flows to OVS bridge")
-			i.ofClient.ReplayFlows()
-			klog.Info("Flow replay completed")
-
-			klog.InfoS("Restoring OF port configs to OVS bridge")
-			if err := i.restorePortConfigs(); err != nil {
-				klog.ErrorS(err, "Failed to restore OF port configs")
-			} else {
-				klog.InfoS("Port configs restoration completed")
-			}
-			// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
-			// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
-			// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
-			// to ensure the flag can be removed successfully.
-			err = wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 10*time.Second, true,
-				func(ctx context.Context) (done bool, err error) {
-					if err := i.FlowRestoreComplete(); err != nil {
-						return false, nil
-					}
-					return true, nil
-				})
-			// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
-			// to clean up the config again so an error log should be fine.
-			if err != nil {
-				klog.Errorf("Failed to clean up flow-restore-wait config: %v", err)
-			}
+			retryDelay = replayFlowsInitialRetryDelay
+			replay()
+			// This is done even if the replay failed: retries may take a while, and the
+			// flow-restore-wait config would otherwise prevent OVS from installing new
+			// datapath flows in the meantime.
+			afterReplay()
+		case <-retryCh:
+			klog.Info("Retrying replay of OF flows to OVS bridge")
+			replay()
+		case <-i.stopCh:
+			return
 		}
-	}()
+	}
+}
 
-	return nil
+// restoreOVSConfigsAfterReplay restores the OF port configs and removes the flow-restore-wait
+// config after flows have been replayed to OVS.
+func (i *Initializer) restoreOVSConfigsAfterReplay() {
+	klog.InfoS("Restoring OF port configs to OVS bridge")
+	if err := i.restorePortConfigs(); err != nil {
+		klog.ErrorS(err, "Failed to restore OF port configs")
+	} else {
+		klog.InfoS("Port configs restoration completed")
+	}
+	// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
+	// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
+	// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
+	// to ensure the flag can be removed successfully.
+	err := wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 10*time.Second, true,
+		func(ctx context.Context) (done bool, err error) {
+			if err := i.FlowRestoreComplete(); err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+	// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
+	// to clean up the config again so an error log should be fine.
+	if err != nil {
+		klog.ErrorS(err, "Failed to clean up flow-restore-wait config")
+	}
 }
 
 func (i *Initializer) FlowRestoreComplete() error {

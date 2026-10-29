@@ -1128,3 +1128,144 @@ func TestDeleteStaleFlowsWithRetry(t *testing.T) {
 		})
 	})
 }
+
+func TestReplayFlowsOnReconnection(t *testing.T) {
+	testErr := errors.New("bundle reply is timeout")
+
+	// start runs replayFlowsOnReconnection in the background. It returns the channel used to
+	// notify reconnections, a function returning the number of afterReplay calls, and a channel
+	// closed when replayFlowsOnReconnection returns.
+	start := func(initializer *Initializer) (chan struct{}, func() int, chan struct{}) {
+		ofConnCh := make(chan struct{})
+		afterReplayCalls := 0
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			initializer.replayFlowsOnReconnection(ofConnCh, func() { afterReplayCalls++ })
+		}()
+		return ofConnCh, func() int { return afterReplayCalls }, done
+	}
+
+	// expectReplays expects ReplayFlows to be called once for each of results, in order, and
+	// returns the times of the calls, relative to the start of the test. All expectations must be
+	// set before replayFlowsOnReconnection starts, as gomock does not support setting them
+	// concurrently with calls. The returned times must only be read after
+	// replayFlowsOnReconnection has returned.
+	expectReplays := func(mockOFClient *openflowtest.MockClient, results ...error) *[]time.Duration {
+		testStart := time.Now()
+		var replayTimes []time.Duration
+		calls := make([]any, 0, len(results))
+		for _, result := range results {
+			calls = append(calls, mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
+				replayTimes = append(replayTimes, time.Since(testStart))
+				return result
+			}))
+		}
+		mock.InOrder(calls...)
+		return &replayTimes
+	}
+
+	t.Run("retries failed replay with backoff until it succeeds", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			replayTimes := expectReplays(mockOFClient, testErr, testErr, nil)
+			stopCh := make(chan struct{})
+			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
+			ofConnCh, afterReplayCalls, done := start(initializer)
+
+			ofConnCh <- struct{}{}
+			synctest.Wait()
+			// OVS configs are restored right after the first replay, even if it failed.
+			assert.Equal(t, 1, afterReplayCalls())
+
+			// No more replay after a successful one, and OVS configs are not restored again.
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
+			synctest.Wait()
+			assert.Equal(t, 1, afterReplayCalls())
+
+			close(stopCh)
+			<-done
+			// The retry delay doubles after each failure.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, *replayTimes)
+		})
+	})
+
+	t.Run("retry delay is capped", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			var replayTimes []time.Time
+			mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
+				replayTimes = append(replayTimes, time.Now())
+				return testErr
+			}).AnyTimes()
+			stopCh := make(chan struct{})
+			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
+			ofConnCh, _, done := start(initializer)
+
+			expectedDelays := []time.Duration{
+				1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second,
+				30 * time.Second, 30 * time.Second, 30 * time.Second,
+			}
+			var total time.Duration
+			for _, d := range expectedDelays {
+				total += d
+			}
+			ofConnCh <- struct{}{}
+			// Stop half-way between the last expected retry and the next one.
+			time.Sleep(total + replayFlowsMaxRetryDelay/2)
+			synctest.Wait()
+			close(stopCh)
+			<-done
+
+			var delays []time.Duration
+			for i := 1; i < len(replayTimes); i++ {
+				delays = append(delays, replayTimes[i].Sub(replayTimes[i-1]))
+			}
+			assert.Equal(t, expectedDelays, delays)
+		})
+	})
+
+	t.Run("reconnection triggers an immediate replay and resets the retry delay", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			replayTimes := expectReplays(mockOFClient, testErr, testErr, testErr, nil)
+			stopCh := make(chan struct{})
+			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
+			ofConnCh, afterReplayCalls, done := start(initializer)
+
+			ofConnCh <- struct{}{}
+			time.Sleep(replayFlowsInitialRetryDelay)
+			synctest.Wait()
+
+			// The next retry is due in 2s; a reconnection replays immediately instead.
+			ofConnCh <- struct{}{}
+			synctest.Wait()
+			assert.Equal(t, 2, afterReplayCalls())
+
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
+			synctest.Wait()
+			close(stopCh)
+			<-done
+			// After the reconnection, the retry delay is reset to its initial value.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 1 * time.Second, 2 * time.Second}, *replayTimes)
+		})
+	})
+
+	t.Run("returns when ofConnCh is closed", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			expectReplays(mockOFClient, testErr)
+			initializer := &Initializer{ofClient: mockOFClient, stopCh: make(chan struct{})}
+			ofConnCh, _, done := start(initializer)
+
+			ofConnCh <- struct{}{}
+			synctest.Wait()
+			close(ofConnCh)
+			<-done
+		})
+	})
+}

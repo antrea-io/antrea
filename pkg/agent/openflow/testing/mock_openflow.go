@@ -729,9 +729,11 @@ func (mr *MockClientMockRecorder) RegisterPacketInHandler(packetHandlerReason, p
 }
 
 // ReplayFlows mocks base method.
-func (m *MockClient) ReplayFlows() {
+func (m *MockClient) ReplayFlows() error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ReplayFlows")
+	ret := m.ctrl.Call(m, "ReplayFlows")
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // ReplayFlows indicates an expected call of ReplayFlows.
