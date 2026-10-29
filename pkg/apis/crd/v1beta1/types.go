@@ -17,6 +17,7 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -52,6 +53,36 @@ type AntreaAgentInfo struct {
 	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
 	// Network information
 	NetworkInfo NetworkInfo `json:"networkInfo,omitempty"`
+	// NodeConfigStatus reports the effective AntreaNodeConfig and secondary network realization.
+	// +optional
+	NodeConfigStatus *AntreaNodeConfigAgentStatus `json:"nodeConfigStatus,omitempty"`
+}
+
+// AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization.
+// An empty ConfigUID means that the report does not identify a selected configuration,
+// including when configuration support is disabled or the Agent is initializing.
+type AntreaNodeConfigAgentStatus struct {
+	// NodeUID identifies the Node incarnation reporting this status.
+	NodeUID types.UID `json:"nodeUID"`
+	// ConfigName is the name of the selected AntreaNodeConfig, if any.
+	ConfigName string `json:"configName,omitempty"`
+	// ConfigUID identifies the selected AntreaNodeConfig incarnation, if any.
+	ConfigUID types.UID `json:"configUID,omitempty"`
+	// LastHeartbeatTime is updated whenever this report is published.
+	LastHeartbeatTime metav1.Time `json:"lastHeartbeatTime"`
+	// SecondaryNetwork reports realization of the selected secondary network configuration.
+	// +optional
+	SecondaryNetwork *SecondaryNetworkStatus `json:"secondaryNetwork,omitempty"`
+}
+
+// SecondaryNetworkStatus describes secondary network configuration realization on a Node.
+type SecondaryNetworkStatus struct {
+	// CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.
+	CurrentBridge string `json:"currentBridge,omitempty"`
+	// DesiredBridge is the desired secondary OVS bridge, if any.
+	DesiredBridge string `json:"desiredBridge,omitempty"`
+	// Conditions includes Ready with the configuration generation observed by this feature.
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type OVSInfo struct {

@@ -288,6 +288,17 @@ jobs:
     name: Go benchmark test
     runs-on: [ubuntu-latest]
     steps:
+      - name: Free disk space
+        # Compiling every package's test binary alongside the Go module and build
+        # caches can exhaust the hosted runner's disk before benchmarks start.
+        run: |
+          sudo apt-get clean
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf "/usr/local/lib/android"
+          df -h
       - name: Check-out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -297,4 +308,10 @@ jobs:
         with:
           go-version-file: '.go-version'
       - name: Run Go benchmark test
-        run: go test -run '^$' -bench . -benchtime 1x -timeout 10m -cpu 4 -v -benchmem ./pkg/...
+        env:
+          # /tmp can be a small tmpfs on hosted runners, independently of free disk space.
+          GOTMPDIR: ${{ runner.temp }}/go-benchmark
+        run: |
+          mkdir -p "$GOTMPDIR"
+          df -h "$GOTMPDIR"
+          go test -run '^$' -bench . -benchtime 1x -timeout 10m -cpu 4 -v -benchmem ./pkg/...
