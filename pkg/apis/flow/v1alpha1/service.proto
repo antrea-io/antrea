@@ -60,10 +60,18 @@ enum FlowFilterDirection {
 
 // FlowFilter specifies optional criteria to narrow which flows are returned.
 // All specified filters are AND-ed; values within a repeated field are OR-ed.
-// An absent or fully-empty filter matches all flows.
+// An absent or fully-empty filter matches all flows. Filters match a record as
+// the client receives it, so a field withheld from the client matches as if
+// the record did not carry it.
 message FlowFilter {
-  // Match flows where source or destination Pod namespace is in this list
-  // (direction semantics are affected by the direction field).
+  // Match flows where source or destination namespace is in this list
+  // (direction semantics are affected by the direction field). An endpoint's
+  // namespace is its Pod's; a destination without a Pod namespace (e.g. the
+  // backend of default/kubernetes) is in its Service's namespace. The
+  // Service's namespace counts for filters only: GetFlowsRequest.namespaces
+  // admits a record by its Pod namespaces, so a flow from ns-a to
+  // default/kubernetes reaches a stream opened for ns-a, not one opened for
+  // default.
   //
   // A Namespace outside GetFlowsRequest.namespaces is allowed, and is how a
   // flow is selected by its peer rather than by its own end: every record that
@@ -78,10 +86,13 @@ message FlowFilter {
   // Match flows where source or destination Pod labels match this selector.
   // Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
   string pod_label_selector = 3;
-  // Match flows where the destination Service name is in this list.
-  // Provide the plain Service name without a namespace prefix (e.g. "frontend",
-  // not "default/frontend"). The match is exact on the name only; to restrict
-  // to a specific namespace combine this filter with the namespaces field.
+  // Match flows where the destination Service is in this list. An entry is
+  // either a plain Service name (e.g. "frontend"), which matches a Service of
+  // that name in any namespace, or a Service name prefixed by its namespace
+  // (e.g. "default/frontend"), which matches that Service only. The namespaces
+  // field restricts the endpoints, not the Service: to restrict a Service to a
+  // namespace, prefix its name. This filter always matches the destination,
+  // whatever the direction.
   repeated string service_names = 4;
   // Match flows based on their type.
   repeated FlowType flow_types = 5;
@@ -89,7 +100,9 @@ message FlowFilter {
   // direction field). CIDR notation is supported (e.g. "10.0.0.0/8").
   repeated string ips = 6;
   // Controls which endpoint of a flow the directional filters (namespaces,
-  // pod_names, pod_label_selector, ips) are matched against.
+  // pod_names, pod_label_selector, ips) are matched against. All of them are
+  // matched against the same endpoint, so that e.g. namespaces and pod_names
+  // together select a Pod by namespace and name.
   // FROM applies filters to the source (sender) side, TO applies them to the
   // destination (receiver) side, and BOTH (default) matches either side.
   //   BOTH (default) - match source OR destination
