@@ -184,13 +184,15 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
 	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
 	egressGroupStore := store.NewEgressGroupStore()
+	egressAddressGroupStore := store.NewEgressAddressGroupStore()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
-	controller := NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPAllocator, egressGroupStore)
+	controller := NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPAllocator, egressGroupStore,
+		egressAddressGroupStore)
 	return &egressController{
 		controller,
 		client,

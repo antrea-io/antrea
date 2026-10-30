@@ -368,6 +368,12 @@ func TestCalculateMTUDeduction(t *testing.T) {
 			nc:                   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel, EnableEgress: false},
 			expectedMTUDeduction: 0,
 		},
+		{
+			name: "noEncap with Egress enabled and the l2 dispatch",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel,
+				EnableEgress: true, EgressDispatch: EgressDispatchL2},
+			expectedMTUDeduction: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -419,12 +425,116 @@ func TestNeedsTunnelInterface(t *testing.T) {
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: false},
 			expected: false,
 		},
+		{
+			name: "noEncap mode with Egress enabled and the l2 dispatch",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: true,
+				EgressDispatch: EgressDispatchL2},
+			expected: false,
+		},
+		{
+			name: "hybrid mode with Egress enabled and the l2 dispatch",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeHybrid, EnableEgress: true,
+				EgressDispatch: EgressDispatchL2},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := tt.nc.NeedsTunnelInterface()
 			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestEgressDispatchConditions(t *testing.T) {
+	tests := []struct {
+		name                  string
+		nc                    *NetworkConfig
+		expectedL2Dispatch    bool
+		expectedTunnel        bool
+		expectedSymmetricPath bool
+	}{
+		{
+			name:                  "encap mode",
+			nc:                    &NetworkConfig{TrafficEncapMode: TrafficEncapModeEncap, EnableEgress: true},
+			expectedSymmetricPath: false,
+		},
+		{
+			name: "encap mode with WireGuard",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeEncap, TrafficEncryptionMode: TrafficEncryptionModeWireGuard,
+				EnableEgress: true},
+			expectedSymmetricPath: true,
+		},
+		{
+			name:                  "hybrid mode",
+			nc:                    &NetworkConfig{TrafficEncapMode: TrafficEncapModeHybrid, EnableEgress: true},
+			expectedSymmetricPath: true,
+		},
+		{
+			// The validation rejects the l2 dispatch in hybrid mode, where Egress keeps the tunnel.
+			name: "hybrid mode with the l2 dispatch",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeHybrid, EnableEgress: true,
+				EgressDispatch: EgressDispatchL2},
+			expectedSymmetricPath: true,
+		},
+		{
+			name:                  "noEncap mode with the tunnel dispatch",
+			nc:                    &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: true},
+			expectedTunnel:        true,
+			expectedSymmetricPath: true,
+		},
+		{
+			name: "noEncap mode with the l2 dispatch",
+			nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: true,
+				EgressDispatch: EgressDispatchL2},
+			expectedL2Dispatch: true,
+		},
+		{
+			name: "noEncap mode with the l2 dispatch and Egress disabled",
+			nc:   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EgressDispatch: EgressDispatchL2},
+		},
+		{
+			name: "noEncap mode with Egress disabled",
+			nc:   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedL2Dispatch, tt.nc.UsesEgressL2Dispatch(), "UsesEgressL2Dispatch")
+			assert.Equal(t, tt.expectedTunnel, tt.nc.NeedsTunnelInNoEncapMode(), "NeedsTunnelInNoEncapMode")
+			assert.Equal(t, tt.expectedSymmetricPath, tt.nc.NeedsEgressSymmetricPath(tt.nc.EnableEgress),
+				"NeedsEgressSymmetricPath")
+		})
+	}
+}
+
+func TestSupportsL2DispatchToPeer(t *testing.T) {
+	_, localSubnet, _ := net.ParseCIDR("192.168.77.100/24")
+	peerInSubnet := net.ParseIP("192.168.77.101")
+	peerOutOfSubnet := net.ParseIP("192.168.78.101")
+	enabled := func(mode TrafficEncapModeType) *NetworkConfig {
+		return &NetworkConfig{TrafficEncapMode: mode, EnableL2Dispatch: true}
+	}
+	tests := []struct {
+		name     string
+		nc       *NetworkConfig
+		peerIP   net.IP
+		localIP  *net.IPNet
+		expected bool
+	}{
+		{name: "noEncap, peer in the local subnet", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerInSubnet, localIP: localSubnet, expected: true},
+		{name: "hybrid, peer in the local subnet", nc: enabled(TrafficEncapModeHybrid), peerIP: peerInSubnet, localIP: localSubnet, expected: true},
+		{name: "noEncap, peer in another subnet", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerOutOfSubnet, localIP: localSubnet, expected: false},
+		{name: "encap, where Pod traffic is tunneled", nc: enabled(TrafficEncapModeEncap), peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "networkPolicyOnly", nc: enabled(TrafficEncapModeNetworkPolicyOnly), peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "no feature uses the l2 dispatch", nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap}, peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "no local transport address of the family", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerInSubnet, localIP: nil, expected: false},
+		{name: "no peer address of the family", nc: enabled(TrafficEncapModeNoEncap), peerIP: nil, localIP: localSubnet, expected: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.nc.SupportsL2DispatchToPeer(tt.peerIP, tt.localIP))
 		})
 	}
 }

@@ -70,6 +70,21 @@ func (in ClusterGroupMembers) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in EgressAddressGroup) OpenAPIModelName() string {
+	return "io.antrea.controlplane.v1beta2.EgressAddressGroup"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in EgressAddressGroupList) OpenAPIModelName() string {
+	return "io.antrea.controlplane.v1beta2.EgressAddressGroupList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in EgressAddressGroupPatch) OpenAPIModelName() string {
+	return "io.antrea.controlplane.v1beta2.EgressAddressGroupPatch"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in EgressGroup) OpenAPIModelName() string {
 	return "io.antrea.controlplane.v1beta2.EgressGroup"
 }
