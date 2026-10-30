@@ -40,7 +40,8 @@ type featureMulticast struct {
 	groupCache         sync.Map
 	enableAntreaPolicy bool
 
-	category cookie.Category
+	category              cookie.Category
+	ovsMetersAreSupported bool
 }
 
 func (f *featureMulticast) getFeatureName() string {
@@ -58,21 +59,23 @@ func newFeatureMulticast(
 	uplinkPort uint32,
 	hostOFPort uint32,
 	flexibleIPAMEnabled bool,
+	ovsMetersAreSupported bool,
 ) *featureMulticast {
 	return &featureMulticast{
-		cookieAllocator:     cookieAllocator,
-		ipProtocols:         ipProtocols,
-		cachedFlows:         newFlowCategoryCache(),
-		bridge:              bridge,
-		category:            cookie.Multicast,
-		groupCache:          sync.Map{},
-		enableAntreaPolicy:  anpEnabled,
-		gatewayPort:         gwPort,
-		encapEnabled:        encapEnabled,
-		tunnelPort:          tunnelPort,
-		uplinkPort:          uplinkPort,
-		hostOFPort:          hostOFPort,
-		flexibleIPAMEnabled: flexibleIPAMEnabled,
+		cookieAllocator:       cookieAllocator,
+		ipProtocols:           ipProtocols,
+		cachedFlows:           newFlowCategoryCache(),
+		bridge:                bridge,
+		category:              cookie.Multicast,
+		groupCache:            sync.Map{},
+		enableAntreaPolicy:    anpEnabled,
+		gatewayPort:           gwPort,
+		encapEnabled:          encapEnabled,
+		tunnelPort:            tunnelPort,
+		uplinkPort:            uplinkPort,
+		hostOFPort:            hostOFPort,
+		flexibleIPAMEnabled:   flexibleIPAMEnabled,
+		ovsMetersAreSupported: ovsMetersAreSupported,
 	}
 }
 
