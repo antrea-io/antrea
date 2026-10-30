@@ -22,6 +22,7 @@ import (
 	v1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	v1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -99,6 +100,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().Tiers().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("traceflows"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().Traceflows().Informer()}, nil
+
+		// Group=crd.antrea.io, Version=v1beta2
+	case v1beta2.SchemeGroupVersion.WithResource("egresses"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta2().Egresses().Informer()}, nil
+	case v1beta2.SchemeGroupVersion.WithResource("externalippools"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta2().ExternalIPPools().Informer()}, nil
 
 	}
 
