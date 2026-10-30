@@ -337,9 +337,10 @@ spec:
       connectRetrySeconds: 5
 ```
 
-Make sure the peer is configured to propose a compatible hold time: the effective hold time is the smaller of the two
-proposed values, so a peer proposing 90 seconds does not shorten its own detection time just because this Node proposes
-10.
+Both speakers use the smaller of the two proposed hold times, so a peer proposing 90 seconds also uses a hold time of
+10 seconds when this Node proposes 10. Make sure the peer accepts the hold time this Node proposes: some BGP
+implementations can be configured with a minimum hold time and refuse a session that proposes less. If the peer
+proposes a hold time smaller than this Node's, that smaller value applies to both sides instead.
 
 ### Leaving room for jitter
 
@@ -365,8 +366,9 @@ This is not a quirk of small numbers: the default 90 and 30 has exactly the same
 KEEPALIVEs land on the deadline there too. What changes with aggressive timers is the absolute margin. At 90 and 30 a
 session survives unless 60 consecutive seconds of KEEPALIVEs are lost, whereas at 9 and 3 six seconds are enough, which
 a short CPU starvation of the antrea-agent or a brief reconvergence can produce. Short timers are exactly where jitter
-matters, so prefer a hold time slightly above three times the keepalive interval rather than exactly at it. A hold time
-of four times the interval, for example 12 and 3, survives a burst of three lost messages.
+matters, so prefer a hold time slightly above a whole multiple of the keepalive interval rather than exactly at it.
+To survive a burst of three lost messages, use a hold time above four times the interval, for example 13 and 3: with
+12 and 3, the fourth message is sent exactly at the hold deadline, which is the same race as 9 and 3 above.
 
 Antrea only rejects a keepalive interval greater than or equal to the hold time, because such a session can never stay
 up. Everything above is guidance rather than a constraint, so a thinner ratio is accepted if your network calls for it.
