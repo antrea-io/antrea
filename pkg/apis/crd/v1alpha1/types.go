@@ -277,6 +277,23 @@ type BGPPolicySpec struct {
 
 	// BGPPeers is the list of BGP peers.
 	BGPPeers []BGPPeer `json:"bgpPeers,omitempty"`
+
+	// DrainOnTaints makes a Node that carries a NoSchedule or NoExecute taint not tolerated here
+	// withdraw its Service routes while keeping its BGP sessions, Pod routes and Egress routes.
+	// Cordoning a Node adds such a taint, so a cordon moves Service traffic away from the Node
+	// before its Pods are evicted. If omitted, taints have no effect on advertisements.
+	DrainOnTaints *DrainOnTaints `json:"drainOnTaints,omitempty"`
+}
+
+// DrainOnTaints configures how a BGPPolicy reacts to Node taints.
+type DrainOnTaints struct {
+	// Enabled turns the behaviour on. It is required so that an empty block is rejected.
+	Enabled bool `json:"enabled"`
+
+	// Tolerations lists taints that do not cause draining, using the same matching rules as Pod
+	// tolerations. Use it for taints that are permanent on some Nodes, such as
+	// node-role.kubernetes.io/control-plane, and for taints unrelated to maintenance.
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
 }
 
 type Advertisements struct {
