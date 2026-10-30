@@ -43,13 +43,26 @@ func TestKindControlPlaneNodeName(t *testing.T) {
 			want:   "isolated-control-plane",
 		},
 		{name: "explicit cluster rejects ambiguity", stdout: multiple, clusterName: "isolated", wantError: true},
+		{name: "explicit cluster rejects suffix match", stdout: single, clusterName: "ind", wantError: true},
+		{name: "explicit cluster rejects unrelated container", stdout: single, clusterName: "isolated", wantError: true},
+		{name: "explicit cluster missing", stdout: header, clusterName: "isolated", wantError: true},
+		{
+			name: "explicit cluster with regexp metacharacter", clusterName: "kind.test",
+			stdout: header + "id kindest/node command created up ports kind.test-control-plane\n",
+			want:   "kind.test-control-plane",
+		},
+		{
+			name: "explicit cluster rejects regexp wildcard match", clusterName: "kind.test",
+			stdout:    header + "id kindest/node command created up ports kindXtest-control-plane\n",
+			wantError: true,
+		},
 		{name: "no containers", stdout: header, wantError: true},
 		{name: "empty output", wantError: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			name, err := kindControlPlaneNodeName(tt.stdout, tt.clusterName)
 			if tt.wantError {
-				require.Error(t, err)
+				require.Error(t, err, "cluster %q must reject Docker output, got container %q", tt.clusterName, name)
 				return
 			}
 			require.NoError(t, err)
