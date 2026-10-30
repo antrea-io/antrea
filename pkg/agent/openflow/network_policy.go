@@ -657,7 +657,7 @@ func (c *conjMatchFlowContextChange) updateContextStatus() {
 	// Update conjMatchFlowContext.dropFlow.
 	if c.dropFlow != nil {
 		switch c.dropFlow.changeType {
-		case insertion:
+		case insertion, modification:
 			c.context.dropFlow = c.dropFlow.flow
 		case deletion:
 			c.context.dropFlow = nil
