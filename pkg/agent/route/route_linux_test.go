@@ -182,11 +182,14 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 
-	// route1 and route2 should be removed
+	// route1, route2 and route3 are in tables created for Egress and should be removed.
 	route1 := &netlink.Route{Scope: netlink.SCOPE_LINK, Dst: ip.MustParseCIDR("10.10.10.0/24"), LinkIndex: 10, Table: 101}
 	route2 := &netlink.Route{Gw: net.ParseIP("10.10.10.1"), LinkIndex: 10, Table: 101}
-	route3 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1")}
-	route4 := &netlink.Route{Gw: net.ParseIP("192.168.1.1"), LinkIndex: 8}
+	route3 := &netlink.Route{Gw: net.ParseIP("fd00:10::1"), LinkIndex: 11, Table: 120}
+	// route4, route5 and route6 are in other tables and should be kept.
+	route4 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1"), Table: unix.RT_TABLE_MAIN}
+	route5 := &netlink.Route{Gw: net.ParseIP("192.168.1.1"), LinkIndex: 8, Table: unix.RT_TABLE_MAIN}
+	route6 := &netlink.Route{Gw: config.VirtualReplyEgressRouteNextHopIPv4, LinkIndex: 10, Table: types.ReplyEgressRouteTable}
 	// rule1 should be removed
 	rule1 := netlink.NewRule()
 	rule1.Table = 101
@@ -197,10 +200,13 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	rule2.Mark = 10
 	rule2.Mask = ptr.To(types.SNATIPMarkMask)
 
-	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*route1, *route2, *route3, *route4}, nil)
+	// The routes must be listed from all tables, as RouteList would return only the ones in the main table.
+	mockNetlink.EXPECT().RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{Table: unix.RT_TABLE_UNSPEC}, netlink.RT_FILTER_TABLE).Return([]netlink.Route{*route1, *route2, *route3, *route4, *route5, *route6}, nil)
 	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1, *rule2}, nil)
-	mockNetlink.EXPECT().RouteDel(route1)
+	// A route that fails to be deleted doesn't prevent the others from being deleted.
+	mockNetlink.EXPECT().RouteDel(route1).Return(fmt.Errorf("invalid argument"))
 	mockNetlink.EXPECT().RouteDel(route2)
+	mockNetlink.EXPECT().RouteDel(route3)
 	mockNetlink.EXPECT().RuleDel(rule1)
 	c := &Client{
 		netlink:       mockNetlink,
