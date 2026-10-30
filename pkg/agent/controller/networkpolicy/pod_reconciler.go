@@ -635,7 +635,7 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 					Service:       filterUnresolvablePort(rule.Services),
 					Action:        rule.Action,
 					Name:          rule.Name,
-					Priority:      nil,
+					Priority:      ofPriority,
 					TableID:       table,
 					PolicyRef:     rule.SourceRef,
 					EnableLogging: rule.EnableLogging,
