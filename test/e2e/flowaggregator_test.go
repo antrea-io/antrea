@@ -221,7 +221,7 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	}
 
 	faNamespace := flowAggregatorNamespaces[options.flowAggregator.selectedAggregator]
-	if err := getAndCheckFlowAggregatorMetrics(t, data, options.databaseURL != "", faNamespace); err != nil {
+	if err := getAndCheckFlowAggregatorMetrics(t, data, options.databaseURL != "", true, faNamespace); err != nil {
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
 
@@ -2095,7 +2095,7 @@ func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 	return serverIPs
 }
 
-func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool, namespace string) error {
+func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter, withIPFIXExporter bool, namespace string) error {
 	flowAggPods, err := data.getFlowAggregators(namespace)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
@@ -2125,13 +2125,13 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 			numRecordsExported += metrics.NumRecordsExported
 			hasAllClickHouseExporter = hasAllClickHouseExporter && metrics.WithClickHouseExporter
 			hasAnyClickHouseExporter = hasAnyClickHouseExporter || metrics.WithClickHouseExporter
-			hasExpectedIPFIXExporter = hasExpectedIPFIXExporter && metrics.WithIPFIXExporter
+			hasExpectedIPFIXExporter = hasExpectedIPFIXExporter && metrics.WithIPFIXExporter == withIPFIXExporter
 		}
 
 		hasExpectedClickHouseExporter = (withClickHouseExporter && hasAllClickHouseExporter) || (!withClickHouseExporter && !hasAnyClickHouseExporter)
 
 		if numConnToCollector != int64(clusterInfo.numNodes) || !hasExpectedClickHouseExporter || !hasExpectedIPFIXExporter || numRecordsExported == 0 {
-			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v. Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
+			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v. Expecting ClickHouseExporter=%v, IPFIXExporter=%v", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter, withIPFIXExporter)
 			return false, nil
 		}
 		return true, nil
