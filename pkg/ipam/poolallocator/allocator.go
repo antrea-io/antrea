@@ -39,16 +39,18 @@ import (
 var ErrPoolExhausted = errors.New("pool exhausted")
 
 // ipPoolStatusRetry backs off longer than retry.DefaultRetry (5 fixed ~10ms
-// sleeps) but avoids an overly long tail. client-go's retry.DefaultBackoff uses
-// fewer steps with a larger factor for a sub-second total; here we use a mild
-// exponential (1.5) with more attempts than DefaultRetry so many Nodes updating
-// the same IPPool status (shared pools, multi-NIC) can clear conflicts without
-// multi-second CNI stalls.
+// sleeps). It uses a mild exponential backoff with jitter so many
+// Nodes concurrently updating the same IPPool status (shared pools, multi-NIC)
+// can clear conflicts without excessive API stalls.
+// With 15 attempts, cumulative backoff is about 2.56s, or up to about 3.1s with
+// jitter, excluding API request time. The last base sleep is about 606ms.
+// Sequential pool operations can accumulate this delay. Do not set Cap: reaching
+// it terminates RetryOnConflict early instead of just limiting the sleep.
 var ipPoolStatusRetry = wait.Backoff{
-	Steps:    8,
-	Duration: 10 * time.Millisecond,
-	Factor:   1.5,
-	Jitter:   0.1,
+	Steps:    15,
+	Duration: 20 * time.Millisecond,
+	Factor:   1.3,
+	Jitter:   0.2,
 }
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
@@ -91,6 +93,26 @@ func NewIPPoolAllocator(poolName string, client crdclientset.Interface, poolList
 func (a *IPPoolAllocator) getPool() (*v1beta1.IPPool, error) {
 	pool, err := a.ipPoolLister.Get(a.ipPoolName)
 	return pool, err
+}
+
+// retryPoolStatusUpdate uses the cache on the first attempt and live reads after
+// conflicts so retries do not depend on the informer observing the latest status.
+func (a *IPPoolAllocator) retryPoolStatusUpdate(update func(*v1beta1.IPPool) error) error {
+	useLiveRead := false
+	return retry.RetryOnConflict(ipPoolStatusRetry, func() error {
+		var pool *v1beta1.IPPool
+		var err error
+		if useLiveRead {
+			pool, err = a.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+		} else {
+			pool, err = a.getPool()
+		}
+		useLiveRead = true
+		if err != nil {
+			return err
+		}
+		return update(pool)
+	})
 }
 
 // initAllocatorList reads IP Pool status and initializes a list of allocators based on
@@ -156,7 +178,7 @@ func (a *IPPoolAllocator) getPoolAndInitIPAllocators() (*v1beta1.IPPool, ipalloc
 	return ipPool, allocators, nil
 }
 
-func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1beta1.IPPool, ip net.IP, state v1beta1.IPAddressPhase, owner v1beta1.IPAddressOwner) error {
+func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1beta1.IPPool, ip net.IP, state v1beta1.IPAddressPhase, owner v1beta1.IPAddressOwner, total int) error {
 	newPool := ipPool.DeepCopy()
 	usageEntry := v1beta1.IPAddressState{
 		IPAddress: ip.String(),
@@ -165,7 +187,7 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1beta1.IPPool, ip net.IP, sta
 	}
 
 	newPool.Status.IPAddresses = append(newPool.Status.IPAddresses, usageEntry)
-	a.updateUsage(newPool)
+	a.updateUsage(newPool, total)
 	klog.V(2).InfoS("Updating IP Pool allocation status", "pool", newPool.Name, "allocation", newPool.Status)
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
@@ -231,7 +253,7 @@ func (a *IPPoolAllocator) appendPoolUsageForStatefulSet(ipPool *v1beta1.IPPool, 
 }
 
 // removeIPAddressState updates ipPool status to delete released IP allocation, and keeps preallocation information
-func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1beta1.IPPool, ip net.IP) error {
+func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1beta1.IPPool, ip net.IP, total int) error {
 
 	ipString := ip.String()
 	newPool := ipPool.DeepCopy()
@@ -257,7 +279,7 @@ func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1beta1.IPPool, ip net.IP
 	}
 
 	newPool.Status.IPAddresses = newList
-	a.updateUsage(newPool)
+	a.updateUsage(newPool, total)
 
 	klog.V(2).InfoS("Updating IP Pool allocation status", "pool", newPool.Name, "allocation", newPool.Status)
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
@@ -304,8 +326,8 @@ func (a *IPPoolAllocator) getExistingAllocation(podOwner *v1beta1.PodOwner) (net
 func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1beta1.IPAddressPhase, owner v1beta1.IPAddressOwner) (*v1beta1.SubnetInfo, error) {
 	var subnetInfo *v1beta1.SubnetInfo
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+	err := a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
 		}
@@ -328,7 +350,7 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1beta1.IPAddressPhase, ow
 		}
 
 		subnetInfo = &ipPool.Spec.SubnetInfo
-		err = a.appendPoolUsage(ipPool, ip, state, owner)
+		err = a.appendPoolUsage(ipPool, ip, state, owner, allocators.Total())
 
 		return err
 	})
@@ -360,10 +382,17 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 	}
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err = retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+	err = a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
+		}
+
+		// A conflict retry may observe an allocation that the lister has not received yet.
+		if entry := findPodAllocation(ipPool, podOwner.ContainerID, podOwner.IFName); entry != nil {
+			ip = net.ParseIP(entry.IPAddress)
+			subnetInfo = &ipPool.Spec.SubnetInfo
+			return nil
 		}
 
 		index := len(allocators)
@@ -381,7 +410,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 		}
 
 		subnetInfo = &ipPool.Spec.SubnetInfo
-		return a.appendPoolUsage(ipPool, ip, state, owner)
+		return a.appendPoolUsage(ipPool, ip, state, owner, allocators.Total())
 	})
 
 	if err != nil {
@@ -417,8 +446,8 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1beta1.IPAddressPhase, o
 	}
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err = retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+	err = a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
 		}
@@ -452,8 +481,8 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1beta1.IPAddressPhase, o
 // be allocated on the fly, and there is no guarantee for continuous IPs.
 func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int, ip net.IP) error {
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+	err := a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
 		}
@@ -491,8 +520,8 @@ func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int, 
 func (a *IPPoolAllocator) Release(ip net.IP) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+	err := a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
 		}
@@ -504,7 +533,7 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 			return fmt.Errorf("IP %v does not belong to IP pool %s", ip, a.ipPoolName)
 		}
 
-		return a.removeIPAddressState(ipPool, ip)
+		return a.removeIPAddressState(ipPool, ip, allocators.Total())
 	})
 
 	if err != nil {
@@ -519,13 +548,7 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, err := a.getPool()
-
-		if err != nil {
-			return err
-		}
-
+	err := a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
 		var updatedAdresses []v1beta1.IPAddressState
 		for _, ip := range ipPool.Status.IPAddresses {
 			if ip.Owner.StatefulSet == nil || ip.Owner.StatefulSet.Namespace != namespace || ip.Owner.StatefulSet.Name != name {
@@ -543,7 +566,7 @@ func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 		newPool.Status.IPAddresses = updatedAdresses
 
 		klog.V(2).InfoS("Updating IP Pool allocation status", "pool", newPool.Name, "allocation", newPool.Status)
-		_, err = a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
+		_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("IP Pool %s update failed: %w", newPool.Name, err)
 		}
@@ -563,19 +586,14 @@ func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 // change.
 func (a *IPPoolAllocator) ReleaseContainer(containerID, ifName string) error {
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
-		ipPool, err := a.getPool()
-		if err != nil {
-			return err
-		}
-
+	err := a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
 		// Mark the released IPs as available in the IPPool status.
-		for _, ip := range ipPool.Status.IPAddresses {
-			savedOwner := ip.Owner.Pod
-			if savedOwner != nil && savedOwner.ContainerID == containerID && savedOwner.IFName == ifName {
-				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
-
+		if entry := findPodAllocation(ipPool, containerID, ifName); entry != nil {
+			allocators, err := a.initIPAllocators(ipPool)
+			if err != nil {
+				return err
 			}
+			return a.removeIPAddressState(ipPool, net.ParseIP(entry.IPAddress), allocators.Total())
 		}
 
 		klog.V(4).InfoS("Did not find the allocation record in IPPool",
@@ -605,6 +623,19 @@ func (a *IPPoolAllocator) hasPod(namespace, podName string) (bool, error) {
 	return false, nil
 }
 
+// findPodAllocation returns the first allocation for a container interface in the supplied snapshot.
+// The returned entry must be treated as read-only, as the snapshot may belong to the informer cache.
+func findPodAllocation(ipPool *v1beta1.IPPool, containerID, ifName string) *v1beta1.IPAddressState {
+	for i := range ipPool.Status.IPAddresses {
+		entry := &ipPool.Status.IPAddresses[i]
+		pod := entry.Owner.Pod
+		if pod != nil && pod.ContainerID == containerID && pod.IFName == ifName {
+			return entry
+		}
+	}
+	return nil
+}
+
 // GetContainerIP returns the IP allocated for the container interface if found.
 func (a *IPPoolAllocator) GetContainerIP(containerID, ifName string) (net.IP, error) {
 	ipPool, err := a.getPool()
@@ -612,10 +643,8 @@ func (a *IPPoolAllocator) GetContainerIP(containerID, ifName string) (net.IP, er
 		return nil, err
 	}
 
-	for _, ip := range ipPool.Status.IPAddresses {
-		if ip.Owner.Pod != nil && ip.Owner.Pod.ContainerID == containerID && ip.Owner.Pod.IFName == ifName {
-			return net.ParseIP(ip.IPAddress), nil
-		}
+	if entry := findPodAllocation(ipPool, containerID, ifName); entry != nil {
+		return net.ParseIP(entry.IPAddress), nil
 	}
 	return nil, nil
 }
@@ -650,7 +679,8 @@ func (a *IPPoolAllocator) Total() int {
 	return allocators.Total()
 }
 
-func (a *IPPoolAllocator) updateUsage(ipPool *v1beta1.IPPool) {
-	ipPool.Status.Usage.Total = a.Total()
+func (a *IPPoolAllocator) updateUsage(ipPool *v1beta1.IPPool, total int) {
+	// The caller computes total from the same retry snapshot, without rereading the lister.
+	ipPool.Status.Usage.Total = total
 	ipPool.Status.Usage.Used = len(ipPool.Status.IPAddresses)
 }
