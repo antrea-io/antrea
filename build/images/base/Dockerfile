@@ -29,7 +29,6 @@ RUN set -eux; \
     dpkgArch="$(dpkg --print-architecture)"; \
     case "${dpkgArch##*-}" in \
          amd64) pluginsArch='amd64' ;; \
-	 armhf) pluginsArch='arm' ;; \
 	 arm64) pluginsArch='arm64' ;; \
          *) pluginsArch=''; echo >&2; echo >&2 "unsupported architecture '$dpkgArch'"; echo >&2 ; exit 1 ;; \
     esac; \

@@ -100,17 +100,21 @@ If you want to add Windows Nodes to your cluster, please refer to these
 
 ### ARM support
 
-Starting with v1.0, Antrea supports arm64 and arm/v7 Nodes. The installation
-instructions do not change when some (or all) Linux Nodes in a cluster use an
-ARM architecture: the same deployment YAML can be used, as the
-`antrea/antrea-agent-ubuntu` and `antrea/antrea-controller-ubuntu` Docker images
-are actually manifest lists with support for the amd64, arm64 and arm/v7
-architectures.
+Antrea supports arm64 Nodes. The installation instructions do not change when
+some (or all) Linux Nodes in a cluster use an ARM architecture: the same
+deployment YAML can be used, as the `antrea/antrea-agent-ubuntu` and
+`antrea/antrea-controller-ubuntu` Docker images are actually manifest lists with
+support for the amd64 and arm64 architectures.
 
-Note that while we do run a subset of the Kubernetes conformance tests on both
-the arm/v7 and arm64 Docker images (using [k3s](https://k3s.io/) as the
-Kubernetes distribution), our testing is not as thorough as for the amd64
-image. However, we do not anticipate any issue.
+Note that while we do run a subset of the Kubernetes conformance tests on the
+arm64 Docker images, our testing is not as thorough as for the amd64 images.
+However, we do not anticipate any issue.
+
+Antrea v2.6 is the last minor release that supports arm/v7 (32-bit ARM) Nodes.
+Antrea v2.7.0 does not work on arm/v7 Nodes (the arm/v7 antrea-agent cannot
+connect to OVSDB), and arm/v7 images and binaries are no longer published
+starting with Antrea v2.7.1 and v2.8.0. Refer to
+[#8537](https://github.com/antrea-io/antrea/issues/8537) for more information.
 
 ### Install with Helm
 
