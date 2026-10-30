@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"net"
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
@@ -33,8 +34,8 @@ type endpointsChangesTracker struct {
 	tracker *k8sproxy.EndpointsChangeTracker
 }
 
-func newEndpointsChangesTracker(hostname string, ipFamily v1.IPFamily) *endpointsChangesTracker {
-	tracker := k8sproxy.NewEndpointsChangeTracker(ipFamily, hostname, types.NewEndpointInfo, nil)
+func newEndpointsChangesTracker(hostname string, ipFamily v1.IPFamily, localPodCIDR *net.IPNet) *endpointsChangesTracker {
+	tracker := k8sproxy.NewEndpointsChangeTracker(ipFamily, hostname, localPodCIDR, types.NewEndpointInfo, nil)
 	return &endpointsChangesTracker{tracker: tracker}
 }
 
