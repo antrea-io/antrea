@@ -106,7 +106,7 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, 10349)
 	externalNodeEnabled := true
-	controllerMonitor := NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
+	controllerMonitor := NewControllerMonitor(crdClient, client.CoreV1().Nodes(), nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
 
 	return &fakeController{
 		controllerMonitor,
@@ -248,6 +248,7 @@ func TestSyncNode(t *testing.T) {
 			controller := newControllerMonitor(clientset)
 			if tt.existingNode != nil {
 				controller.client = fake.NewSimpleClientset(node)
+				controller.controllerMonitor.nodeClient = controller.client.CoreV1().Nodes()
 				controller.informerFactory = informers.NewSharedInformerFactory(controller.client, informerDefaultResync)
 				controller.controllerMonitor.nodeInformer = controller.informerFactory.Core().V1().Nodes()
 				controller.controllerMonitor.nodeLister = controller.controllerMonitor.nodeInformer.Lister()
@@ -306,7 +307,8 @@ func TestDeleteAgentCRD(t *testing.T) {
 			expectedError:  "",
 		},
 		{
-			name: "fail to delete CRD AntreaAgentInfo with given name due to error",
+			name:             "fail to delete CRD AntreaAgentInfo with given name due to error",
+			existingAgentCRD: testAgentCRD,
 			prepareReactor: func(clientset *fakeclientset.Clientset) {
 				clientset.PrependReactor("delete", "antreaagentinfos", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1beta1.AntreaAgentInfo{}, errors.New("error deleting agent crd")
@@ -334,6 +336,130 @@ func TestDeleteAgentCRD(t *testing.T) {
 				_, err = controller.controllerMonitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, "testAgentCRD", metav1.GetOptions{})
 				assert.True(t, errortesting.IsNotFound(err))
 			}
+		})
+	}
+}
+
+func TestAgentCRDWithNodeConfigStatusSurvivesStaleNodeCache(t *testing.T) {
+	for _, startup := range []bool{false, true} {
+		name := "node-event"
+		if startup {
+			name = "startup-cleanup"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			report := &v1beta1.AntreaAgentInfo{
+				ObjectMeta:       metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
+				NodeConfigStatus: &v1beta1.AntreaNodeConfigAgentStatus{},
+			}
+			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
+			_, err := controller.client.CoreV1().Nodes().Create(ctx, &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: report.Name},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			// Leave informers stopped to model a Node recreation not yet reflected in the cache.
+			if startup {
+				controller.controllerMonitor.deleteStaleAgentCRDs()
+			} else {
+				require.NoError(t, controller.controllerMonitor.syncNode(report.Name))
+			}
+			actual, err := controller.crdClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, report.Name, metav1.GetOptions{})
+			require.NoError(t, err, "a live Node must retain its durable status report")
+			assert.Equal(t, report, actual)
+		})
+	}
+}
+
+func TestDeleteAgentCRDNodeConfigStatus(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		nodeError  error
+		withStatus bool
+	}{
+		{name: "absent Node", withStatus: true},
+		{name: "Node API unavailable", withStatus: true, nodeError: errors.New("Node API unavailable")},
+		{name: "legacy report does not require Node API", nodeError: errors.New("Node API unavailable")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			report := &v1beta1.AntreaAgentInfo{
+				ObjectMeta: metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
+			}
+			if tt.withStatus {
+				report.NodeConfigStatus = &v1beta1.AntreaNodeConfigAgentStatus{}
+			}
+			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
+			if tt.nodeError != nil {
+				controller.client.PrependReactor("get", "nodes", func(action cgtesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tt.nodeError
+				})
+			}
+			controller.crdClient.PrependReactor("delete", "antreaagentinfos", func(action cgtesting.Action) (bool, runtime.Object, error) {
+				options := action.(cgtesting.DeleteAction).GetDeleteOptions()
+				require.NotNil(t, options.Preconditions)
+				assert.Equal(t, &report.UID, options.Preconditions.UID)
+				assert.Equal(t, &report.ResourceVersion, options.Preconditions.ResourceVersion)
+				return false, nil, nil
+			})
+			err := controller.controllerMonitor.deleteAgentCRD(report.Name)
+			if tt.nodeError != nil && tt.withStatus {
+				require.ErrorIs(t, err, tt.nodeError)
+				actual, err := controller.crdClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, report.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, report, actual)
+			} else {
+				require.NoError(t, err)
+				_, err := controller.crdClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, report.Name, metav1.GetOptions{})
+				assert.True(t, errortesting.IsNotFound(err))
+			}
+		})
+	}
+}
+
+func TestDeleteAgentCRDPreservesConcurrentStatusPublication(t *testing.T) {
+	for _, recreate := range []bool{false, true} {
+		name := "updated report"
+		if recreate {
+			name = "recreated report"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			report := &v1beta1.AntreaAgentInfo{
+				ObjectMeta:       metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
+				NodeConfigStatus: &v1beta1.AntreaNodeConfigAgentStatus{},
+			}
+			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
+			replacement := report.DeepCopy()
+			replacement.ResourceVersion = "11"
+			if recreate {
+				replacement.UID = "report2"
+				// Keep the version equal to isolate protection provided by the UID precondition.
+				replacement.ResourceVersion = report.ResourceVersion
+			}
+			resource := v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos")
+			controller.client.PrependReactor("get", "nodes", func(action cgtesting.Action) (bool, runtime.Object, error) {
+				// Publish after the Node read has observed absence, before it returns to the monitor.
+				require.NoError(t, controller.crdClient.Tracker().Update(resource, replacement, ""))
+				return true, nil, errortesting.NewNotFound(v1.Resource("nodes"), report.Name)
+			})
+			// The fake client does not enforce server-side deletion preconditions.
+			controller.crdClient.PrependReactor("delete", "antreaagentinfos", func(action cgtesting.Action) (bool, runtime.Object, error) {
+				options := action.(cgtesting.DeleteAction).GetDeleteOptions()
+				current, err := controller.crdClient.Tracker().Get(resource, "", report.Name)
+				require.NoError(t, err)
+				actual := current.(*v1beta1.AntreaAgentInfo)
+				if p := options.Preconditions; p != nil &&
+					((p.UID != nil && *p.UID != actual.UID) ||
+						(p.ResourceVersion != nil && *p.ResourceVersion != actual.ResourceVersion)) {
+					return true, nil, errortesting.NewConflict(resource.GroupResource(), report.Name, errors.New("precondition failed"))
+				}
+				return false, nil, nil
+			})
+			err := controller.controllerMonitor.deleteAgentCRD(report.Name)
+			require.True(t, errortesting.IsConflict(err), "concurrent publication must reject deletion, got %v", err)
+			actual, err := controller.crdClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, report.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, replacement, actual)
 		})
 	}
 }

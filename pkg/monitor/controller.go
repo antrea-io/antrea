@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	coreclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -55,6 +56,7 @@ var (
 
 type controllerMonitor struct {
 	client       clientset.Interface
+	nodeClient   coreclient.NodeInterface
 	nodeInformer coreinformers.NodeInformer
 	nodeLister   corelisters.NodeLister
 	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
@@ -77,6 +79,7 @@ type controllerMonitor struct {
 // NewControllerMonitor creates a new controller monitor.
 func NewControllerMonitor(
 	client clientset.Interface,
+	nodeClient coreclient.NodeInterface,
 	nodeInformer coreinformers.NodeInformer,
 	externalNodeInformer externalnodeinformers.ExternalNodeInformer,
 	querier controllerquerier.ControllerQuerier,
@@ -84,6 +87,7 @@ func NewControllerMonitor(
 ) *controllerMonitor {
 	m := &controllerMonitor{
 		client:           client,
+		nodeClient:       nodeClient,
 		nodeInformer:     nodeInformer,
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
@@ -245,7 +249,9 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 	}
 	staleSet := existingNames.Difference(expectedNames)
 	for _, name := range sets.List(staleSet) {
-		monitor.deleteAgentCRD(name)
+		if err := monitor.deleteAgentCRD(name); err != nil {
+			klog.ErrorS(err, "Failed to delete stale agent monitoring CRD", "name", name)
+		}
 	}
 }
 
@@ -386,8 +392,30 @@ func (monitor *controllerMonitor) createAgentCRD(name string) error {
 }
 
 func (monitor *controllerMonitor) deleteAgentCRD(name string) error {
+	agentCRD, err := monitor.client.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if agentCRD.NodeConfigStatus != nil {
+		// A stale informer cache must not erase ownership status for a live Node.
+		_, err := monitor.nodeClient.Get(context.TODO(), name, metav1.GetOptions{})
+		if err == nil {
+			return nil
+		}
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	// Read the report before checking the Node, and preserve any report published since that read.
+	options := metav1.DeleteOptions{Preconditions: &metav1.Preconditions{
+		UID:             &agentCRD.UID,
+		ResourceVersion: &agentCRD.ResourceVersion,
+	}}
 	klog.InfoS("Deleting agent monitoring CRD", "name", name)
-	err := monitor.client.CrdV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err = monitor.client.CrdV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, options)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			klog.InfoS("Skipping deleting agent monitoring CRD as it is not found", "name", name)

@@ -34,6 +34,7 @@ import (
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1a1inf "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
@@ -455,7 +456,7 @@ func TestSelectAntreaNodeConfigsForNode(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := selectAntreaNodeConfigsForNode(tc.node, tc.configs)
+			got := k8s.MatchingAntreaNodeConfigs(tc.node, tc.configs)
 			assert.Equal(t, tc.wantNames, ancNames(got))
 		})
 	}

@@ -55,8 +55,6 @@ const (
 )
 
 var (
-	errStaleBridgeInUse = errors.New("secondary OVS bridge is in use")
-
 	// Funcs which will be overridden with mock funcs in tests.
 	interfaceByNameFn = net.InterfaceByName
 	// func(bridge, ifName, ifOFPort, externalIDs, mtu) (bridgedName, alreadyExists, error)
@@ -97,6 +95,7 @@ func NewController(
 	ancUpdateSubscriber channel.Subscriber,
 ) (*Controller, error) {
 	c := &Controller{
+		statusUpdates:        make(chan struct{}, 1),
 		secNetConfig:         secNetConfig,
 		nodeName:             nodeConfig.Name,
 		primaryOVSBridgeName: nodeConfig.OVSBridge,
@@ -268,6 +267,8 @@ func (c *Controller) processNextItem() bool {
 		}
 	} else {
 		c.queue.Forget(key)
+		// Refresh actual realization independently of the AgentInfo heartbeat.
+		c.queue.AddAfter(key, time.Minute)
 	}
 	return true
 }
@@ -276,7 +277,7 @@ func (c *Controller) processNextItem() bool {
 // current bridge state once after Agent startup, then reconciles that state
 // against the same snapshot. Startup initialization is retried as a unit after
 // transient failures and committed only after PodController restoration succeeds.
-func (c *Controller) syncBridge() error {
+func (c *Controller) syncBridge() (syncErr error) {
 	c.bridgeSyncMutex.Lock()
 	defer c.bridgeSyncMutex.Unlock()
 
@@ -286,6 +287,13 @@ func (c *Controller) syncBridge() error {
 	if c.dynamicBridgeReconcile && c.queue.ShuttingDown() {
 		return nil
 	}
+	// Associate the result with exactly the snapshot used for this reconciliation.
+	// A newer snapshot may arrive while OVS or netlink operations are running.
+	snap := c.latestANCSnapshot.Load()
+	var desired *agenttypes.OVSBridgeConfig
+	if c.dynamicBridgeReconcile {
+		defer func() { c.updateNodeConfigStatus(snap, desired, syncErr) }()
+	}
 
 	// When the AntreaNodeConfig lister returns an error, skip reconciliation
 	// instead of deleting the current bridge. A transient error should not tear
@@ -293,7 +301,7 @@ func (c *Controller) syncBridge() error {
 	// AntreaNodeConfig lister and takes precedence over it, so a static bridge
 	// must still be reconciled when the lister is unavailable.
 	if c.dynamicBridgeReconcile {
-		if snap := c.latestANCSnapshot.Load(); snap != nil && snap.AntreaNodeConfigListError != "" {
+		if snap != nil && snap.AntreaNodeConfigListError != "" {
 			if c.secNetConfig == nil || len(c.secNetConfig.OVSBridges) == 0 {
 				klog.ErrorS(errors.New(snap.AntreaNodeConfigListError), "Skipping secondary bridge reconciliation due to AntreaNodeConfig list error")
 				return nil
@@ -301,7 +309,17 @@ func (c *Controller) syncBridge() error {
 		}
 	}
 
-	desired := c.effectiveOVSBridge()
+	if c.dynamicBridgeReconcile {
+		desired = effectiveSecondaryOVSBridgeFromSnapshot(snap, c.secNetConfig, c.primaryOVSBridgeName)
+		if snap != nil && snap.AntreaNodeConfig != nil && desired == nil {
+			cfg := snap.AntreaNodeConfig.Spec.SecondaryNetwork
+			if cfg != nil && len(cfg.OVSBridges) > 0 {
+				return fmt.Errorf("invalid secondary OVS bridge configuration")
+			}
+		}
+	} else {
+		desired = c.effectiveOVSBridge()
+	}
 	if err := c.initializeBridgeState(desired); err != nil {
 		return err
 	}
@@ -362,10 +380,15 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 	}
 
 	if desired != nil && currentBrName == desired.BridgeName {
+		// GetPortList treats a missing bridge as empty, so verify the bridge exists
+		// before reconciling a configuration without physical interfaces.
+		if _, err := currentClient.GetExternalIDs(); err != nil {
+			return fmt.Errorf("failed to query OVS bridge %s: %w", desired.BridgeName, err)
+		}
 		// Case: same bridge name - update physical interfaces in-place.
 		// effectiveBridgeCfg is updated only after all same-bridge mutations succeed,
 		// so a retry does not skip partially-applied host-connection changes.
-		klog.InfoS("Secondary OVS bridge name unchanged, updating physical interfaces",
+		klog.V(2).InfoS("Secondary OVS bridge name unchanged, updating physical interfaces",
 			"bridge", desired.BridgeName)
 
 		needsMcastSnoopingUpdate := c.effectiveBridgeCfg == nil ||
@@ -382,7 +405,7 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 		// failed deletion, so always install the current client again.
 		c.podController.SetOVSBridgeClient(currentClient)
 		c.effectiveBridgeCfg = desired
-		klog.InfoS("Secondary OVS bridge reconciliation completed",
+		klog.V(2).InfoS("Secondary OVS bridge reconciliation completed",
 			"bridge", desired.BridgeName, "physicalInterfaces", desired.PhysicalInterfaces)
 		return nil
 	}
@@ -410,11 +433,11 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 	}
 	if desired != nil {
 		newClient, err := c.createAndConfigureBridge(desired)
+		c.ovsBridgeClient = newClient
 		if err != nil {
 			return err
 		}
 		c.podController.SetOVSBridgeClient(newClient)
-		c.ovsBridgeClient = newClient
 		c.effectiveBridgeCfg = desired
 		klog.InfoS("Secondary OVS bridge transition completed",
 			"previousBridge", currentBrName, "currentBridge", desired.BridgeName)
@@ -437,10 +460,10 @@ func (c *Controller) createAndConfigureBridge(desired *agenttypes.OVSBridgeConfi
 		return nil, err
 	}
 	if err := newClient.SetMcastSnooping(desired.EnableMulticastSnooping); err != nil {
-		return nil, fmt.Errorf("failed to set multicast snooping on OVS bridge %s: %w", desired.BridgeName, err)
+		return newClient, fmt.Errorf("failed to set multicast snooping on OVS bridge %s: %w", desired.BridgeName, err)
 	}
 	if err := updatePhysicalInterfaces(newClient, desired); err != nil {
-		return nil, err
+		return newClient, err
 	}
 	return newClient, nil
 }

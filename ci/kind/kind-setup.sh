@@ -116,7 +116,7 @@ function configure_networks {
   local cluster_name="$1"
 
   echo "Configuring networks"
-  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
+  networks=$(docker network ls -f "name=^antrea-${cluster_name}-" --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ -z $SUBNETS ]] && [[ -z $networks ]]; then
     echo "Using default kind docker network"

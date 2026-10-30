@@ -579,7 +579,6 @@ type PacketCaptureCondition struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // AntreaNodeConfig defines Antrea Agent configuration for a set of Nodes
@@ -591,6 +590,22 @@ type AntreaNodeConfig struct {
 
 	// +required
 	Spec AntreaNodeConfigSpec `json:"spec"`
+	// Status describes configuration realization on the selected Nodes.
+	// +optional
+	Status AntreaNodeConfigStatus `json:"status,omitempty"`
+}
+
+// AntreaNodeConfigStatus describes the realization of an AntreaNodeConfig.
+type AntreaNodeConfigStatus struct {
+	// ObservedGeneration is the generation processed by the Controller, not necessarily realized.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// DesiredNodes is the number of Nodes for which this configuration takes precedence.
+	DesiredNodes int32 `json:"desiredNodes"`
+	// RealizedNodes is the number of desired Nodes which have realized the current generation.
+	RealizedNodes int32 `json:"realizedNodes"`
+	// Conditions includes Ready and ConflictFree for the current generation.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // AntreaNodeConfigSpec defines the desired state of AntreaNodeConfig.
