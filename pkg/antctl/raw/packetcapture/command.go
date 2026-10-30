@@ -46,6 +46,7 @@ import (
 var (
 	defaultTimeout          = time.Second * 60
 	maxPacketCaptureTimeout = time.Second * 300
+	deleteTimeout           = time.Second * 5
 	Command                 *cobra.Command
 	getCopier               = getPodFileCopier
 	defaultFS               = afero.NewOsFs()
@@ -201,8 +202,11 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 		return nil
 	} else {
 		defer func() {
-			if err = antreaClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), pc.Name, metav1.DeleteOptions{}); err != nil {
-				fmt.Fprintf(out, "error when deleting PacketCapture: %s", err.Error())
+			// Do not derive from ctx, so that the PacketCapture is still deleted when ctx is cancelled.
+			deleteCtx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
+			defer cancel()
+			if err := antreaClient.CrdV1alpha1().PacketCaptures().Delete(deleteCtx, pc.Name, metav1.DeleteOptions{}); err != nil {
+				fmt.Fprintf(out, "error when deleting PacketCapture: %v\n", err)
 			}
 		}()
 	}
