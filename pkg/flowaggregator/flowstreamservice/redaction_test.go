@@ -151,7 +151,7 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			source:      tierIdentity,
 			destination: tierIdentity,
 			want: concat(flowTier, sourceIdentity, destinationIdentity,
-				[]string{"source_disclosure", "destination_disclosure"}),
+				[]string{"source_disclosure", "destination_disclosure", "destination_service_disclosure"}),
 		},
 		{
 			name:        "the client's own endpoint is disclosed in full",
@@ -160,7 +160,7 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			// source_disclosure is absent because tierFull maps to ENDPOINT_DISCLOSURE_FULL,
 			// the zero value, which proto reflection does not report as populated.
 			want: concat(flowTier, sourceIdentity, sourceFull,
-				[]string{"destination_pod_namespace", "destination_disclosure"}),
+				[]string{"destination_pod_namespace", "destination_disclosure", "destination_service_disclosure"}),
 		},
 		{
 			name:        "the client's own connection to an unidentified destination, denied",
@@ -169,14 +169,15 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			denied:      true,
 			// A denied connection does not reveal where it was going, which is what closes the
 			// Pod-CIDR-to-Namespace enumeration oracle.
-			want: concat(flowTier, sourceIdentity, sourceFull, []string{"destination_disclosure"}),
+			want: concat(flowTier, sourceIdentity, sourceFull,
+				[]string{"destination_disclosure", "destination_service_disclosure"}),
 		},
 		{
 			name:        "an identifiable peer of the client's own endpoint",
 			source:      tierFull,
 			destination: tierIdentity,
 			want: concat(flowTier, sourceIdentity, sourceFull, destinationIdentity,
-				[]string{"destination_disclosure"}),
+				[]string{"destination_disclosure", "destination_service_disclosure"}),
 		},
 		{
 			name:        "an inbound flow from an unidentified source",
@@ -206,11 +207,113 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 				f.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
 			}
 
-			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow, tt.destination)
 
 			assert.ElementsMatch(t, tt.want, populatedFields(redacted.GetK8S()))
 			assert.Equal(t, tt.source.disclosure(), redacted.GetK8S().GetSourceDisclosure())
 			assert.Equal(t, tt.destination.disclosure(), redacted.GetK8S().GetDestinationDisclosure())
+			assert.Equal(t, tt.destination.disclosure(), redacted.GetK8S().GetDestinationServiceDisclosure())
+		})
+	}
+}
+
+// TestRedactFlow_ServiceFollowsItsOwnNamespace covers a destination Service disclosed at a tier
+// other than its destination endpoint's, as for a Service whose endpoints have no Namespace or are
+// in another Namespace than the Service, and withheld along with a withheld destination Namespace.
+func TestRedactFlow_ServiceFollowsItsOwnNamespace(t *testing.T) {
+	serviceFields := []string{
+		"destination_cluster_ip", "destination_service_ip", "destination_service_port",
+		"destination_service_port_name", "destination_service_uid",
+	}
+	tests := []struct {
+		name        string
+		destination disclosureTier
+		service     disclosureTier
+		denied      bool
+		// notAPod is whether the destination has no Pod Namespace to begin with.
+		notAPod bool
+		// noService is whether the connection did not go through a Service.
+		noService   bool
+		wantService bool
+		wantSvcTier disclosureTier
+		// wantDestinationNamespace is whether the destination's Namespace survives.
+		wantDestinationNamespace bool
+	}{
+		{
+			name:                     "the client's own Service, destination unidentified",
+			destination:              tierFlow,
+			service:                  tierFull,
+			wantService:              true,
+			wantSvcTier:              tierFull,
+			wantDestinationNamespace: true,
+		},
+		{
+			name:        "an identifiable Service, connection to an unidentified destination denied",
+			destination: tierFlow,
+			service:     tierIdentity,
+			denied:      true,
+			wantSvcTier: tierFlow,
+		},
+		{
+			name:        "an identifiable Service, connection to a destination that is not a Pod denied",
+			destination: tierFlow,
+			service:     tierIdentity,
+			denied:      true,
+			notAPod:     true,
+			wantService: true,
+			wantSvcTier: tierIdentity,
+		},
+		{
+			// There is no Service to withhold, so none is reported as withheld.
+			name:        "no Service, connection to an unidentified destination denied",
+			destination: tierFlow,
+			service:     tierFull,
+			denied:      true,
+			noService:   true,
+			wantSvcTier: tierFull,
+		},
+		{
+			name:                     "another Namespace's Service, destination disclosed in full",
+			destination:              tierFull,
+			service:                  tierFlow,
+			wantSvcTier:              tierFlow,
+			wantDestinationNamespace: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := fullFlow()
+			if tt.denied {
+				f.K8S.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+			}
+			if tt.notAPod {
+				f.K8S.DestinationPodNamespace = ""
+			}
+			if tt.noService {
+				f.K8S.DestinationServicePort = 0
+				f.K8S.DestinationServicePortName = ""
+				f.K8S.DestinationServiceUid = ""
+				f.K8S.DestinationServiceIp = nil
+				f.K8S.DestinationClusterIp = nil //nolint:staticcheck
+			}
+
+			redacted := redactFlow(f, tierFull, tt.destination, tierFull, tt.service)
+
+			populated := nameSet(populatedFields(redacted.GetK8S()))
+			for _, name := range serviceFields {
+				if tt.wantService {
+					assert.Contains(t, populated, name)
+				} else {
+					assert.NotContains(t, populated, name)
+				}
+			}
+			if tt.wantDestinationNamespace {
+				assert.Equal(t, "ns-b", redacted.GetK8S().GetDestinationPodNamespace())
+			} else {
+				assert.Empty(t, redacted.GetK8S().GetDestinationPodNamespace())
+			}
+			assert.Equal(t, tt.destination.disclosure(), redacted.GetK8S().GetDestinationDisclosure())
+			assert.Equal(t, tt.wantSvcTier.disclosure(), redacted.GetK8S().GetDestinationServiceDisclosure())
 		})
 	}
 }
@@ -223,7 +326,7 @@ func TestRedactFlow_FullKubernetesIsExhaustive(t *testing.T) {
 	populated := nameSet(populatedFields(fullKubernetes()))
 	for i := range fields.Len() {
 		name := string(fields.Get(i).Name())
-		if name == "source_disclosure" || name == "destination_disclosure" {
+		if name == "source_disclosure" || name == "destination_disclosure" || name == "destination_service_disclosure" {
 			// Only redaction sets these.
 			continue
 		}
@@ -257,7 +360,7 @@ var (
 func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	f := fullFlow()
 
-	redacted := redactFlow(f, tierFull, tierIdentity, tierFlow)
+	redacted := redactFlow(f, tierFull, tierIdentity, tierFlow, tierIdentity)
 
 	assert.ElementsMatch(t, recordFieldsDisclosed, populatedFields(redacted))
 	// Spot-check that a disclosed field carries the original value rather than merely being set.
@@ -274,7 +377,7 @@ func TestRedactFlow_IpfixWithEndpointsInFull(t *testing.T) {
 	f := fullFlow()
 	f.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
 
-	redacted := redactFlow(f, tierFull, tierFull, tierFlow)
+	redacted := redactFlow(f, tierFull, tierFull, tierFlow, tierFull)
 
 	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
 	assert.Equal(t, f.GetIpfix(), redacted.GetIpfix())
@@ -348,7 +451,7 @@ func TestRedactFlow_ClusterScopedPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			redacted := redactFlow(f, tt.source, tt.destination, tt.cluster)
+			redacted := redactFlow(f, tt.source, tt.destination, tt.cluster, tt.destination)
 
 			// The action and type stay: the client learns that a cluster-scoped policy dropped its
 			// connection, so it knows to escalate to the platform team rather than to the peer.
@@ -380,12 +483,12 @@ func TestRedactFlow_NamespacedPolicyFollowsItsEndpoint(t *testing.T) {
 
 	// The source is disclosed, the destination is not: the egress policy, enforced in the source's
 	// Namespace, survives; the ingress policy, enforced in the destination's, does not.
-	redacted := redactFlow(f, tierFull, tierFlow, tierFull)
+	redacted := redactFlow(f, tierFull, tierFlow, tierFull, tierFlow)
 	assert.Equal(t, "allow-destination", redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
 
 	// And the other way around.
-	redacted = redactFlow(f, tierFlow, tierFull, tierFull)
+	redacted = redactFlow(f, tierFlow, tierFull, tierFull, tierFull)
 	assert.Empty(t, redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
 }
@@ -398,7 +501,7 @@ func TestRedactFlow_NamespacedPolicyFollowsItsEndpoint(t *testing.T) {
 func TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity(t *testing.T) {
 	f := fullFlow()
 
-	redacted := redactFlow(f, tierIdentity, tierIdentity, tierFlow)
+	redacted := redactFlow(f, tierIdentity, tierIdentity, tierFlow, tierIdentity)
 
 	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
 	assert.Equal(t, "ingress-rule", redacted.GetK8S().GetIngressNetworkPolicyRuleName())
@@ -432,7 +535,7 @@ func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow, tt.destination)
 
 			assert.Equal(t, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, redacted.GetK8S().GetFlowType())
 			// Which Node is what stays withheld.
@@ -501,7 +604,7 @@ func TestRedactFlow_PeerNamespace(t *testing.T) {
 			f := fullFlow()
 			tt.modify(f.K8S)
 
-			redacted := redactFlow(f, tt.source, tt.destination, tierFlow)
+			redacted := redactFlow(f, tt.source, tt.destination, tierFlow, tt.destination)
 
 			assert.Equal(t, tt.wantSource, redacted.GetK8S().GetSourcePodNamespace())
 			assert.Equal(t, tt.wantDest, redacted.GetK8S().GetDestinationPodNamespace())

@@ -305,14 +305,19 @@ func (NetworkPolicyRuleAction) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP(), []int{4}
 }
 
-// EndpointDisclosure records how much of one endpoint of a flow the client
-// receiving the record was authorized to see. Only FlowStreamService sets it,
-// when it redacts a record for a client that may not observe every Namespace
-// the record involves; nothing else in the pipeline populates it.
+// EndpointDisclosure records how much of one endpoint of a flow, or of its
+// destination Service, the client receiving the record was authorized to see.
+// Only FlowStreamService sets it, when it redacts a record for a client that
+// may not observe every Namespace the record involves; nothing else in the
+// pipeline populates it.
 //
 // It exists so that a withheld field is distinguishable from a field the Flow
 // Aggregator never had: an empty ingress_network_policy_namespace, for
 // instance, is what a cluster-scoped policy legitimately looks like.
+//
+// For the destination Service, "the endpoint's Namespace" below is the
+// Service's own Namespace, and destination_service_disclosure describes when
+// the Service is withheld whatever that Namespace grants.
 type EndpointDisclosure int32
 
 const (
@@ -320,14 +325,15 @@ const (
 	// for it. Zero deliberately carries this meaning rather than an "unspecified"
 	// one, so that a record no producer set the field on reads as Full — which is
 	// every record before it reaches FlowStreamService, every record on a
-	// cluster-wide stream, and every record whose endpoints were both authorized
-	// in full. The marker covers the endpoint only: such a record may still
-	// have the identity of a cluster-scoped policy withheld, which an empty
-	// policy name signals, since a cluster-scoped policy always has one.
+	// cluster-wide stream, and every record that needed no redaction. A marker
+	// covers only what it describes: a record may still have the identity of a
+	// cluster-scoped policy withheld, which an empty policy name signals, since a
+	// cluster-scoped policy always has one.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL EndpointDisclosure = 0
-	// The endpoint is disclosed at the Identity tier: its Namespace, Pod and
-	// Service identity, and the identity of the namespaced network policies of its
-	// Namespace, but not its Node placement or the Egress applied to it. Set when
+	// The endpoint is disclosed at the Identity tier: its Namespace and Pod
+	// identity, and the identity of the namespaced network policies of its
+	// Namespace, but not its Node placement or the Egress applied to it. For a
+	// destination Service, its identity, which is all there is of it. Set when
 	// the client holds get on flows/identity in the endpoint's Namespace, but that
 	// Namespace is not one the stream is authorized to observe flows for, and the
 	// client does not hold the stream's own verb on flows there either. The
@@ -340,7 +346,8 @@ const (
 	// endpoint is the destination of a connection the client initiated and that
 	// was denied. Set when the client holds neither the stream's own verb on
 	// flows nor flows/identity in the endpoint's Namespace, and for an endpoint
-	// that has no Namespace at all.
+	// that has no Namespace at all. For a destination Service, nothing of it is
+	// disclosed, not even its Namespace.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW EndpointDisclosure = 2
 )
 
@@ -860,15 +867,28 @@ type Kubernetes struct {
 	// an empty destination_service_uid what a flow that never went through a
 	// Service looks like. Without it a client cannot tell a field withheld from
 	// it apart from one that never existed, and would have to present a redacted
-	// Pod as an external address. There is one marker per endpoint, rather than
-	// one per record, because the two ends are authorized independently: a record
-	// commonly carries one endpoint in full and the other redacted.
+	// Pod as an external address. There is one marker per endpoint, and one for
+	// the destination Service, rather than one per record, because each is
+	// authorized independently: a record commonly carries one endpoint in full and
+	// the other redacted.
 	SourceDisclosure EndpointDisclosure `protobuf:"varint,100,opt,name=source_disclosure,json=sourceDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"source_disclosure,omitempty"`
 	// How much of the destination endpoint the receiving client was authorized to
 	// see. Set by FlowStreamService only; see source_disclosure.
 	DestinationDisclosure EndpointDisclosure `protobuf:"varint,101,opt,name=destination_disclosure,json=destinationDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"destination_disclosure,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// How much of the destination Service (destination_service_ip,
+	// destination_service_port, destination_service_port_name,
+	// destination_service_uid, and the deprecated destination_cluster_ip) the
+	// receiving client was authorized to see. Set by FlowStreamService only; see
+	// source_disclosure. A Service is disclosed at the tier of its own Namespace,
+	// which is not necessarily the destination endpoint's: its endpoints may have
+	// no Namespace at all (hostNetwork Pods, external addresses), or be in another
+	// Namespace. A Service is withheld entirely (ENDPOINT_DISCLOSURE_FLOW) or not
+	// at all. On a stream that is not cluster-wide, a Service whose name could not
+	// be resolved has no Namespace, so it is withheld, and a Service is withheld
+	// whenever destination_pod_namespace is.
+	DestinationServiceDisclosure EndpointDisclosure `protobuf:"varint,102,opt,name=destination_service_disclosure,json=destinationServiceDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"destination_service_disclosure,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *Kubernetes) Reset() {
@@ -1157,6 +1177,13 @@ func (x *Kubernetes) GetSourceDisclosure() EndpointDisclosure {
 func (x *Kubernetes) GetDestinationDisclosure() EndpointDisclosure {
 	if x != nil {
 		return x.DestinationDisclosure
+	}
+	return EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL
+}
+
+func (x *Kubernetes) GetDestinationServiceDisclosure() EndpointDisclosure {
+	if x != nil {
+		return x.DestinationServiceDisclosure
 	}
 	return EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL
 }
@@ -1542,7 +1569,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x06labels\x18\x01 \x03(\v2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xca\x13\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xce\x14\n" +
 	"\n" +
 	"Kubernetes\x12N\n" +
 	"\tflow_type\x18\x01 \x01(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\bflowType\x120\n" +
@@ -1584,7 +1611,8 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"egress_uid\x18\" \x01(\tR\tegressUid\x124\n" +
 	"\x16destination_service_ip\x18# \x01(\fR\x14destinationServiceIp\x12h\n" +
 	"\x11source_disclosure\x18d \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x10sourceDisclosure\x12r\n" +
-	"\x16destination_disclosure\x18e \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x15destinationDisclosure\"G\n" +
+	"\x16destination_disclosure\x18e \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x15destinationDisclosure\x12\x81\x01\n" +
+	"\x1edestination_service_disclosure\x18f \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x1cdestinationServiceDisclosure\"G\n" +
 	"\x03App\x12#\n" +
 	"\rprotocol_name\x18\x01 \x01(\tR\fprotocolName\x12\x1b\n" +
 	"\thttp_vals\x18\x02 \x01(\fR\bhttpVals\"\xa4\a\n" +
@@ -1708,29 +1736,30 @@ var file_pkg_apis_flow_v1alpha1_flow_proto_depIdxs = []int32{
 	4,  // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.egress_network_policy_rule_action:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyRuleAction
 	5,  // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.source_disclosure:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
 	5,  // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.destination_disclosure:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
-	18, // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_source:type_name -> google.protobuf.Timestamp
-	18, // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_destination:type_name -> google.protobuf.Timestamp
-	11, // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	11, // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	11, // 17: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	11, // 18: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	7,  // 19: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ipfix:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
-	18, // 20: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.start_ts:type_name -> google.protobuf.Timestamp
-	18, // 21: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_ts:type_name -> google.protobuf.Timestamp
-	0,  // 22: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_reason:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowEndReason
-	8,  // 23: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ip:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
-	10, // 24: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.transport:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
-	13, // 25: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.k8s:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
-	11, // 26: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	11, // 27: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.reverse_stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	14, // 28: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.app:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.App
-	6,  // 29: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.flow_direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
-	15, // 30: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.aggregation:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
-	31, // [31:31] is the sub-list for method output_type
-	31, // [31:31] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	5,  // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.destination_service_disclosure:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
+	18, // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_source:type_name -> google.protobuf.Timestamp
+	18, // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_destination:type_name -> google.protobuf.Timestamp
+	11, // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 17: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 18: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 19: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	7,  // 20: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ipfix:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
+	18, // 21: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.start_ts:type_name -> google.protobuf.Timestamp
+	18, // 22: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_ts:type_name -> google.protobuf.Timestamp
+	0,  // 23: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_reason:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowEndReason
+	8,  // 24: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ip:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
+	10, // 25: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.transport:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
+	13, // 26: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.k8s:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
+	11, // 27: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 28: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.reverse_stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	14, // 29: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.app:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.App
+	6,  // 30: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.flow_direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
+	15, // 31: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.aggregation:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_flow_proto_init() }
