@@ -859,29 +859,30 @@ example-bgp-policy 172.18.0.2 64512     179         65000                    645
 
 `antctl` agent command `get bgppeers` print the current status of all BGP peers
 of effective BGP policy applied on the local Node. It includes Peer IP address with port,
-ASN, and State of the BGP Peers.
+ASN, State of the BGP Peers, and the state of the BFD session towards the peer (`<NONE>` when
+BFD is not enabled for the peer).
 
 ```bash
 # Get the list of all bgp peers
 $ antctl get bgppeers
 
-PEER                       ASN   STATE
-192.168.77.200:179         65001 Established
-[fec0::196:168:77:251]:179 65002 Active
+PEER                       ASN   STATE       BFD
+192.168.77.200:179         65001 Established Up
+[fec0::196:168:77:251]:179 65002 Active      <NONE>
 
 # Get the list of IPv4 bgp peers only
 $ antctl get bgppeers --ipv4-only
 
-PEER               ASN   STATE
-192.168.77.200:179 65001 Established
-192.168.77.201:179 65002 Active
+PEER               ASN   STATE       BFD
+192.168.77.200:179 65001 Established Up
+192.168.77.201:179 65002 Active      <NONE>
 
 # Get the list of IPv6 bgp peers only
 $ antctl get bgppeers --ipv6-only
 
-PEER                       ASN   STATE
-[fec0::196:168:77:251]:179 65001 Established
-[fec0::196:168:77:252]:179 65002 Active
+PEER                       ASN   STATE       BFD
+[fec0::196:168:77:251]:179 65001 Established Up
+[fec0::196:168:77:252]:179 65002 Active      <NONE>
 ```
 
 `antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
