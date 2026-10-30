@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
@@ -75,7 +76,7 @@ func NewKindProvider(configPath string) (ProviderInterface, error) {
 	filter := "name=control-plane"
 	clusterName := os.Getenv("KIND_CLUSTER_NAME")
 	if clusterName != "" {
-		filter = "name=" + clusterName + "-control-plane$"
+		filter = "name=^/" + regexp.QuoteMeta(clusterName+"-control-plane") + "$"
 	}
 	rc, stdout, _, err := exec.RunDockerPsFilterCommand(filter)
 	if err != nil || rc != 0 {
@@ -104,5 +105,9 @@ func kindControlPlaneNodeName(stdout, clusterName string) (string, error) {
 	if len(fields) == 0 {
 		return "", fmt.Errorf("missing Kind control-plane container name")
 	}
-	return fields[len(fields)-1], nil
+	name := fields[len(fields)-1]
+	if clusterName != "" && name != clusterName+"-control-plane" {
+		return "", fmt.Errorf("expected Kind control-plane container %q, got %q", clusterName+"-control-plane", name)
+	}
+	return name, nil
 }

@@ -380,6 +380,11 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 	}
 
 	if desired != nil && currentBrName == desired.BridgeName {
+		// GetPortList treats a missing bridge as empty, so verify the bridge exists
+		// before reconciling a configuration without physical interfaces.
+		if _, err := currentClient.GetExternalIDs(); err != nil {
+			return fmt.Errorf("failed to query OVS bridge %s: %w", desired.BridgeName, err)
+		}
 		// Case: same bridge name - update physical interfaces in-place.
 		// effectiveBridgeCfg is updated only after all same-bridge mutations succeed,
 		// so a retry does not skip partially-applied host-connection changes.

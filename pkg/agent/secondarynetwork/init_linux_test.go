@@ -455,6 +455,7 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 
 			bridgeClient.EXPECT().Create().Return(nil)
 			if tt.startupBridgeName != "" {
+				bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
 				bridgeClient.EXPECT().GetBridgeName().Return(brNew)
 				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return(nil, nil)
@@ -974,6 +975,9 @@ func TestReconcileBridge(t *testing.T) {
 			}
 			t.Cleanup(func() { prepareHostInterfaceConnectionFn = origPrepare })
 
+			if tc.prevCfg != nil && tc.desiredCfg != nil && tc.prevCfg.BridgeName == tc.desiredCfg.BridgeName {
+				oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
+			}
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(oldMock, newMock)
 			}
@@ -1056,6 +1060,7 @@ func TestReconcileBridgeUpdatesMcastSnooping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := mock.NewController(t)
 			bridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
 			bridgeClient.EXPECT().GetBridgeName().Return(brOld)
 			bridgeClient.EXPECT().SetMcastSnooping(tt.desiredEnabled).Return(tt.updateErr)
 			if tt.updateErr == nil {
@@ -1171,6 +1176,7 @@ func TestSyncBridgeRetriesStartupBridgeInitialization(t *testing.T) {
 
 	mockNewOVSBridge(t, bridgeClient)
 	bridgeClient.EXPECT().Create().Return(nil).Times(2)
+	bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
 	bridgeClient.EXPECT().GetBridgeName().Return(brOld)
 	bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 	bridgeClient.EXPECT().GetPortList().Return(nil, nil)
@@ -1298,6 +1304,7 @@ func TestSyncBridgeCancelsDrainWhenDiscoveredBridgeBecomesDesired(t *testing.T) 
 	// The bridge is discovered and attached once. A desired-state rollback
 	// reuses the cached client and cancels the in-progress drain.
 	oldMock.EXPECT().Create().Return(nil)
+	oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
 	oldMock.EXPECT().GetBridgeName().Return(brOld).Times(4)
 	oldMock.EXPECT().SetMcastSnooping(false).Return(nil)
 	oldMock.EXPECT().GetPortList().Return(nil, nil)
@@ -1342,6 +1349,7 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 
 	desired := bridgeConfig(brOld, eth1, eth2)
 	oldMock.EXPECT().Create().Return(nil)
+	oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
 	oldMock.EXPECT().GetBridgeName().Return(brOld)
 	oldMock.EXPECT().SetMcastSnooping(false).Return(nil)
 	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{

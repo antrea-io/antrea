@@ -18,8 +18,12 @@
 package secondarynetwork
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/ovn-kubernetes/libovsdb/client"
+	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -128,4 +132,81 @@ func TestRetainedEmptyConfigurationReportsDrainCompletion(t *testing.T) {
 	assert.Nil(t, c.ovsBridgeClient)
 	assert.Nil(t, c.effectiveBridgeCfg)
 	assert.Equal(t, 2, pods.drainCalls)
+}
+
+// emptyBridgeDB supplies a bridge without ports to the real OVS bridge client.
+type emptyBridgeDB struct {
+	client.Client
+	getErr error
+}
+
+func (db *emptyBridgeDB) Get(_ context.Context, _ model.Model) error {
+	return db.getErr
+}
+
+func (db *emptyBridgeDB) WhereCache(_ any) client.ConditionalAPI {
+	return &emptyBridgeTable{}
+}
+
+type emptyBridgeTable struct {
+	client.ConditionalAPI
+}
+
+func (*emptyBridgeTable) List(_ context.Context, _ any) error {
+	return nil
+}
+
+func TestSameBridgeStatusRequiresExistingBridge(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "healthy bridge"},
+		{name: "missing bridge", err: client.ErrNotFound},
+		{name: "OVS query failure", err: errors.New("OVS query failed")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, pods := newStatusTestController(t)
+			snap := statusSnapshot("config-a")
+			c.latestANCSnapshot.Store(snap)
+			c.bridgeStateInitDone = true
+			c.effectiveBridgeCfg = effectiveSecondaryOVSBridgeFromSnapshot(snap, c.secNetConfig, c.primaryOVSBridgeName)
+			db := &emptyBridgeDB{}
+			c.ovsBridgeClient = ovsconfig.NewOVSBridge(brNew, ovsconfig.OVSDatapathSystem, db)
+			require.NoError(t, c.syncBridge())
+			require.True(t, meta.IsStatusConditionTrue(c.GetAntreaNodeConfigStatus().SecondaryNetwork.Conditions, "Ready"))
+
+			next := snap.DeepCopy()
+			next.AntreaNodeConfig.Generation++
+			c.latestANCSnapshot.Store(next)
+			db.getErr = tt.err
+			err := c.syncBridge()
+			report := c.GetAntreaNodeConfigStatus()
+			require.Len(t, report.SecondaryNetwork.Conditions, 1)
+			ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			require.NotNil(t, ready)
+			assert.Equal(t, next.AntreaNodeConfig.Generation, ready.ObservedGeneration)
+			if tt.err == nil {
+				assert.NoError(t, err)
+				assert.Equal(t, metav1.ConditionTrue, ready.Status)
+				assert.Equal(t, "Reconciled", ready.Reason)
+				return
+			}
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, metav1.ConditionFalse, ready.Status)
+			assert.Equal(t, "ReconcileFailed", ready.Reason)
+			assert.Contains(t, ready.Message, tt.err.Error())
+			assert.Len(t, pods.setBridgeCalls, 1, "failed reconciliation must not reattach the bridge")
+
+			db.getErr = nil
+			require.NoError(t, c.syncBridge())
+			report = c.GetAntreaNodeConfigStatus()
+			ready = meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			require.NotNil(t, ready)
+			assert.Equal(t, next.AntreaNodeConfig.Generation, ready.ObservedGeneration)
+			assert.Equal(t, metav1.ConditionTrue, ready.Status)
+			assert.Equal(t, "Reconciled", ready.Reason)
+			assert.Equal(t, brNew, report.SecondaryNetwork.CurrentBridge)
+		})
+	}
 }

@@ -145,6 +145,26 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 		return
 	}
 
+	if !t.Run("MissingBridge", func(t *testing.T) {
+		_, _, err := e2eData.RunCommandFromAntreaPodOnNode(nodeName, []string{"ovs-vsctl", "del-br", bridge})
+		require.NoError(t, err)
+		waitBridgeAbsent(t, nodeName)
+		cfg = update(t, func(current *crdv1alpha1.AntreaNodeConfig) {
+			current.Spec.NodeSelector.MatchExpressions = []metav1.LabelSelectorRequirement{{
+				Key: "kubernetes.io/hostname", Operator: metav1.LabelSelectorOpExists,
+			}}
+		})
+		failed := waitStatus(t, cfg.Generation, metav1.ConditionFalse, "ReconcileFailed")
+		assert.Equal(t, int32(1), failed.Status.DesiredNodes)
+		assert.Zero(t, failed.Status.RealizedNodes)
+		require.NoError(t, e2eData.RestartAntreaAgentPods(60*time.Second))
+		cfg = waitStatus(t, cfg.Generation, metav1.ConditionTrue, "Reconciled")
+		require.NoError(t, data.waitForOVSBridge(nodeName, bridge))
+		verifyReport(t, nodeName, cfg)
+	}) {
+		return
+	}
+
 	if !t.Run("FailureAndRecovery", func(t *testing.T) {
 		cfg = update(t, func(current *crdv1alpha1.AntreaNodeConfig) {
 			current.Spec.SecondaryNetwork.OVSBridges[0].PhysicalInterfaces = []crdv1alpha1.OVSPhysicalInterfaceConfig{{Name: "missing-status"}}
