@@ -31,6 +31,7 @@ import (
 
 	config "antrea.io/antrea/v2/pkg/agent/config"
 	openflow "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ip "antrea.io/antrea/v2/pkg/util/ip"
 	gomock "go.uber.org/mock/gomock"
 	sets "k8s.io/apimachinery/pkg/util/sets"
 )
@@ -99,6 +100,20 @@ func (m *MockInterface) AddExternalIPConfigs(svcInfoStr string, externalIP net.I
 func (mr *MockInterfaceMockRecorder) AddExternalIPConfigs(svcInfoStr, externalIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).AddExternalIPConfigs), svcInfoStr, externalIP)
+}
+
+// AddL2DispatchPeerRoutes mocks base method.
+func (m *MockInterface) AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *ip.DualStackIPs) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddL2DispatchPeerRoutes", peerIndex, peerNodeIPs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddL2DispatchPeerRoutes indicates an expected call of AddL2DispatchPeerRoutes.
+func (mr *MockInterfaceMockRecorder) AddL2DispatchPeerRoutes(peerIndex, peerNodeIPs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddL2DispatchPeerRoutes", reflect.TypeOf((*MockInterface)(nil).AddL2DispatchPeerRoutes), peerIndex, peerNodeIPs)
 }
 
 // AddLocalAntreaFlexibleIPAMPodRule mocks base method.
@@ -255,6 +270,20 @@ func (mr *MockInterfaceMockRecorder) DeleteExternalIPConfigs(svcInfoStr, externa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteExternalIPConfigs), svcInfoStr, externalIP)
 }
 
+// DeleteL2DispatchPeerRoutes mocks base method.
+func (m *MockInterface) DeleteL2DispatchPeerRoutes(peerIndex uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteL2DispatchPeerRoutes", peerIndex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteL2DispatchPeerRoutes indicates an expected call of DeleteL2DispatchPeerRoutes.
+func (mr *MockInterfaceMockRecorder) DeleteL2DispatchPeerRoutes(peerIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteL2DispatchPeerRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteL2DispatchPeerRoutes), peerIndex)
+}
+
 // DeleteLocalAntreaFlexibleIPAMPodRule mocks base method.
 func (m *MockInterface) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	m.ctrl.T.Helper()
@@ -365,6 +394,21 @@ func (m *MockInterface) Initialize(nodeConfig *config.NodeConfig, done func()) e
 func (mr *MockInterfaceMockRecorder) Initialize(nodeConfig, done any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), nodeConfig, done)
+}
+
+// ListL2DispatchPeers mocks base method.
+func (m *MockInterface) ListL2DispatchPeers() (map[uint32]*ip.DualStackIPs, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListL2DispatchPeers")
+	ret0, _ := ret[0].(map[uint32]*ip.DualStackIPs)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListL2DispatchPeers indicates an expected call of ListL2DispatchPeers.
+func (mr *MockInterfaceMockRecorder) ListL2DispatchPeers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListL2DispatchPeers", reflect.TypeOf((*MockInterface)(nil).ListL2DispatchPeers))
 }
 
 // MigrateRoutesToGw mocks base method.
