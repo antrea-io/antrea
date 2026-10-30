@@ -31,6 +31,7 @@ import (
 
 	config "antrea.io/antrea/v2/pkg/agent/config"
 	openflow "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ip "antrea.io/antrea/v2/pkg/util/ip"
 	gomock "go.uber.org/mock/gomock"
 	sets "k8s.io/apimachinery/pkg/util/sets"
 )
@@ -57,6 +58,20 @@ func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
+}
+
+// AddDSRPeerNodeMAC mocks base method.
+func (m *MockInterface) AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddDSRPeerNodeMAC", peerNodeMAC)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddDSRPeerNodeMAC indicates an expected call of AddDSRPeerNodeMAC.
+func (mr *MockInterfaceMockRecorder) AddDSRPeerNodeMAC(peerNodeMAC any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDSRPeerNodeMAC", reflect.TypeOf((*MockInterface)(nil).AddDSRPeerNodeMAC), peerNodeMAC)
 }
 
 // AddEgressRoutes mocks base method.
@@ -99,6 +114,20 @@ func (m *MockInterface) AddExternalIPConfigs(svcInfoStr string, externalIP net.I
 func (mr *MockInterfaceMockRecorder) AddExternalIPConfigs(svcInfoStr, externalIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).AddExternalIPConfigs), svcInfoStr, externalIP)
+}
+
+// AddL2DispatchPeerRoutes mocks base method.
+func (m *MockInterface) AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *ip.DualStackIPs) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddL2DispatchPeerRoutes", peerIndex, peerNodeIPs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddL2DispatchPeerRoutes indicates an expected call of AddL2DispatchPeerRoutes.
+func (mr *MockInterfaceMockRecorder) AddL2DispatchPeerRoutes(peerIndex, peerNodeIPs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddL2DispatchPeerRoutes", reflect.TypeOf((*MockInterface)(nil).AddL2DispatchPeerRoutes), peerIndex, peerNodeIPs)
 }
 
 // AddLocalAntreaFlexibleIPAMPodRule mocks base method.
@@ -213,6 +242,20 @@ func (mr *MockInterfaceMockRecorder) ClearConntrackEntryForService(svcIP, svcPor
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearConntrackEntryForService", reflect.TypeOf((*MockInterface)(nil).ClearConntrackEntryForService), svcIP, svcPort, endpointIP, protocol)
 }
 
+// DeleteDSRPeerNodeMAC mocks base method.
+func (m *MockInterface) DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDSRPeerNodeMAC", peerNodeMAC)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDSRPeerNodeMAC indicates an expected call of DeleteDSRPeerNodeMAC.
+func (mr *MockInterfaceMockRecorder) DeleteDSRPeerNodeMAC(peerNodeMAC any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDSRPeerNodeMAC", reflect.TypeOf((*MockInterface)(nil).DeleteDSRPeerNodeMAC), peerNodeMAC)
+}
+
 // DeleteEgressRoutes mocks base method.
 func (m *MockInterface) DeleteEgressRoutes(tableID uint32) error {
 	m.ctrl.T.Helper()
@@ -253,6 +296,20 @@ func (m *MockInterface) DeleteExternalIPConfigs(svcInfoStr string, externalIP ne
 func (mr *MockInterfaceMockRecorder) DeleteExternalIPConfigs(svcInfoStr, externalIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteExternalIPConfigs), svcInfoStr, externalIP)
+}
+
+// DeleteL2DispatchPeerRoutes mocks base method.
+func (m *MockInterface) DeleteL2DispatchPeerRoutes(peerIndex uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteL2DispatchPeerRoutes", peerIndex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteL2DispatchPeerRoutes indicates an expected call of DeleteL2DispatchPeerRoutes.
+func (mr *MockInterfaceMockRecorder) DeleteL2DispatchPeerRoutes(peerIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteL2DispatchPeerRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteL2DispatchPeerRoutes), peerIndex)
 }
 
 // DeleteLocalAntreaFlexibleIPAMPodRule mocks base method.
@@ -367,6 +424,21 @@ func (mr *MockInterfaceMockRecorder) Initialize(nodeConfig, done any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), nodeConfig, done)
 }
 
+// ListL2DispatchPeers mocks base method.
+func (m *MockInterface) ListL2DispatchPeers() (map[uint32]*ip.DualStackIPs, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListL2DispatchPeers")
+	ret0, _ := ret[0].(map[uint32]*ip.DualStackIPs)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListL2DispatchPeers indicates an expected call of ListL2DispatchPeers.
+func (mr *MockInterfaceMockRecorder) ListL2DispatchPeers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListL2DispatchPeers", reflect.TypeOf((*MockInterface)(nil).ListL2DispatchPeers))
+}
+
 // MigrateRoutesToGw mocks base method.
 func (m *MockInterface) MigrateRoutesToGw(linkName string) error {
 	m.ctrl.T.Helper()
@@ -393,6 +465,20 @@ func (m *MockInterface) Reconcile(podCIDRs []string) error {
 func (mr *MockInterfaceMockRecorder) Reconcile(podCIDRs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockInterface)(nil).Reconcile), podCIDRs)
+}
+
+// ReconcileDSRPeerNodeMACs mocks base method.
+func (m *MockInterface) ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReconcileDSRPeerNodeMACs", desiredMACs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReconcileDSRPeerNodeMACs indicates an expected call of ReconcileDSRPeerNodeMACs.
+func (mr *MockInterfaceMockRecorder) ReconcileDSRPeerNodeMACs(desiredMACs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconcileDSRPeerNodeMACs", reflect.TypeOf((*MockInterface)(nil).ReconcileDSRPeerNodeMACs), desiredMACs)
 }
 
 // RestoreEgressRoutesAndRules mocks base method.

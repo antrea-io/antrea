@@ -155,6 +155,14 @@ var (
 	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
+	// reg4[29]: Mark to indicate that the traffic of a DSR Service uses the l2 dispatch: the ingress Node sends it to
+	// the MAC address of the Node hosting the selected Endpoint, instead of through the tunnel.
+	DSRL2DispatchServiceRegMark    = binding.NewOneBitRegMark(4, 29)
+	NotDSRL2DispatchServiceRegMark = binding.NewOneBitZeroRegMark(4, 29)
+	// reg4[30]: Mark to indicate that the packet is sent back to the Antrea gateway, which it came from, by the l2
+	// dispatch of DSR. It must not be SNAT'd like a hairpin connection, and it must be output to its in-port.
+	DSRL2DispatchRegMark    = binding.NewOneBitRegMark(4, 30)
+	NotDSRL2DispatchRegMark = binding.NewOneBitZeroRegMark(4, 30)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

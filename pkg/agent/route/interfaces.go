@@ -23,6 +23,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 var (
@@ -76,6 +77,32 @@ type Interface interface {
 
 	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
 	DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error
+
+	// AddL2DispatchPeerRoutes installs the policy routing which sends the packets marked for the peer Node with the
+	// given index by the l2 dispatch to the transport IPs of the peer Node, through the transport interface. It
+	// replaces the routing of the index if it exists.
+	AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *utilip.DualStackIPs) error
+
+	// DeleteL2DispatchPeerRoutes deletes the policy routing of the peer Node with the given index. It does nothing
+	// if the routing does not exist.
+	DeleteL2DispatchPeerRoutes(peerIndex uint32) error
+
+	// ListL2DispatchPeers returns the indices of the peer Nodes whose l2 dispatch routing exists on the Node, with
+	// the transport IPs which the routing sends packets to. The IPs are empty for an index which has rules but no
+	// routes. It lets the indices survive an agent restart.
+	ListL2DispatchPeers() (map[uint32]*utilip.DualStackIPs, error)
+
+	// AddDSRPeerNodeMAC adds the transport MAC address of a peer Node to the MAC addresses from which the Node accepts
+	// the traffic of DSR Services as already load-balanced: the peer Node sent it with the l2 dispatch.
+	AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error
+
+	// DeleteDSRPeerNodeMAC deletes a MAC address added by AddDSRPeerNodeMAC. It does nothing if the MAC address does
+	// not exist.
+	DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error
+
+	// ReconcileDSRPeerNodeMACs deletes the MAC addresses added by AddDSRPeerNodeMAC which are not in desiredMACs, for
+	// example those of the peer Nodes deleted while the agent was not running.
+	ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error
 
 	// AddNodePortConfigs adds routing configurations for redirecting traffic to OVS when a NodePort Service is created.
 	AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
