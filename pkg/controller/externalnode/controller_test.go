@@ -485,30 +485,26 @@ func TestDeleteExternalNode(t *testing.T) {
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 		informerFactory.Start(stopCh)
+		// Required: otherwise Run sleeps in its 100ms cache-sync poll and Wait() returns too early.
+		informerFactory.WaitForCacheSync(stopCh)
 		go controller.Run(stopCh)
+		synctest.Wait()
+		// All goroutines are idle: initial reconciliation is done, and both reflectors
+		// have established their watches, so the Delete below cannot be missed.
 		key, err := keyFunc(externalNode)
 		require.NoError(t, err)
-		err = wait.PollUntilContextTimeout(t.Context(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			_, exists, _ := controller.syncedExternalNode.GetByKey(key)
-			return exists, nil
-		})
-		require.NoError(t, err)
+		_, exists, _ := controller.syncedExternalNode.GetByKey(key)
+		require.True(t, exists)
 
 		err = controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(
 			t.Context(), externalNode.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
-		err = wait.PollUntilContextTimeout(t.Context(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			deleted, checkErr := checkExternalEntityDeleted(ctx, controller.crdClient, expectedEntity.Namespace, expectedEntity.Name)
-			if checkErr != nil {
-				return false, checkErr
-			}
-			if !deleted {
-				return false, nil
-			}
-			_, nodeExists, _ := controller.syncedExternalNode.GetByKey(key)
-			return !nodeExists, nil
-		})
-		require.NoError(t, err)
+		synctest.Wait()
+		_, err = controller.crdClient.CrdV1alpha2().ExternalEntities(expectedEntity.Namespace).Get(
+			t.Context(), expectedEntity.Name, metav1.GetOptions{})
+		assert.True(t, errors.IsNotFound(err))
+		_, exists, _ = controller.syncedExternalNode.GetByKey(key)
+		assert.False(t, exists)
 	})
 }
 
@@ -661,17 +657,6 @@ func checkExternalEntityExists(crdClient versioned.Interface, ee *v1alpha2.Exter
 		return false, nil
 	}
 	return true, nil
-}
-
-func checkExternalEntityDeleted(ctx context.Context, crdClient versioned.Interface, namespace, name string) (bool, error) {
-	_, getErr := crdClient.CrdV1alpha2().ExternalEntities(namespace).Get(ctx, name, metav1.GetOptions{})
-	if getErr == nil {
-		return false, nil
-	}
-	if errors.IsNotFound(getErr) {
-		return true, nil
-	}
-	return false, getErr
 }
 
 func newExternalNodeController(objects []runtime.Object) *ExternalNodeController {
