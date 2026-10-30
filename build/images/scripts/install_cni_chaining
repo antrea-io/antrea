@@ -110,7 +110,7 @@ function update_cni_conf {
 # monitor will start a watch on host's CNI config directory.
 # when we detect a change to the CNI conf file, we call update_cni_conf.
 function monitor {
-    inotifywait -m "$HOST_CNI_NET_DIR" -e create,close_write |
+    inotifywait -m "$HOST_CNI_NET_DIR" -e create,close_write,moved_to |
         while read -r directory action filename; do
             if [[ "$filename" == "$cni_conf_name" ]]; then
                 log_info "install_cni_chaining" "inotify event in $directory: $action $filename"
