@@ -268,6 +268,8 @@ spec:
 ## Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
+To find out why a BGPPolicy does not work as expected, see [Troubleshooting
+BGP](troubleshooting.md#troubleshooting-bgp).
 
 ## Limitations
 

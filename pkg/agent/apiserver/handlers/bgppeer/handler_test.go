@@ -17,6 +17,7 @@ package bgppeer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -181,4 +182,64 @@ func TestBGPPeerQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPPeerQueryWithBGPPolicyNotApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetBGPPeerStatus(gomock.Any()).Return(nil, &bgpcontroller.BGPPolicyNotAppliedError{
+		BGPPolicyName: "policy-1",
+		Err:           errors.New("failed to start BGP server: listen tcp :179: bind: address already in use"),
+	})
+	handler := HandleFunc(q)
+
+	req, err := http.NewRequest(http.MethodGet, "", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Equal(t, "there is no effective bgp policy applied to the Node: BGPPolicy policy-1 could not be applied: "+
+		"failed to start BGP server: listen tcp :179: bind: address already in use\n", recorder.Body.String())
+}
+
+func TestBGPPeerQueryDetail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetBGPPeerStatus(gomock.Any()).Return([]bgp.PeerStatus{
+		{
+			Address:                    "192.168.77.200",
+			Port:                       179,
+			ASN:                        65001,
+			MultihopTTL:                2,
+			GracefulRestartTimeSeconds: 120,
+			SessionState:               bgp.SessionEstablished,
+			UptimeSeconds:              3600,
+			AdvertisedRouteCount:       3,
+			ReceivedRouteCount:         1,
+		},
+		{
+			Address:                    "192.168.77.201",
+			Port:                       179,
+			ASN:                        65002,
+			MultihopTTL:                1,
+			GracefulRestartTimeSeconds: 120,
+			SessionState:               bgp.SessionActive,
+		},
+	}, nil)
+	handler := HandleFunc(q)
+
+	req, err := http.NewRequest(http.MethodGet, "", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	// The uptime of a session that is not established is omitted, but a route count of 0 is not.
+	assert.JSONEq(t, `[
+		{"peer": "192.168.77.200:179", "asn": 65001, "state": "Established", "uptimeSeconds": 3600, "multihopTTL": 2,
+		 "gracefulRestartTimeSeconds": 120, "advertisedRoutes": 3, "receivedRoutes": 1},
+		{"peer": "192.168.77.201:179", "asn": 65002, "state": "Active", "multihopTTL": 1,
+		 "gracefulRestartTimeSeconds": 120, "advertisedRoutes": 0, "receivedRoutes": 0}
+	]`, recorder.Body.String())
 }

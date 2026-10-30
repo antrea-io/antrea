@@ -96,6 +96,34 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 				SessionState: bgp.SessionIdle,
 			},
 		},
+		{
+			name: "Established peer with routes",
+			peer: &gobgpapi.Peer{
+				Conf: &gobgpapi.PeerConf{
+					NeighborAddress: "192.168.1.1",
+					PeerAsn:         65001,
+				},
+				State: &gobgpapi.PeerState{
+					SessionState: gobgpapi.PeerState_SESSION_STATE_ESTABLISHED,
+				},
+				AfiSafis: []*gobgpapi.AfiSafi{
+					{
+						State: &gobgpapi.AfiSafiState{
+							Advertised: 3,
+							Received:   1,
+							Accepted:   1,
+						},
+					},
+				},
+			},
+			expected: &bgp.PeerStatus{
+				Address:              "192.168.1.1",
+				ASN:                  65001,
+				SessionState:         bgp.SessionEstablished,
+				AdvertisedRouteCount: 3,
+				ReceivedRouteCount:   1,
+			},
+		},
 	}
 
 	for _, tt := range tests {

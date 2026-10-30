@@ -121,6 +121,8 @@ type PeerStatus struct {
 	MultihopTTL                int32
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
+	AdvertisedRouteCount       uint64
+	ReceivedRouteCount         uint64
 	UptimeSeconds              int
 }
 

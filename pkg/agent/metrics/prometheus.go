@@ -224,6 +224,76 @@ var (
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		},
 	)
+
+	BGPPeerSessionState = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "bgp_peer_session_state",
+			Help: "State of the BGP session with each peer of the BGPPolicy applied to the local Node: 0 for Unknown, " +
+				"1 for Idle, 2 for Connect, 3 for Active, 4 for OpenSent, 5 for OpenConfirm and 6 for Established.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"peer", "asn"},
+	)
+
+	BGPPeerUp = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "bgp_peer_up",
+			Help:           "1 when the BGP session with each peer of the BGPPolicy applied to the local Node is Established, otherwise 0.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"peer", "asn"},
+	)
+
+	BGPPeerAdvertisedRouteCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "bgp_peer_advertised_route_count",
+			Help:           "Number of routes sent to each peer of the BGPPolicy applied to the local Node. It is 0 while the session with the peer is not Established.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"peer", "asn"},
+	)
+
+	BGPRouteAdvertisementCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "bgp_route_advertisement_count",
+			Help: "Number of routes advertised to the BGP peers of the local Node, partitioned by route type (EgressIP, " +
+				"ServiceLoadBalancerIP, ServiceExternalIP, ServiceClusterIP and NodeIPAMPodCIDR).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"type"},
+	)
+
+	BGPRouteWithdrawalCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "bgp_route_withdrawal_count",
+			Help: "Number of routes withdrawn from the BGP peers of the local Node, partitioned by route type (EgressIP, " +
+				"ServiceLoadBalancerIP, ServiceExternalIP, ServiceClusterIP and NodeIPAMPodCIDR).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"type"},
+	)
+
+	BGPEffectivePolicy = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "bgp_effective_policy",
+			Help: "Always 1, for the BGPPolicy that the local Node applies, even when the last attempt to apply it failed. " +
+				"Absent when no BGPPolicy selects the local Node.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"policy"},
+	)
 )
 
 func InitializePrometheusMetrics() {
@@ -318,5 +388,28 @@ func InitializeConnectionMetrics() {
 	}
 	if err := legacyregistry.Register(ConntrackPollCycleDuration); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_conntrack_poll_cycle_duration_seconds")
+	}
+}
+
+// InitializeBGPMetrics registers the BGP metrics. It is not called by InitializePrometheusMetrics, as the BGP metrics
+// are only registered when the BGPPolicy feature is enabled.
+func InitializeBGPMetrics() {
+	if err := legacyregistry.Register(BGPPeerSessionState); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_peer_session_state")
+	}
+	if err := legacyregistry.Register(BGPPeerUp); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_peer_up")
+	}
+	if err := legacyregistry.Register(BGPPeerAdvertisedRouteCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_peer_advertised_route_count")
+	}
+	if err := legacyregistry.Register(BGPRouteAdvertisementCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_route_advertisement_count")
+	}
+	if err := legacyregistry.Register(BGPRouteWithdrawalCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_route_withdrawal_count")
+	}
+	if err := legacyregistry.Register(BGPEffectivePolicy); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_effective_policy")
 	}
 }
