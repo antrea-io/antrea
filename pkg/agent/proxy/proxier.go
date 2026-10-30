@@ -1372,6 +1372,7 @@ func (p *ProxyServer) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 // newProxier returns a new single-stack proxier.
 func newProxier(
 	hostname string,
+	localPodCIDR *net.IPNet,
 	ofClient openflow.Client,
 	ipFamily corev1.IPFamily,
 	routeClient route.Interface,
@@ -1405,7 +1406,7 @@ func newProxier(
 
 	p := &proxier{
 		nodeIPChecker:                        nodeIPChecker,
-		endpointsChanges:                     newEndpointsChangesTracker(hostname, ipFamily),
+		endpointsChanges:                     newEndpointsChangesTracker(hostname, ipFamily, localPodCIDR),
 		serviceChanges:                       newServiceChangesTracker(ipFamily, serviceLabelSelector, skipServices),
 		serviceMap:                           k8sproxy.ServicePortMap{},
 		serviceInstalledMap:                  k8sproxy.ServicePortMap{},
@@ -1460,6 +1461,8 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 
 func newDualStackProxier(
 	hostname string,
+	podIPv4CIDR *net.IPNet,
+	podIPv6CIDR *net.IPNet,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodeIPChecker nodeip.Checker,
@@ -1479,6 +1482,7 @@ func newDualStackProxier(
 ) (Proxier, error) {
 	// Create an IPv4 instance of the single-stack proxier.
 	ipv4Proxier, err := newProxier(hostname,
+		podIPv4CIDR,
 		ofClient,
 		corev1.IPv4Protocol,
 		routeClient,
@@ -1500,6 +1504,7 @@ func newDualStackProxier(
 	}
 	// Create an IPv6 instance of the single-stack proxier.
 	ipv6Proxier, err := newProxier(hostname,
+		podIPv6CIDR,
 		ofClient,
 		corev1.IPv6Protocol,
 		routeClient,
@@ -1548,6 +1553,8 @@ func generateServiceLabelSelector(serviceProxyName string) labels.Selector {
 }
 
 func NewProxyServer(hostname string,
+	podIPv4CIDR *net.IPNet,
+	podIPv6CIDR *net.IPNet,
 	nodeManager *k8sproxy.NodeManager,
 	ofClient openflow.Client,
 	routeClient route.Interface,
@@ -1582,6 +1589,8 @@ func NewProxyServer(hostname string,
 	switch {
 	case v4Enabled && v6Enabled:
 		proxier, err = newDualStackProxier(hostname,
+			podIPv4CIDR,
+			podIPv6CIDR,
 			ofClient,
 			routeClient,
 			nodeIPChecker,
@@ -1604,6 +1613,7 @@ func NewProxyServer(hostname string,
 		}
 	case v4Enabled:
 		proxier, err = newProxier(hostname,
+			podIPv4CIDR,
 			ofClient,
 			corev1.IPv4Protocol,
 			routeClient,
@@ -1625,6 +1635,7 @@ func NewProxyServer(hostname string,
 		}
 	case v6Enabled:
 		proxier, err = newProxier(hostname,
+			podIPv6CIDR,
 			ofClient,
 			corev1.IPv6Protocol,
 			routeClient,
