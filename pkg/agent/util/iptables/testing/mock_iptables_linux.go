@@ -154,6 +154,21 @@ func (mr *MockInterfaceMockRecorder) InsertRule(protocol, table, chain, ruleSpec
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertRule", reflect.TypeOf((*MockInterface)(nil).InsertRule), protocol, table, chain, ruleSpec)
 }
 
+// ListChains mocks base method.
+func (m *MockInterface) ListChains(protocol iptables.Protocol, table string) (map[iptables.Protocol][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListChains", protocol, table)
+	ret0, _ := ret[0].(map[iptables.Protocol][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListChains indicates an expected call of ListChains.
+func (mr *MockInterfaceMockRecorder) ListChains(protocol, table any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListChains", reflect.TypeOf((*MockInterface)(nil).ListChains), protocol, table)
+}
+
 // ListRules mocks base method.
 func (m *MockInterface) ListRules(protocol iptables.Protocol, table, chain string) (map[iptables.Protocol][]string, error) {
 	m.ctrl.T.Helper()
