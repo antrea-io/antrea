@@ -7,12 +7,13 @@
 - [Prerequisites](#prerequisites)
 - [The Egress resource](#the-egress-resource)
   - [AppliedTo](#appliedto)
-  - [EgressIP](#egressip)
+  - [EgressIPs](#egressips)
   - [ExternalIPPool](#externalippool)
+  - [IP family selection](#ip-family-selection)
   - [Bandwidth](#bandwidth)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
-  - [SubnetInfo](#subnetinfo)
+  - [Subnets](#subnets)
   - [NodeSelector](#nodeselector)
 - [Usage examples](#usage-examples)
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
@@ -78,7 +79,7 @@ data:
 A typical Egress resource example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -90,11 +91,34 @@ spec:
     podSelector:
       matchLabels:
         role: web
-  egressIP: 10.10.0.8 # can be populated by Antrea after assigning an IP from the pool below
+  egressIPs: # can be populated by Antrea after assigning an IP from the pool below
+  - 10.10.0.8
   externalIPPool: prod-external-ip-pool
 status:
   egressNode: node01
+  egressIPs:
+  - 10.10.0.8
 ```
+
+Starting with Antrea v2.8, the Egress and ExternalIPPool CRDs support the
+`v1beta2` API version, which introduces incompatible schema changes from
+`v1beta1`. This document describes `v1beta2`. The `v1beta1` CRDs remain
+served for compatibility; see the
+[Antrea v2.7 documentation](https://github.com/antrea-io/antrea/blob/release-2.7/docs/egress.md)
+for their definitions and configuration examples.
+
+The `crd.antrea.io/conversion-data` annotation is reserved for API version
+conversion on Egress and ExternalIPPool resources. When updating an existing
+resource, do not add, modify, or remove this annotation. When updating through
+`v1beta1`, preserve it exactly as returned by the API server. For example,
+modify the object returned by a GET request instead of rebuilding it. When
+copying an existing resource to create a new one, remove the annotation from
+the copy before submitting it.
+
+While the `v1beta2` schema is designed to support dual-stack Egress with up to
+two entries in each of `spec.egressIPs` and `spec.ipFamilies`, dual-stack Egress
+runtime support is not yet implemented. Currently, when specified, each field
+must contain a single entry.
 
 ### AppliedTo
 
@@ -105,25 +129,25 @@ with a `namespaceSelector`, all Pods from Namespaces selected by the
 be selected by providing both a `podSelector` and a `namespaceSelector`. Empty
 `appliedTo` selects nothing. The field is mandatory.
 
-### EgressIP
+### EgressIPs
 
-The `egressIP` field specifies the egress (SNAT) IP the traffic from the
+The `egressIPs` field specifies the egress (SNAT) IP the traffic from the
 selected Pods to the external network should use. **The IP must be reachable
 from all Nodes.** The IP can be specified when creating the Egress. Starting
 with Antrea v1.2, it can be allocated from an `ExternalIPPool` automatically.
 
-- If `egressIP` is not specified, `externalIPPool` must be specified. An IP will
+- If `egressIPs` is not specified, `externalIPPool` must be specified. An IP will
   be allocated from the pool by the antrea-controller. The IP will be assigned
   to a Node selected by the `nodeSelector` of the `externalIPPool` automatically.
-- If both `egressIP` and `externalIPPool` are specified, the IP must be in the
+- If both `egressIPs` and `externalIPPool` are specified, the IP must be in the
   range of the pool. Similarly, the IP will be assigned to a Node selected by
   the `externalIPPool` automatically.
-- If only `egressIP` is specified, Antrea will not manage the assignment of the
+- If only `egressIPs` is specified, Antrea will not manage the assignment of the
   IP and it must be assigned to an arbitrary interface of one Node manually.
 
 **Starting with Antrea v1.2, high availability is provided automatically when
-the `egressIP` is allocated from an `externalIPPool`**, i.e. when the
-`externalIPPool` is specified. If the Node hosting the `egressIP` fails, another
+the Egress IP is allocated from an `externalIPPool`**, i.e. when the
+`externalIPPool` is specified. If the Node hosting the Egress IP fails, another
 Node will be elected (from among the remaining Nodes selected by the
 `nodeSelector` of the `externalIPPool`) as the new egress Node of this Egress.
 It will take over the IP and send layer 2 advertisement (for example, Gratuitous
@@ -134,14 +158,54 @@ to be down and egress traffic will not flow through it but the interface determi
 by the route table.
 
 **Note**: If more than one Egress applies to a Pod and they specify different
-`egressIP`, the effective egress IP will be selected randomly.
+Egress IP, the effective Egress will be selected randomly.
 
 ### ExternalIPPool
 
-The `externalIPPool` field specifies the name of the `ExternalIPPool` that the
-`egressIP` should be allocated from. It also determines which Nodes the IP can
-be assigned to. It can be empty, which means users should assign the `egressIP`
-to one Node manually.
+The `externalIPPool` field specifies the name of the `ExternalIPPool` from
+which the Egress IP is allocated. The pool's `nodeSelector` determines which
+Nodes are eligible to host the IP. If the hosting Node becomes unreachable,
+Antrea moves the IP to another eligible Node, if one is available.
+
+If `externalIPPool` is not specified, you must specify a single IP in
+`egressIPs` and configure that IP on a network interface of one Node manually.
+Antrea does not allocate the IP or provide automatic failover in this case.
+
+### IP family selection
+
+The optional `ipFamilies` field selects the IP families for automatic allocation.
+One entry requests single-stack allocation. The schema also supports two entries,
+one `IPv4` and one `IPv6`, in any order, for future dual-stack allocation.
+Dual-stack allocation is not supported yet; currently, specify a single entry.
+For example, the following configuration requests automatic allocation of an
+IPv6 address from a dual-stack `ExternalIPPool`:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta2
+kind: Egress
+metadata:
+  name: egress-prod-web
+spec:
+  appliedTo:
+    namespaceSelector:
+      matchLabels:
+        env: prod
+    podSelector:
+      matchLabels:
+        role: web
+  externalIPPool: dual-stack-pool
+  ipFamilies:
+  - IPv6
+```
+
+If `egressIPs` is provided, `ipFamilies` may be omitted. If both fields are
+specified, their IP families must match, regardless of order. The schema also
+supports two explicit `egressIPs` entries, one IPv4 address and one IPv6 address,
+in any order, but such requests are currently rejected until dual-stack Egress
+runtime support is implemented. If both `egressIPs` and `ipFamilies` are
+omitted, Antrea allocates a single IP from the pool without an IP family
+preference. A single-stack pool provides an IP of its family; a dual-stack pool
+can provide either an IPv4 or an IPv6 address, depending on availability.
 
 ### Bandwidth
 
@@ -163,7 +227,7 @@ function requires the OVS datapath to support meters.
 An Egress with traffic shaping example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -175,12 +239,15 @@ spec:
     podSelector:
       matchLabels:
         role: web
-  egressIP: 10.10.0.8
+  egressIPs:
+  - 10.10.0.8
   bandwidth:
     rate: 800M
     burst: 2G
 status:
   egressNode: node01
+  egressIPs:
+  - 10.10.0.8
 ```
 
 ## The ExternalIPPool resource
@@ -190,7 +257,7 @@ external network. The IPs in the pool can be allocated to the Egress resources
 as the Egress IPs. A typical ExternalIPPool resource example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: ExternalIPPool
 metadata:
   name: prod-external-ip-pool
@@ -219,14 +286,45 @@ providing a /32 CIDR or a /31 CIDR will yield an empty pool of IP addresses. A
 /28 CIDR will yield 14 allocatable IP addresses. In the future we may make this
 behavior configurable, so that the full CIDR can be used if desired.
 
-### SubnetInfo
+Antrea considers at most 65,536 candidate addresses from each IP range. For a
+range larger than this limit, the allocator considers only the first 65,536
+candidate addresses. This limit applies independently to each range, not to the
+ExternalIPPool as a whole. The `TOTAL` column of `kubectl get externalippools`
+reports the sum of the allocator capacities (used plus free) across all
+configured ranges. For a CIDR range, this capacity excludes the first address
+and the IPv4 broadcast address. `TOTAL` therefore represents the allocator
+capacity rather than the theoretical size of the ranges, and it can exceed
+65,536 when an ExternalIPPool contains multiple ranges. A configured gateway is
+not automatically excluded from this capacity.
+
+### Subnets
 
 By default, it's assumed that the IPs allocated from an ExternalIPPool are in
 the same subnet as the Node IPs. Starting with Antrea v1.15, IPs can be
 allocated from a subnet different from the Node IPs.
 
-The optional `subnetInfo` field contains the subnet attributes of the IPs in
-this pool. When using a different subnet:
+The optional `spec.subnets` list contains the subnet attributes
+of the IPs in this pool. Specify one entry for a single-stack pool or two
+entries, one per IP family, for a dual-stack pool. Each entry has its own
+gateway, prefix length, and optional VLAN ID. When configured, the subnets must
+cover all IP ranges and match their IP families. An empty pool can retain its
+subnets until ranges are added.
+
+The `gateway` and `prefixLength` of each configured subnet cannot be changed,
+and configured subnets cannot be removed. Subnet configuration may be added when
+previously absent, and subnet entries may be reordered. VLAN IDs may be updated.
+
+The `v1beta1` API uses a single `spec.subnetInfo` field and does not support
+dual-stack subnet configuration. When a `v1beta1` ExternalIPPool is read through
+the `v1beta2` API, that configuration appears as one entry in `spec.subnets`.
+
+When a `v1beta2` ExternalIPPool with both IPv4 and IPv6 subnets configured is
+read by a `v1beta1` client, `spec.subnetInfo` contains the IPv4 subnet. The IPv6
+subnet is preserved in the `crd.antrea.io/conversion-data` annotation. Updating
+the IPv4 subnet through `spec.subnetInfo` preserves the IPv6 subnet. Removing
+`spec.subnetInfo` removes the subnet configuration for both families.
+
+When using a different subnet:
 
 * `gateway` and `prefixLength` must be set. Antrea will route Egress traffic to
 the specified gateway when the destination is not in the same subnet of the
@@ -246,7 +344,7 @@ sub-interfaces on the transport interface.
 An example of ExternalIPPool using a non-default subnet is as below:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: ExternalIPPool
 metadata:
   name: prod-external-ip-pool
@@ -254,8 +352,8 @@ spec:
   ipRanges:
   - start: 10.10.0.2
     end: 10.10.0.10
-  subnetInfo:
-    gateway: 10.10.0.1
+  subnets:
+  - gateway: 10.10.0.1
     prefixLength: 24
     vlan: 10
   nodeSelector:
@@ -297,7 +395,7 @@ First, create an `ExternalIPPool` with a list of external routable IPs on the
 network.
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: ExternalIPPool
 metadata:
   name: external-ip-pool
@@ -312,7 +410,7 @@ Then create two `Egress` resources, each of which applies to web apps in one
 Namespace.
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -326,7 +424,7 @@ spec:
         app: web
   externalIPPool: external-ip-pool
 ---
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-staging-web
@@ -346,9 +444,9 @@ IP from the IP pool and gets one Node assigned as its Egress Node.
 
 ```yaml
 # kubectl get egress
-NAME                 EGRESSIP       AGE   NODE
-egress-prod-web      10.10.0.11     1m    node-4
-egress-staging-web   10.10.0.12     1m    node-6
+NAME                 EGRESSIPS        AGE   NODE
+egress-prod-web      ["10.10.0.11"]   1m    node-4
+egress-staging-web   ["10.10.0.12"]   1m    node-6
 ```
 
 Now, the packets from the Pods with label `app=web` in the `prod` Namespace to
@@ -372,7 +470,7 @@ Since the Egress IPs have been configured to the Nodes, we can create `Egress`
 resources with specific IPs directly.
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-prod
@@ -381,9 +479,10 @@ spec:
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: prod
-  egressIP: 10.10.0.104   # node-4's IP
+  egressIPs:
+  - 10.10.0.104   # node-4's IP
 ---
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-staging
@@ -392,7 +491,8 @@ spec:
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: staging
-  egressIP: 10.10.0.105   # node-5's IP
+  egressIPs:
+  - 10.10.0.105   # node-5's IP
 ```
 
 List the `Egress` resource with kubectl. The output shows `10.10.0.104` is
@@ -400,9 +500,9 @@ discovered on `node-4` Node while `10.10.0.105` is discovered on `node-5`.
 
 ```yaml
 # kubectl get egress
-NAME                 EGRESSIP       AGE   NODE
-egress-prod          10.10.0.104    1m    node-4
-egress-staging       10.10.0.105    1m    node-5
+NAME                 EGRESSIPS         AGE   NODE
+egress-prod          ["10.10.0.104"]   1m    node-4
+egress-staging       ["10.10.0.105"]   1m    node-5
 ```
 
 Now, the packets from the Pods in the `prod` Namespace to the external
@@ -411,7 +511,7 @@ while the packets from the Pods in the `staging` Namespace to the external
 network will be redirected to the `node-5` Node and SNATed to `10.10.0.105`.
 
 In this configuration, if the `node-4` Node powers off, re-configuring
-`10.10.0.104` to another Node or updating the `egressIP` of `egress-prod` to
+`10.10.0.104` to another Node or updating the `egressIPs` of `egress-prod` to
 another Node's IP can recover the egress connection. Antrea will detect the
 configuration change and redirect the packets from the Pods in the `prod`
 Namespace to the new Node.
