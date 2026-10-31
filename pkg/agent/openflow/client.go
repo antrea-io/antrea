@@ -195,9 +195,11 @@ type Client interface {
 
 	// ReplayFlows should be called when a spurious disconnection occurs. After we reconnect to
 	// the OFSwitch, we need to replay all the flows cached by the client. ReplayFlows will try
-	// to replay as many flows as possible, and will log an error when a flow cannot be
-	// installed.
-	ReplayFlows()
+	// to replay as many flows as possible, and returns an error if any entry cannot be
+	// installed. In that case, the OVS bridge may be missing flows, groups or meters, and the
+	// caller should call ReplayFlows again: every call starts by deleting all groups and meters,
+	// so it is safe to retry.
+	ReplayFlows() error
 
 	// DeleteStaleFlows deletes all flows from the previous round which are no longer needed. It
 	// should be called by the agent after all required flows have been installed / updated with
@@ -1190,12 +1192,23 @@ func (c *client) UninstallEgressQoS(meterID uint32) error {
 	return nil
 }
 
-func (c *client) ReplayFlows() {
+func (c *client) ReplayFlows() error {
 	c.replayMutex.Lock()
 	defer c.replayMutex.Unlock()
 
+	// A retry may reuse the same connection. Reset counts from the previous attempt, since
+	// replaying flows increments them even when OVS replaces entries that already exist.
+	c.bridge.ResetFlowTableStatus()
+
+	var errs []error
+	// initialize deletes all groups and meters before installing the default flows and the
+	// initial groups of each feature (e.g. the NetworkPolicy logging groups). If it fails
+	// part way, some of these groups are missing from OVS, and the feature flows which
+	// reference them cannot be installed. Keep replaying the remaining entries, so that as
+	// much as possible is restored, but report the failure so that the caller retries.
 	if err := c.initialize(); err != nil {
-		klog.Errorf("Error during flow replay: %v", err)
+		klog.ErrorS(err, "Error during flow replay")
+		errs = append(errs, err)
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
@@ -1205,15 +1218,19 @@ func (c *client) ReplayFlows() {
 			// calling AddOFEntries function.
 			if err := meter.Add(); err != nil {
 				klog.ErrorS(err, "Error when replaying feature meters", "feature", featureName)
+				errs = append(errs, fmt.Errorf("failed to replay feature %s meters: %w", featureName, err))
 			}
 		}
 		if err := c.ofEntryOperations.AddOFEntries(activeFeature.replayGroups()); err != nil {
 			klog.ErrorS(err, "Error when replaying feature groups", "feature", featureName)
+			errs = append(errs, fmt.Errorf("failed to replay feature %s groups: %w", featureName, err))
 		}
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
 			klog.ErrorS(err, "Error when replaying feature flows", "feature", featureName)
+			errs = append(errs, fmt.Errorf("failed to replay feature %s flows: %w", featureName, err))
 		}
 	}
+	return errors.Join(errs...)
 }
 
 func (c *client) deleteFlowsByRoundNum(roundNum uint64) error {
