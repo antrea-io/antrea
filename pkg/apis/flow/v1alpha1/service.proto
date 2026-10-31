@@ -124,7 +124,10 @@ message GetFlowsRequest {
   // Maximum number of flows to return in total. 0 means no limit.
   uint32 max_count = 3;
   // If true, keep the stream open and push new flows as they arrive after
-  // historical flows have been sent. If false, close after historical flows.
+  // historical flows have been sent. If false, close once every flow held when
+  // the stream was opened has been accounted for, without waiting for new ones:
+  // the last response's resume_token then names the last of those, so a client
+  // resuming from it picks up exactly where this stream ended.
   bool follow = 4;
   // Request flows cluster-wide, including records that cannot be attributed to
   // any Namespace: both endpoints external, or no Kubernetes metadata at all.
