@@ -318,7 +318,10 @@ type GetFlowsRequest struct {
 	// Maximum number of flows to return in total. 0 means no limit.
 	MaxCount uint32 `protobuf:"varint,3,opt,name=max_count,json=maxCount,proto3" json:"max_count,omitempty"`
 	// If true, keep the stream open and push new flows as they arrive after
-	// historical flows have been sent. If false, close after historical flows.
+	// historical flows have been sent. If false, close once every flow held when
+	// the stream was opened has been accounted for, without waiting for new ones:
+	// the last response's resume_token then names the last of those, so a client
+	// resuming from it picks up exactly where this stream ended.
 	Follow bool `protobuf:"varint,4,opt,name=follow,proto3" json:"follow,omitempty"`
 	// Request flows cluster-wide, including records that cannot be attributed to
 	// any Namespace: both endpoints external, or no Kubernetes metadata at all.

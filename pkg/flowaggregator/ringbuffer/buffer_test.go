@@ -813,10 +813,10 @@ func TestReadAvailableSkipsOverwrittenHeadRatherThanStalling(t *testing.T) {
 }
 
 // TestConsumeMultipleDoesNotReportEmptyWhileDataRemains is the same case at the ConsumeMultiple
-// level, where it matters to callers: n == 0 is how a caller learns the buffer is drained
-// (FlowStreamService ends a non-follow stream on it), so an overwritten head must not produce it
-// while readable positions remain. The batch must also still be the contiguous run ending at end,
-// with the lost position sitting immediately before it.
+// level, where it matters to callers: n == 0 with nothing lost tells a caller that there was
+// nothing to read, so an overwritten head must not produce it while readable positions remain.
+// The batch must also still be the contiguous run ending at end, with the lost position sitting
+// immediately before it.
 func TestConsumeMultipleDoesNotReportEmptyWhileDataRemains(t *testing.T) {
 	const bufSize = 8
 	rb := NewBroadcastBuffer[int](bufSize)

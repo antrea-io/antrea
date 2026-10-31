@@ -298,7 +298,7 @@ func rejectUnaryRPC(ctx context.Context, req any, info *grpc.UnaryServerInfo, ha
 // GetFlows is the server-streaming RPC handler. The gRPC framework spawns a
 // goroutine per connected client and calls this method. It exits when:
 //   - the client disconnects (ctx cancelled / stream.Send error),
-//   - follow=false and all historical flows have been sent,
+//   - follow=false and every flow the buffer held when the stream opened has been accounted for,
 //   - max_count flows have been sent,
 //   - or the ring buffer shuts down.
 func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.FlowStreamService_GetFlowsServer) error {
@@ -373,13 +373,19 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// producer advances between Tip and NewConsumer, the consumer starts slightly behind the buffer
 	// and its first read counts those records as dropped, which is correct: they were held when the
 	// stream started, and were evicted before it could deliver them.
-	resumePos := max(s.buffer.Tip()-s.buffer.Capacity(), 0) - 1
+	//
+	// tip, the position the buffer is about to write when the stream opens, is also where a
+	// non-follow stream ends: it covers the records held at that point, and none produced after.
+	// Ending at the first read that finds nothing new instead would not end the stream at all while
+	// records keep arriving at least once per ConsumeDeadline, which a busy cluster always does.
+	tip := s.buffer.Tip()
+	resumePos := max(tip-s.buffer.Capacity(), 0) - 1
 	if r := req.GetResume(); r != nil && r.GetStreamEpoch() == s.streamEpoch {
 		if r.GetSequenceNumber() < -1 {
 			return status.Errorf(codes.InvalidArgument,
 				"resume sequence_number %d is invalid: must be -1 or greater", r.GetSequenceNumber())
 		}
-		if tip := s.buffer.Tip(); r.GetSequenceNumber() >= tip {
+		if r.GetSequenceNumber() >= tip {
 			return status.Errorf(codes.InvalidArgument,
 				"resume sequence_number %d is invalid: must be less than %d, the next position to be written",
 				r.GetSequenceNumber(), tip)
@@ -428,11 +434,33 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// client to reconnect before its resume point is evicted.
 	lastTokenPos := resumePos
 	tokenRefreshSpan := max(s.buffer.Capacity()/2, 1)
+	// pos is the position of the last record this stream accounted for, by sending it, filtering it
+	// out or counting it as dropped.
+	pos := resumePos
 
 	for {
 		if err := ctx.Err(); err != nil {
 			klog.InfoS("Client disconnected from FlowStreamService", "err", err)
 			return status.FromContextError(err).Err()
+		}
+
+		// A non-follow stream that has reached its end closes before revalidating: it has nothing
+		// left to send that a revoked grant could withhold, and its client should see it end
+		// cleanly rather than fail after receiving everything it asked for.
+		if !follow && pos >= tip-1 {
+			// Sending up-to-date pos for a non-follow stream at its end keeps a selective client's
+			// dropped_count accurate across repeated non-follow polls.
+			if pos > lastTokenPos {
+				if err := stream.Send(&flowpb.GetFlowsResponse{
+					DroppedCount: totalDropped,
+					ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: pos},
+				}); err != nil {
+					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+					return err
+				}
+			}
+			klog.InfoS("Accounted for every flow held when the stream opened, closing non-follow stream")
+			return nil
 		}
 
 		if streamAuth != nil {
@@ -444,9 +472,28 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			}
 		}
 
+		out := batch
+		if !follow {
+			// Asking for no more than the records left before tip lets ConsumeMultiple return as
+			// soon as it has them, instead of waiting out its deadline for more.
+			out = batch[:min(int64(len(batch)), tip-1-pos)]
+		}
+
 		// A batch returned together with shutdown is still processed and sent below before the
 		// stream closes: it is the last one the buffer will ever hand out.
-		n, dropped, endPos, shutdown := consumer.ConsumeMultiple(batch)
+		n, dropped, endPos, shutdown := consumer.ConsumeMultiple(out)
+		if !follow && endPos > tip {
+			// The producer lapped this consumer, which skipped ahead to the oldest record still
+			// held and may have read records produced after tip, or counted some as lost. Neither
+			// belongs to this stream, so they are trimmed off the end of the read: the delivered
+			// records come last, right after the lost ones, and the read started before tip, so
+			// the excess never exceeds n+dropped.
+			excess := endPos - tip
+			cut := min(excess, int64(n))
+			n -= int(cut)
+			dropped -= excess - cut
+			endPos = tip
+		}
 		totalDropped += uint64(dropped)
 
 		limit := 0
@@ -474,6 +521,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			sent += len(filtered)
 			lastTokenPos = tokenPos
 		}
+		pos = tokenPos
 
 		if maxCount > 0 && sent >= maxCount {
 			klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
@@ -482,24 +530,6 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
-			return nil
-		}
-
-		// n == 0 with dropped > 0 is not the tail: every record available to this read was
-		// overwritten before it could be read, and the buffer may still hold more.
-		if !follow && n == 0 && dropped == 0 {
-			// Sending up-to-date tokenPos for a non-follow stream at the tail keeps a selective
-			// client's dropped_count accurate across repeated non-follow polls.
-			if tokenPos > lastTokenPos {
-				if err := stream.Send(&flowpb.GetFlowsResponse{
-					DroppedCount: totalDropped,
-					ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
-				}); err != nil {
-					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
-					return err
-				}
-			}
-			klog.InfoS("Caught up to ring buffer tail, closing non-follow stream")
 			return nil
 		}
 	}
