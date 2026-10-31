@@ -987,15 +987,13 @@ func TestGetFlows_ReceivesAllFlows(t *testing.T) {
 		svc := newTestService(buf)
 		stream := newFakeStream(t.Context())
 
+		start := time.Now()
 		errCh := make(chan error, 1)
 		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
-
-		// Advance fake time past ConsumeDeadline so that after all buffered flows
-		// are consumed, ConsumeMultiple returns n==0 and the non-follow stream exits.
-		time.Sleep(2 * exporter.ConsumeDeadline)
-		synctest.Wait()
-
 		require.NoError(t, <-errCh)
+		// No fake time passes: a non-follow stream knows where it ends, so it returns without
+		// waiting out ConsumeDeadline for more records.
+		assert.Zero(t, time.Since(start))
 		got := collectFlows(stream.responses)
 		gotIDs := make([]string, len(got))
 		for i, f := range got {
@@ -1443,6 +1441,36 @@ func TestGetFlows_RevokedMidStream(t *testing.T) {
 	})
 }
 
+// TestGetFlows_NonFollowEndsWithoutRevalidating covers a non-follow stream that has sent every
+// record it will ever send when revalidation comes due: it ends cleanly, even if the grant was
+// revoked in the meantime, instead of failing after its client received everything it asked for.
+func TestGetFlows_NonFollowEndsWithoutRevalidating(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(podFlow("ns-a", "ns-b"))
+
+		svc, fake := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+		// While the last record goes out, the grant is revoked and revalidation comes due.
+		stream.onSend = func(r *flowpb.GetFlowsResponse) {
+			if len(r.GetFlows()) > 0 {
+				fake.revoke(flowsGrant(listVerb, "ns-a"))
+				time.Sleep(revalidationInterval)
+			}
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+		}()
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+		require.Len(t, collectFlows(stream.responses), 1)
+	})
+}
+
 func TestGetFlows_HandshakeAndSequenceNumbers(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
@@ -1640,8 +1668,10 @@ func TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops(t *testing.T) {
 		// Simulate the race: right as the resuming stream's handshake response goes out, the
 		// producer advances by a full buffer's worth, evicting flow-0 and flow-1 — exactly the
 		// range this stream's client already has from the first stream — before the resuming
-		// consumer gets to read anything.
-		second := newFakeStream(t.Context())
+		// consumer gets to read anything. The resuming stream follows, since a non-follow one would
+		// end right away: nothing past the resume position was held when it opened.
+		ctx, cancel := context.WithCancel(t.Context())
+		second := newFakeStream(ctx)
 		second.onSend = func(*flowpb.GetFlowsResponse) {
 			second.onSend = nil // only once, on the handshake
 			for i := 2; i < 2+bufSize; i++ {
@@ -1649,11 +1679,14 @@ func TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops(t *testing.T) {
 			}
 		}
 		go func() {
-			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true, Resume: token}, second)
 		}()
 		time.Sleep(2 * exporter.ConsumeDeadline)
 		synctest.Wait()
-		require.NoError(t, <-errCh)
+		cancel()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		assert.Equal(t, codes.Canceled, status.Code(<-errCh))
 
 		data := second.responses[len(second.responses)-1]
 		assert.Zero(t, data.GetDroppedCount(),
@@ -1949,11 +1982,11 @@ func TestGetFlows_TokenRefreshWhenEverythingFilteredOut(t *testing.T) {
 	})
 }
 
-// TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut covers a non-follow, selective stream
-// that reaches the tail without ever crossing tokenRefreshSpan: every record it read was filtered
+// TestGetFlows_NonFollowEndSendsFinalTokenWhenFilteredOut covers a non-follow, selective stream
+// that reaches its end without ever crossing tokenRefreshSpan: every record it read was filtered
 // out, so the per-batch send condition never fires, and the client would otherwise be left with
 // only its handshake token. The stream must still send that position once, right before closing.
-func TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut(t *testing.T) {
+func TestGetFlows_NonFollowEndSendsFinalTokenWhenFilteredOut(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const bufSize = 64
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
@@ -1973,12 +2006,11 @@ func TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut(t *testing.T) {
 				Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
 			}},
 		}
+		start := time.Now()
 		errCh := make(chan error, 1)
 		go func() { errCh <- svc.GetFlows(req, stream) }()
-		time.Sleep(2 * exporter.ConsumeDeadline)
-		synctest.Wait()
-
 		require.NoError(t, <-errCh)
+		assert.Zero(t, time.Since(start), "the stream must not wait out ConsumeDeadline")
 		assert.Empty(t, collectFlows(stream.responses))
 		require.Len(t, stream.responses, 2, "handshake plus one final token-only response")
 		assert.EqualValues(t, produced-1, stream.responses[len(stream.responses)-1].GetResumeToken().GetSequenceNumber(),
@@ -1986,34 +2018,29 @@ func TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut(t *testing.T) {
 	})
 }
 
-// TestGetFlows_NonFollowTailFinalTokenCarriesDroppedCount covers the same final token-only response
+// TestGetFlows_NonFollowEndFinalTokenCarriesDroppedCount covers the same final token-only response
 // on a stream that did drop records earlier: dropped_count is cumulative for the stream, so that
 // response must repeat it rather than report 0.
-func TestGetFlows_NonFollowTailFinalTokenCarriesDroppedCount(t *testing.T) {
+func TestGetFlows_NonFollowEndFinalTokenCarriesDroppedCount(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		const bufSize = 64
+		// Over internalBatchSize, so that the stream reads the buffer in two batches, and under
+		// twice that, so that the second batch stays under tokenRefreshSpan.
+		const bufSize = 128
+		require.Greater(t, bufSize, internalBatchSize)
+		require.Less(t, bufSize-internalBatchSize, bufSize/2)
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
 		t.Cleanup(func() { buf.Shutdown() })
 
-		produce := func(from, to int) {
-			for i := from; i < to; i++ {
-				buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S("default", "pod", "other", "pod")))
-			}
+		// Positions 22-149 remain in the buffer, so resuming from position 0 drops positions 1-21.
+		// The first batch reports that drop along with positions 22-121, and the second batch
+		// reads positions 122-149, all filtered out, so that only the final token-only response
+		// accounts for them.
+		for i := range 150 {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S("default", "pod", "other", "pod")))
 		}
-		// Positions 36-99 remain in the buffer, so resuming from position 0 drops positions 1-35.
-		produce(0, 100)
 
 		svc := newTestService(buf)
 		stream := newFakeStream(t.Context())
-		// Once the drop has been reported, produce a few more records, all filtered out and well
-		// under tokenRefreshSpan, so that only the final token-only response accounts for them.
-		producedMore := false
-		stream.onSend = func(r *flowpb.GetFlowsResponse) {
-			if r.GetDroppedCount() > 0 && !producedMore {
-				producedMore = true
-				produce(100, 110)
-			}
-		}
 		req := &flowpb.GetFlowsRequest{
 			Follow: false,
 			Filters: []*flowpb.FlowFilter{{
@@ -2022,19 +2049,173 @@ func TestGetFlows_NonFollowTailFinalTokenCarriesDroppedCount(t *testing.T) {
 			}},
 			Resume: &flowpb.ResumeToken{StreamEpoch: svc.streamEpoch, SequenceNumber: 0},
 		}
+		start := time.Now()
 		errCh := make(chan error, 1)
 		go func() { errCh <- svc.GetFlows(req, stream) }()
-		time.Sleep(2 * exporter.ConsumeDeadline)
-		synctest.Wait()
-
 		require.NoError(t, <-errCh)
-		require.True(t, producedMore, "the drop must have been reported before the tail")
+		assert.Zero(t, time.Since(start), "the stream must not wait out ConsumeDeadline")
 		assert.Empty(t, collectFlows(stream.responses))
 		require.Len(t, stream.responses, 3, "handshake, drop report, and one final token-only response")
+		assert.EqualValues(t, 121, stream.responses[1].GetResumeToken().GetSequenceNumber())
 		last := stream.responses[len(stream.responses)-1]
-		assert.EqualValues(t, 109, last.GetResumeToken().GetSequenceNumber(),
+		assert.EqualValues(t, 149, last.GetResumeToken().GetSequenceNumber(),
 			"the final response must report the position this stream actually reached")
-		assert.EqualValues(t, 35, last.GetDroppedCount(), "dropped_count is cumulative for the stream")
+		assert.EqualValues(t, 21, last.GetDroppedCount(), "dropped_count is cumulative for the stream")
+	})
+}
+
+// TestGetFlows_NonFollowEndsUnderSteadyProduction covers a non-follow stream on a Flow Aggregator
+// that keeps producing records faster than once per ConsumeDeadline, as a busy cluster does: the
+// stream must still end, once it has sent the records held when it opened, and without sending
+// any record produced after that.
+func TestGetFlows_NonFollowEndsUnderSteadyProduction(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		for i := range 3 {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+		}
+		svc := newTestService(buf)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		stream := newFakeStream(ctx)
+		// Produce one more record on every response, starting with the handshake, so that a new
+		// record is always waiting for the stream's next read.
+		next := 3
+		stream.onSend = func(*flowpb.GetFlowsResponse) {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", next), &flowpb.Kubernetes{}))
+			next++
+		}
+
+		start := time.Now()
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
+		select {
+		case err := <-errCh:
+			require.NoError(t, err)
+		case <-time.After(10 * exporter.ConsumeDeadline):
+			// Stop the stream before failing: it must not produce into the buffer after the
+			// cleanup has shut it down.
+			cancel()
+			<-errCh
+			require.FailNow(t, "non-follow GetFlows did not return while records kept being produced")
+		}
+		assert.Zero(t, time.Since(start), "the stream must not wait for records produced after it opened")
+		var gotIDs []string
+		for _, f := range collectFlows(stream.responses) {
+			gotIDs = append(gotIDs, f.GetId())
+		}
+		assert.Equal(t, []string{"flow-0", "flow-1", "flow-2"}, gotIDs)
+		assert.EqualValues(t, 2, stream.responses[len(stream.responses)-1].GetResumeToken().GetSequenceNumber(),
+			"a client resuming from the final token must get the records produced after the stream opened")
+	})
+}
+
+// TestGetFlows_NonFollowEmptyBufferEndsImmediately covers a non-follow stream with nothing to send:
+// it ends right after the handshake, without waiting out ConsumeDeadline.
+func TestGetFlows_NonFollowEmptyBufferEndsImmediately(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		start := time.Now()
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
+		require.NoError(t, <-errCh)
+		assert.Zero(t, time.Since(start), "the stream must not wait out ConsumeDeadline")
+		require.Len(t, stream.responses, 1, "only the handshake")
+		assert.EqualValues(t, -1, stream.responses[0].GetResumeToken().GetSequenceNumber())
+	})
+}
+
+// TestGetFlows_NonFollowLappedStopsAtStartTip covers a non-follow stream lapped by the producer
+// before it reads anything: the consumer skips ahead to the oldest record still held, which is
+// past where the stream ends. The records held when the stream opened are reported as dropped,
+// and those produced after it opened are neither sent nor counted as dropped.
+func TestGetFlows_NonFollowLappedStopsAtStartTip(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 4
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		for i := range bufSize {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+		}
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		// Right as the handshake goes out, produce two buffers' worth: positions 0-7 are evicted,
+		// and only positions 8-11, all produced after the stream opened, remain.
+		stream.onSend = func(*flowpb.GetFlowsResponse) {
+			stream.onSend = nil
+			for i := bufSize; i < 3*bufSize; i++ {
+				buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+			}
+		}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		assert.Empty(t, collectFlows(stream.responses))
+		require.Len(t, stream.responses, 2, "handshake plus the drop report")
+		last := stream.responses[1]
+		assert.EqualValues(t, bufSize, last.GetDroppedCount(), "only positions 0-3 were held when the stream opened")
+		assert.EqualValues(t, bufSize-1, last.GetResumeToken().GetSequenceNumber(),
+			"the stream ends at the last position held when it opened")
+	})
+}
+
+// TestGetFlows_NonFollowLappedResumeTrimsPartOfRead covers a resumed non-follow stream lapped by
+// the producer during its handshake, by less than its whole span: its read starts with a position
+// the client never received but which is now gone, then delivers the records still held, the last
+// of which was produced after the stream opened. Only that last record is trimmed, and the
+// positions the client already received before resuming are not counted as dropped.
+func TestGetFlows_NonFollowLappedResumeTrimsPartOfRead(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 4
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		produce := func(from, to int) {
+			for i := from; i < to; i++ {
+				buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+			}
+		}
+		produce(0, 2)
+		svc := newTestService(buf)
+		first := newFakeStream(t.Context())
+		require.NoError(t, svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, first))
+		token := first.responses[len(first.responses)-1].GetResumeToken()
+		require.EqualValues(t, 1, token.GetSequenceNumber())
+
+		// The second stream opens with positions 0-3 held and resumes after position 1, so it
+		// covers positions 2 and 3. Right as its handshake goes out, positions 4-6 are produced,
+		// evicting positions 0-2: its read loses position 2, then reads positions 3 and 4.
+		produce(2, 4)
+		second := newFakeStream(t.Context())
+		second.onSend = func(*flowpb.GetFlowsResponse) {
+			second.onSend = nil
+			produce(4, 7)
+		}
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
+		}()
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		var gotIDs []string
+		for _, f := range collectFlows(second.responses) {
+			gotIDs = append(gotIDs, f.GetId())
+		}
+		assert.Equal(t, []string{"flow-3"}, gotIDs, "flow-4 was produced after the stream opened")
+		require.Len(t, second.responses, 2, "handshake plus one data response")
+		last := second.responses[1]
+		assert.EqualValues(t, 1, last.GetDroppedCount(), "only position 2 was held at open and never received")
+		assert.EqualValues(t, 3, last.GetResumeToken().GetSequenceNumber())
 	})
 }
 
