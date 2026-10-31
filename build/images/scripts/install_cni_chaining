@@ -114,11 +114,13 @@ function monitor {
         while read -r directory action filename; do
             if [[ "$filename" == "$cni_conf_name" ]]; then
                 log_info "install_cni_chaining" "inotify event in $directory: $action $filename"
-                sha="$(sha256sum "$directory/$filename" | while read -r s _; do echo "$s"; done)"
-                if [[ "$sha" == "" ]]; then
+                # hash the content the same way update_cni_conf does, so that a file
+                # ending with a newline can match cni_conf_sha
+                if ! content="$(cat "$directory/$filename" 2>/dev/null)"; then
                     log_warning "install_cni_chaining" "unable to compute sha, file may have been deleted"
                     continue
                 fi
+                sha="$(echo -n "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
                 if [[ "$sha" == "$cni_conf_sha" ]]; then
                     log_info "install_cni_chaining" "sha matches existing one, ignoring event"
                     continue
