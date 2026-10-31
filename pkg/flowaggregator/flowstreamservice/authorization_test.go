@@ -709,6 +709,196 @@ func TestAuthorized_ConnectionStoppedBeforeTheDestination(t *testing.T) {
 	}
 }
 
+// TestAuthorized_DestinationService covers the destination Service end to end: it is disclosed at
+// the tier of its own Namespace rather than its endpoint's, and withheld along with a destination
+// Namespace that is withheld. The Service's Namespace does not bring a record into a stream.
+func TestAuthorized_DestinationService(t *testing.T) {
+	// toService is a connection from a Pod of sourceNamespace to service, whose endpoint is a Pod of
+	// destinationNamespace, or not a Pod at all (e.g. a hostNetwork Pod) when that is empty.
+	toService := func(sourceNamespace, destinationNamespace, service string) *flowpb.Flow {
+		f := podFlow(sourceNamespace, destinationNamespace)
+		if destinationNamespace == "" {
+			f.K8S.FlowType = flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL
+			f.K8S.DestinationPodName = ""
+		}
+		f.K8S.DestinationServicePortName = service
+		f.K8S.DestinationServiceIp = []byte{10, 96, 0, 10}
+		return f
+	}
+	denied := func(f *flowpb.Flow) *flowpb.Flow {
+		f.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+		f.K8S.EgressNetworkPolicyNamespace = f.K8S.SourcePodNamespace
+		f.K8S.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		return f
+	}
+	identity := flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY
+	flow := flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW
+
+	tests := []struct {
+		name   string
+		flow   *flowpb.Flow
+		grants []string
+		// observed is whether the record reaches a stream opened for ns-a.
+		observed       bool
+		wantService    bool
+		wantSvcTier    flowpb.EndpointDisclosure
+		wantDstTier    flowpb.EndpointDisclosure
+		wantUnmodified bool
+	}{
+		{
+			name:           "the stream's own Service, endpoint in the stream's Namespace",
+			flow:           toService("ns-a", "ns-a", "ns-a/svc:http"),
+			observed:       true,
+			wantService:    true,
+			wantUnmodified: true,
+		},
+		{
+			name:        "the stream's own Service, endpoint not a Pod",
+			flow:        toService("ns-a", "", "ns-a/svc-hn:http"),
+			observed:    true,
+			wantService: true,
+			wantDstTier: flow,
+		},
+		{
+			name:        "the stream's own Service, endpoint in another Namespace",
+			flow:        toService("ns-a", "ns-b", "ns-a/svc-xns:http"),
+			observed:    true,
+			wantService: true,
+			wantDstTier: flow,
+		},
+		{
+			name:        "another Namespace's Service, endpoint in the stream's Namespace",
+			flow:        toService("ns-c", "ns-a", "ns-b/svc-xns:http"),
+			observed:    true,
+			wantSvcTier: flow,
+		},
+		{
+			name:        "a Service the client may identify, endpoint not a Pod",
+			flow:        toService("ns-a", "", "default/kubernetes:https"),
+			grants:      []string{identityGrant("default")},
+			observed:    true,
+			wantService: true,
+			wantSvcTier: identity,
+			wantDstTier: flow,
+		},
+		{
+			name:        "a Service the client may not identify, endpoint not a Pod",
+			flow:        toService("ns-a", "", "default/kubernetes:https"),
+			observed:    true,
+			wantSvcTier: flow,
+			wantDstTier: flow,
+		},
+		{
+			// A ClusterIP whose name could not be resolved names no Namespace to authorize against.
+			name:        "a Service without a name",
+			flow:        toService("ns-a", "ns-a", ""),
+			observed:    true,
+			wantSvcTier: flow,
+		},
+		{
+			// There is no destination Namespace to withhold.
+			name:        "a denied connection to a Service the client may identify, endpoint not a Pod",
+			flow:        denied(toService("ns-a", "", "default/kubernetes:https")),
+			grants:      []string{identityGrant("default")},
+			observed:    true,
+			wantService: true,
+			wantSvcTier: identity,
+			wantDstTier: flow,
+		},
+		{
+			name:        "a denied connection to the stream's own Service, endpoint in another Namespace",
+			flow:        denied(toService("ns-a", "ns-b", "ns-a/svc-xns:http")),
+			observed:    true,
+			wantSvcTier: flow,
+			wantDstTier: flow,
+		},
+		{
+			// There is no Service to withhold, so none is reported as withheld.
+			name:        "a denied connection without a Service, endpoint in another Namespace",
+			flow:        denied(podFlow("ns-a", "ns-b")),
+			observed:    true,
+			wantDstTier: flow,
+		},
+		{
+			name: "a call to the stream's own Service from another Namespace, endpoint not a Pod",
+			flow: toService("ns-c", "", "ns-a/svc-hn:http"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			grants := append([]string{flowsGrant(watchVerb, "ns-a")}, tt.grants...)
+			a := newAuthorizer(newFakeAuthorizer(grants...))
+			req := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}
+			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+			require.NoError(t, err)
+
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{tt.flow})
+
+			if !tt.observed {
+				assert.Empty(t, got)
+				return
+			}
+			require.Len(t, got, 1)
+			if tt.wantUnmodified {
+				assert.Same(t, tt.flow, got[0])
+			}
+			k8s := got[0].GetK8S()
+			if tt.wantService {
+				assert.Equal(t, tt.flow.GetK8S().GetDestinationServicePortName(), k8s.GetDestinationServicePortName())
+				assert.NotNil(t, k8s.GetDestinationServiceIp())
+			} else {
+				assert.Empty(t, k8s.GetDestinationServicePortName())
+				assert.Nil(t, k8s.GetDestinationServiceIp())
+			}
+			assert.Equal(t, tt.wantSvcTier, k8s.GetDestinationServiceDisclosure())
+			assert.Equal(t, tt.wantDstTier, k8s.GetDestinationDisclosure())
+		})
+	}
+}
+
+// TestAuthorized_ServiceWithoutAName covers a record that carries some field of a destination Service
+// but not its name: there is no Namespace to authorize the Service against, so it is withheld, even
+// on a stream that may observe both endpoints in full.
+func TestAuthorized_ServiceWithoutAName(t *testing.T) {
+	serviceFields := []string{
+		"destination_cluster_ip", "destination_service_ip", "destination_service_port",
+		"destination_service_port_name", "destination_service_uid",
+	}
+	tests := []struct {
+		name   string
+		modify func(k8s *flowpb.Kubernetes)
+	}{
+		{"a ClusterIP", func(k8s *flowpb.Kubernetes) { k8s.DestinationServiceIp = []byte{10, 96, 0, 10} }},
+		{"a deprecated ClusterIP", func(k8s *flowpb.Kubernetes) {
+			k8s.DestinationClusterIp = []byte{10, 96, 0, 10} //nolint:staticcheck
+		}},
+		{"a port", func(k8s *flowpb.Kubernetes) { k8s.DestinationServicePort = 80 }},
+		{"a UID", func(k8s *flowpb.Kubernetes) { k8s.DestinationServiceUid = "service-uid" }},
+		{"a port name without a Namespace", func(k8s *flowpb.Kubernetes) { k8s.DestinationServicePortName = "svc:http" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newAuthorizer(newFakeAuthorizer(flowsGrant(watchVerb, "ns-a")))
+			req := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}
+			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+			require.NoError(t, err)
+			f := podFlow("ns-a", "ns-a")
+			tt.modify(f.K8S)
+
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{f})
+
+			require.Len(t, got, 1)
+			k8s := got[0].GetK8S()
+			populated := nameSet(populatedFields(k8s))
+			for _, name := range serviceFields {
+				assert.NotContains(t, populated, name)
+			}
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, k8s.GetDestinationServiceDisclosure())
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, k8s.GetDestinationDisclosure())
+		})
+	}
+}
+
 // TestAuthorized_DeniedFlowPeerNamespace covers how a denied connection's peer Namespace is disclosed
 // at the stream level: a source that initiated an inbound connection keeps it, and a destination the
 // client tried to reach loses it.

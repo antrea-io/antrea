@@ -860,41 +860,28 @@ The two Namespace segments are disclosed at one of these tiers, independently:
 | Tier     | Fields                                                                                                                                                                                                                                                                                                                                              | Requires                                                                                                              |
 |----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
 | Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of every network policy evaluated, and the endpoint's Pod Namespace (see below)                                                                                                                              | receiving the record at all                                                                                           |
-| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the namespace/name/UID/rule name of the segment's policies             | `get flows/identity` in the endpoint's Namespace                                                                      |
+| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, and the namespace/name/UID/rule name of the segment's policies                                                                                                                                                                                                           | `get flows/identity` in the endpoint's Namespace                                                                      |
 | Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                                                                                         | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
 
 The cluster segment discloses the name/UID/rule name of cluster-scoped policies
 to a client holding `get flows/identity` or the stream's verb on `flows`
 cluster-wide. No Namespace grant does.
 
-A destination Service's IP sits at the Identity tier rather than the Flow tier,
-because it maps back to the Service it belongs to, so granting `flows/identity`
-in a Namespace discloses the IPs of that Namespace's Services along with their
-names. There is no field carrying a Service's name on its own: the name rides
-inside `destination_service_port_name`, which the Flow Exporter sets to
-`namespace/name:portName`, so that one field carries the Service's Namespace and
-name as well as the port's name.
-
-Those Service fields follow the tier of the *destination endpoint*, which is
-resolved from `destination_pod_namespace` — the Namespace of the Pod that
-received the connection, after DNAT. The Service's own Namespace, the `ns/`
-prefix of `destination_service_port_name`, is normally that same Namespace, but
-the two can differ, because a Service's endpoints are not constrained to its own
-Namespace: a selector-less Service in `ns-a` can be pointed at a Pod IP in `ns-b`
-by a manually created EndpointSlice, which AntreaProxy accepts. **If a Service
-has endpoints in another Namespace, its name, UID and ClusterIP are disclosed to
-whoever may observe flows in the Namespace its backends live in, whatever the
-Service's own Namespace has granted** — the Service fields were tiered against
-`ns-b`'s consent, not `ns-a`'s. This is a documented caveat rather than something
-the tiering tries to undo: creating such a Service takes EndpointSlice write
-access in `ns-a`, and a Service's name and ClusterIP are discoverable through
-cluster DNS by any Pod anyway.
-
-The converse also holds. A destination endpoint with no Namespace at all, e.g. a
-`hostNetwork` backend, or a Multicluster endpoint in another cluster — sits at the
-Flow tier on every non-cluster-wide stream, so the Service fields are withheld even
-on a stream opened for the Service's own Namespace. Nothing is over-disclosed there;
-the client simply cannot see which of its own Services such a flow went through.
+The destination Service, i.e. `destination_service_port`,
+`destination_service_port_name`, `destination_service_uid` and
+`destination_service_ip` (plus the deprecated `destination_cluster_ip`), is
+disclosed at the tier of *the Service's own Namespace*, with the same
+requirements as an endpoint of that Namespace, and withheld at the Flow tier. That
+Namespace is the `ns/` prefix of `destination_service_port_name`, which the Flow
+Exporter sets to `namespace/name:portName`. It is normally the destination
+endpoint's Namespace, but need not be: a Service's endpoints may have no Namespace
+at all (`hostNetwork` Pods, external addresses, Multicluster endpoints, or the
+API server behind `default/kubernetes`), or be Pods of another Namespace, pointed
+at by a manually created EndpointSlice. Either way, the Service's tier is
+resolved in its own Namespace, not in its endpoints'. Its IP goes with its name
+because a ClusterIP maps back to the Service it belongs to. On a stream that is
+not cluster-wide, a Service whose name could not be resolved has no Namespace to
+authorize against, and is withheld.
 
 The flow type is deliberately not redacted, so `FLOW_TYPE_INTRA_NODE` still
 reports that the two endpoints share a Node. Paired with an endpoint the client
@@ -908,12 +895,14 @@ collapsing `INTRA_NODE` to `INTER_NODE` would make the field mean something
 different on every stream. The peer's Node is never named.
 
 Each endpoint's tier is reported on the record itself (`source_disclosure` /
-`destination_disclosure`), so that a client can tell a field that was withheld
-from one the Flow Aggregator never had — an empty policy Namespace, for
-instance, is what a cluster-scoped policy legitimately looks like. `FULL` is the
-zero value of both fields, so a record that was never redacted, and every record
-reaching a cluster-wide stream, reports both endpoints as fully disclosed
-without the Flow Aggregator having to modify anything.
+`destination_disclosure`), and so is the destination Service's
+(`destination_service_disclosure`), so that a client can tell a field that was
+withheld from one the Flow Aggregator never had — an empty policy Namespace, for
+instance, is what a cluster-scoped policy legitimately looks like, and empty
+Service fields what a connection that did not go through a Service looks like.
+`FULL` is the zero value of all three fields, so a record that was never
+redacted, and every record reaching a cluster-wide stream, reports everything as
+fully disclosed without the Flow Aggregator having to modify anything.
 
 At the Flow tier, an endpoint keeps its Namespace unless it is the destination of
 a denied connection. When the Namespace that client opened the stream with initiated
@@ -935,8 +924,8 @@ carries the IP of the Node that exported the record, is withheld unless *both*
 endpoints are disclosed in full: it is present on every record, including a
 Pod-to-Pod flow where neither Node is named. Because it is a record-level field,
 an endpoint can lose it from a record while its own `source_disclosure` /
-`destination_disclosure` still reports `FULL`: a marker describes an endpoint,
-not the record it arrives on.
+`destination_disclosure` still reports `FULL`: a marker describes an endpoint or
+the destination Service, not the record it arrives on.
 
 `proxy_snat_ip` and `proxy_snat_port` are not redacted, even though they too
 hold a Node address. Only a from-external flow carries them — they are the
@@ -983,11 +972,6 @@ full or rejected, never narrowed.
   ClusterRoleBinding gives the subject the names of all Antrea ClusterNetworkPolicies
   and Kubernetes ClusterNetworkPolicies that applied to any flow it receives, in
   addition to the identity of every peer Namespace.
-- **A Service with endpoints in another Namespace discloses itself there.** The
-  Service fields of a record are tiered by the Namespace of the Pod that received
-  the connection, so a Service whose EndpointSlices point outside its own
-  Namespace is named to whoever may observe flows where its backends are. See the
-  paragraph on the Service tier above.
 - **Revoking a grant takes up to 11 minutes to end an established stream.**
   Authorization decisions, both allow and deny, are cached for 10 minutes — the
   shortest lifetime Kubernetes gives a projected ServiceAccount token — and an

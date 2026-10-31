@@ -38,9 +38,9 @@ import (
 // flow it was evaluated: a namespaced policy (K8s NetworkPolicy, AntreaNetworkPolicy) belongs to the
 // segment of the endpoint it selects, and a cluster-scoped one belongs to the cluster segment.
 //
-// disclosureTier is how much of one segment of a flow a client may be told. The two Namespace
-// segments are resolved independently, so a single record commonly carries one at tierFull and the
-// other at a lower tier.
+// disclosureTier is how much of one segment of a flow, or of its destination Service, a client may
+// be told. The two Namespace segments are resolved independently, so a single record commonly
+// carries one at tierFull and the other at a lower tier.
 type disclosureTier int
 
 const (
@@ -48,7 +48,7 @@ const (
 	// grantable: it's based on client's flow visibility in the Namespace with the stream's own verb,
 	// whether or not that Namespace is the one the stream was opened for.
 	tierFull disclosureTier = iota
-	// tierIdentity discloses the segment's workload identity (Namespace, Pod and Service) and the
+	// tierIdentity discloses the segment's workload identity (Namespace and Pod) and the
 	// identity of the policies enforced inside the segment, but not the workload's Node placement or
 	// the Egress applied to it. It is what "get flows/identity" grants: enough to recognize the
 	// workloads and to see which of its policies governed the connection, so that "which of your
@@ -56,8 +56,8 @@ const (
 	// identified. Placement stays out of it: co-tenancy is not needed to author or debug a policy, so
 	// granting identity does not hand a workload's Node over as a side effect. The exception is
 	// co-tenancy with the *client's own* endpoint, which flow_type carries and which is deliberately
-	// not redacted; see redactFlow. The cluster segment has no placement, so for it tierIdentity and
-	// tierFull disclose the same.
+	// not redacted; see redactFlow. The cluster segment and the destination Service have no
+	// placement, so for them tierIdentity and tierFull disclose the same.
 	tierIdentity
 	// tierFlow discloses only what the flow itself shows: addresses, ports, protocol, statistics,
 	// timestamps, and the type and action of the policies. Whether the endpoint's Namespace is
@@ -71,9 +71,9 @@ func (t disclosureTier) identifies() bool {
 	return t != tierFlow
 }
 
-// disclosure maps a tier to the marker sent to the client for that endpoint, so that a withheld
-// field is never confused with one the Flow Aggregator did not have. tierFull maps to the zero
-// value, which is why a record that never reached redaction reads as fully disclosed.
+// disclosure maps a tier to the marker sent to the client for that endpoint or Service, so that a
+// withheld field is never confused with one the Flow Aggregator did not have. tierFull maps to the
+// zero value, which is why a record that never reached redaction reads as fully disclosed.
 func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 	switch t {
 	case tierIdentity:
@@ -86,8 +86,11 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 }
 
 // redactFlow returns a copy of f in which each segment is disclosed at its own tier: source and
-// destination for the two Namespace segments, cluster for the cluster segment. The record itself is
-// shared with every other stream, so it is copied rather than modified in place.
+// destination for the two Namespace segments, cluster for the cluster segment. The destination
+// Service is disclosed at service, the tier of the Service's own Namespace, which is not necessarily
+// the destination endpoint's: a Service's endpoints may have no Namespace at all (hostNetwork Pods,
+// external addresses), or live in another Namespace. The record itself is shared with every other
+// stream, so it is copied rather than modified in place.
 //
 // The type and action of every policy are kept whatever the tiers. They tell the client why its
 // connection failed and in which segment it was stopped, i.e. whether to look at its own policies,
@@ -109,7 +112,7 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 // flow_type is kept even though FLOW_TYPE_INTRA_NODE tells the client that the peer shares a Node
 // with its own workload. Without it, the client could not tell a genuinely external endpoint apart
 // from one whose Namespace was withheld.
-func redactFlow(f *flowpb.Flow, source, destination, cluster disclosureTier) *flowpb.Flow {
+func redactFlow(f *flowpb.Flow, source, destination, cluster, service disclosureTier) *flowpb.Flow {
 	// Only the Kubernetes sub-message is rewritten, so the copies share every other sub-message
 	// with the original record instead of duplicating it.
 	k8s := shallowCopy(f.GetK8S())
@@ -164,7 +167,19 @@ func redactFlow(f *flowpb.Flow, source, destination, cluster disclosureTier) *fl
 		k8s.DestinationPodName = ""
 		k8s.DestinationPodUid = ""
 		k8s.DestinationPodLabels = nil
-		// The destination Service is identity belonging to the destination's Namespace, and a
+		if !connectionAllowed(f.GetK8S()) && k8s.DestinationPodNamespace != "" {
+			// The destination is the address the client picked, and the connection was denied.
+			k8s.DestinationPodNamespace = ""
+			// Filters run on the redacted record, and place a destination with no Namespace in its
+			// Service's Namespace (see matchEndpoint). The Service is therefore withheld along with
+			// the destination's Namespace, so that a Pod of another Namespace is never placed there.
+			if hasDestinationService(k8s) {
+				service = tierFlow
+			}
+		}
+	}
+	if !service.identifies() {
+		// The destination Service is identity belonging to the Service's Namespace, and a
 		// ClusterIP maps back to it.
 		k8s.DestinationServicePort = 0
 		k8s.DestinationServicePortName = ""
@@ -172,14 +187,11 @@ func redactFlow(f *flowpb.Flow, source, destination, cluster disclosureTier) *fl
 		k8s.DestinationServiceIp = nil
 		// deprecated, but must be redacted for as long as it is populated
 		k8s.DestinationClusterIp = nil //nolint:staticcheck
-		if !connectionAllowed(f.GetK8S()) {
-			// The destination is the address the client picked, and the connection was denied.
-			k8s.DestinationPodNamespace = ""
-		}
 	}
 
 	k8s.SourceDisclosure = source.disclosure()
 	k8s.DestinationDisclosure = destination.disclosure()
+	k8s.DestinationServiceDisclosure = service.disclosure()
 
 	redacted := shallowCopy(f)
 	redacted.K8S = k8s
