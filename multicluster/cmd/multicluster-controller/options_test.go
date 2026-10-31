@@ -90,6 +90,49 @@ func TestComplete(t *testing.T) {
 	}
 }
 
+func TestCompleteAntreaNamespace(t *testing.T) {
+	testCases := []struct {
+		name                    string
+		configFile              string
+		expectedAntreaNamespace string
+		expectedErr             string
+	}{
+		{
+			name:                    "default Antrea Namespace without config file",
+			expectedAntreaNamespace: "kube-system",
+		},
+		{
+			name:                    "default Antrea Namespace when not set in config file",
+			configFile:              "./testdata/antrea-mc-config-with-valid-podcidrs.yml",
+			expectedAntreaNamespace: "kube-system",
+		},
+		{
+			name:                    "custom Antrea Namespace",
+			configFile:              "./testdata/antrea-mc-config-with-antrea-namespace.yml",
+			expectedAntreaNamespace: "antrea-system",
+		},
+		{
+			name:        "invalid Antrea Namespace",
+			configFile:  "./testdata/antrea-mc-config-with-invalid-antrea-namespace.yml",
+			expectedErr: "invalid antreaNamespace: Invalid_Namespace",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			o := newOptions()
+			o.configFile = tt.configFile
+			err := o.complete(nil)
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedAntreaNamespace, o.AntreaNamespace)
+		})
+	}
+}
+
 func TestUnmarshalDefaultConfig(t *testing.T) {
 	configBytes := multicluster.DefaultControllerManagerConfigBytes
 	var multiclusterConfig mcsv1alpha1.MultiClusterConfig
