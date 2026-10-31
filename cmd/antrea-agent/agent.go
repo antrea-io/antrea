@@ -429,7 +429,7 @@ func run(o *Options) error {
 
 	if enableMulticlusterGW {
 		if !networkConfig.IPv4Enabled {
-			return fmt.Errorf("Antrea Mutli-cluster doesn't not support IPv6 only cluster")
+			return fmt.Errorf("Antrea Multi-cluster does not support IPv6-only cluster")
 		}
 
 		mcInformerFactoryWithNamespaceOption = mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
