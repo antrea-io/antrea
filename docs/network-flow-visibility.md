@@ -673,6 +673,23 @@ flowStreamService:
 The connection uses server-side TLS with the same self-signed certificate as the
 gRPC collector.
 
+Each `GetFlowsResponse` contains at most 100 flows and its complete serialized
+protobuf payload is at most 4 MiB, including its resume token and counters.
+Clients can use the default gRPC receive limit. The service reserves some space
+for response metadata, with the remaining byte budget used for encoded flow entries.
+Large batches are split without changing flow order, authorized fields, or labels.
+Each response's resume token accounts
+only for records already delivered, filtered out, withheld by authorization, or
+reported as dropped; resuming after an intermediate response does not skip the
+remaining flows.
+
+If a single flow's authorized form exceeds this byte budget when encoded,
+the service skips that flow and continues. Such flows increment `dropped_count`,
+along with records lost to ring-buffer eviction. This counter is cumulative for
+the stream, including across split responses. Skipped flows do not count towards
+the request's `max_count`, which limits delivered flows. A response can contain
+no flows when it reports drops or advances the resume token.
+
 When the `FlowStreamService` is enabled, the Flow Aggregator Service carries the
 label `observability.antrea.io/flow-stream-service: "true"`; it does not carry
 it otherwise. As a cluster can run several Flow Aggregators, and only some of

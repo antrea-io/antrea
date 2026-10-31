@@ -188,6 +188,11 @@ message ResumeToken {
 }
 
 // GetFlowsResponse carries a batch of flow records from the server.
+// The complete serialized protobuf response is at most 4 MiB, so clients can use
+// the default gRPC receive limit. Some space is reserved for response metadata.
+// An individual authorized flow whose encoded entry exceeds the remaining byte
+// budget is skipped and counted in dropped_count; it does not count towards the
+// request's max_count.
 message GetFlowsResponse {
   // The matching flow records. Empty in the first response of every stream,
   // and in any later response sent only to report dropped_count or move
@@ -196,7 +201,8 @@ message GetFlowsResponse {
   repeated Flow flows = 1;
   // Number of flows dropped because the consumer fell behind and the ring
   // buffer wrapped around, or because a resume request named a
-  // sequence_number that had already fallen out of the ring buffer.
+  // sequence_number that had already fallen out of the ring buffer, or because
+  // an individual authorized flow exceeded the flow byte budget.
   // Cumulative since the start of the stream.
   //
   // A 0 is a confirmed "nothing was lost" only once records have been
@@ -215,7 +221,7 @@ message GetFlowsResponse {
   // authorization and the client's own filters also remove records from
   // flows without those being drops, so a client comparing sequence-number
   // deltas against the length of flows cannot tell a redacted or filtered-out
-  // record from an evicted one.
+  // record from a dropped one.
   uint64 dropped_count = 2;
   // The ring-buffer position accounted for as of this response: every
   // record up to and including it was either sent in flows, counted in

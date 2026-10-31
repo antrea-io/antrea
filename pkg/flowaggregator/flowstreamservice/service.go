@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"slices"
@@ -35,6 +36,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
@@ -47,6 +50,8 @@ import (
 
 const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
+	// maxResponseSize matches the default gRPC client receive limit, including response metadata.
+	maxResponseSize = 4 * 1024 * 1024
 	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	flowStreamPort = 14740
 )
@@ -243,6 +248,7 @@ func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setSta
 
 	serverOpts := []grpc.ServerOption{
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
+		grpc.ForceServerCodecV2(newFlowStreamCodec()),
 		grpc.UnaryInterceptor(rejectUnaryRPC),
 		// grpc-go's default is math.MaxUint32, i.e. one connection may open unbounded concurrent
 		// streams. This is a transport-level backstop rather than a replacement for the per-client-IP cap
@@ -415,6 +421,14 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// which Kubernetes cannot answer today — the server will have to report what it resolved to,
 	// and a field can be added to GetFlowsResponse then.
 
+	// Reserve the largest metadata encoding once, rather than tracking counter / token growth
+	// while selecting flows. This is 62 bytes for the current 36-character stream epoch. A
+	// negative sequence number uses the maximum int64 encoding length (10 bytes). This can leave
+	// up to 22 bytes unused with the current schema, avoiding per-response metadata accounting.
+	maxFlowsSize := maxResponseSize - proto.Size(&flowpb.GetFlowsResponse{
+		DroppedCount: math.MaxUint64,
+		ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: -1},
+	})
 	sent := 0
 	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
@@ -449,36 +463,49 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		n, dropped, endPos, shutdown := consumer.ConsumeMultiple(batch)
 		totalDropped += uint64(dropped)
 
-		limit := 0
-		if maxCount > 0 {
-			limit = maxCount - sent
+		// Every selection from this batch shares one authorization budget, even when sending
+		// it requires several responses. A later selection must not restart a timed-out check.
+		batchCtx := ctx
+		cancelBatchAuth := func() {}
+		if streamAuth != nil && !streamAuth.clusterWide {
+			batchCtx, cancelBatchAuth = context.WithTimeout(ctx, authorizationCheckTimeout)
 		}
-		filtered, examined := selectRecords(ctx, streamAuth, batch[:n], parsedFilters, since, limit)
-		// tokenPos is the ring-buffer position of the last record this stream accounted for.
-		// batch[:n] holds positions [endPos-n, endPos), so batch[i] is at endPos-n+i, and the
-		// last examined record is at endPos-n+examined-1. Normally examined == n and the token
-		// is endPos-1. When max_count stops consumption early, the records after the last examined
-		// one have not been sent, so tokenPos stops before them; otherwise a client resuming from
-		// it would skip them.
-		tokenPos := endPos - int64(n) + int64(examined) - 1
-		if len(filtered) > 0 || dropped > 0 || tokenPos-lastTokenPos >= tokenRefreshSpan {
-			resp := &flowpb.GetFlowsResponse{
-				Flows:        filtered,
-				DroppedCount: totalDropped,
-				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
+		remaining := batch[:n]
+		var tokenPos int64
+		for {
+			limit := 0
+			if maxCount > 0 {
+				limit = maxCount - sent
 			}
-			if err := stream.Send(resp); err != nil {
-				klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
-				return err
+			filtered, consumed, oversized := selectRecords(batchCtx, streamAuth, remaining, parsedFilters, since, limit, maxFlowsSize)
+			totalDropped += oversized
+			remaining = remaining[consumed:]
+			// The remaining tail still holds its original ring-buffer positions. Stop the
+			// token just before it, including records filtered out or dropped in this selection.
+			tokenPos = endPos - int64(len(remaining)) - 1
+			if len(filtered) > 0 || dropped > 0 || oversized > 0 || tokenPos-lastTokenPos >= tokenRefreshSpan {
+				if err := stream.Send(&flowpb.GetFlowsResponse{
+					Flows:        filtered,
+					DroppedCount: totalDropped,
+					ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
+				}); err != nil {
+					cancelBatchAuth()
+					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+					return err
+				}
+				sent += len(filtered)
+				lastTokenPos = tokenPos
 			}
-			sent += len(filtered)
-			lastTokenPos = tokenPos
+			if maxCount > 0 && sent >= maxCount {
+				cancelBatchAuth()
+				klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
+				return nil
+			}
+			if len(remaining) == 0 {
+				break
+			}
 		}
-
-		if maxCount > 0 && sent >= maxCount {
-			klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
-			return nil
-		}
+		cancelBatchAuth()
 
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
@@ -506,9 +533,11 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 }
 
 // selectRecords returns the records in batch that the stream may observe and that match the
-// client's filters, in order, stopping once limit records are selected (a limit of 0 means no
-// limit). It also returns how many records of batch it examined, which is len(batch) unless the
-// limit stopped it early: the records past that were neither delivered nor filtered out.
+// client's filters, in order, stopping at limit records (0 means no count limit) or sizeLimit bytes
+// of encoded flow entries. sizeLimit excludes the space reserved for response metadata.
+// It also returns how many input records were accounted for and how many were dropped because
+// their individual encoded size exceeds sizeLimit. Such drops do not count towards limit. A flow
+// that fits individually but exceeds the remaining byte budget is left for the next selection.
 //
 // Authorization runs before the client's own filters, and before the max_count accounting, so
 // that a record the client may not observe is never counted against the records it asked for, and
@@ -518,25 +547,41 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 // service_names entry qualified by that Namespace), and matches only where that Namespace was
 // disclosed.
 //
-// The selected records are compacted into batch[:0], so batch is modified.
-func selectRecords(ctx context.Context, streamAuth *StreamAuthorization, batch []*flowpb.Flow, filters []flowFilter, since time.Time, limit int) ([]*flowpb.Flow, int) {
+// The selected records are compacted into batch[:0]. The unconsumed tail is left unchanged, so the
+// caller can use batch[consumed:] for the next selection and consumed to advance its resume token.
+func selectRecords(ctx context.Context, streamAuth *StreamAuthorization, batch []*flowpb.Flow, filters []flowFilter, since time.Time, limit, sizeLimit int) ([]*flowpb.Flow, int, uint64) {
+	const flowTagSize = 1 // The repeated flows field (field number 1) has a one-byte tag.
 	records := slices.All(batch)
 	if streamAuth != nil {
 		records = streamAuth.Authorized(ctx, batch)
 	}
 	selected := batch[:0]
-	examined := len(batch)
+	consumed := len(batch)
+	var oversized uint64
+	size := 0
 	for i, f := range records {
 		if !matchFlow(f, filters, since) {
 			continue
 		}
+		// Populate the size caches that flowStreamCodec reuses when sending the selected flows.
+		flowSize := flowTagSize + protowire.SizeBytes(proto.Size(f))
+		if flowSize > sizeLimit {
+			oversized++
+			klog.V(2).InfoS("Skipping flow that exceeds the flow byte budget", "size", flowSize, "limit", sizeLimit)
+			continue
+		}
+		if size+flowSize > sizeLimit {
+			consumed = i
+			break
+		}
 		selected = append(selected, f)
+		size += flowSize
 		if limit > 0 && len(selected) >= limit {
-			examined = i + 1
+			consumed = i + 1
 			break
 		}
 	}
-	return selected, examined
+	return selected, consumed, oversized
 }
 
 // flowFilter holds the pre-parsed form of a FlowFilter proto, so that
