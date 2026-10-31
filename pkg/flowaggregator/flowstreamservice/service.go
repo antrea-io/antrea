@@ -514,8 +514,9 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 // that a record the client may not observe is never counted against the records it asked for, and
 // so that filters only ever match what it can see. That last point is also what gives a filter
 // naming a Namespace outside the stream's scope its meaning: every record here already has an
-// endpoint in scope, so such a filter selects flows by their peer, and matches only where that
-// peer's Namespace was disclosed.
+// endpoint in scope, so such a filter selects flows by their peer (or by their Service, with a
+// service_names entry qualified by that Namespace), and matches only where that Namespace was
+// disclosed.
 //
 // The selected records are compacted into batch[:0], so batch is modified.
 func selectRecords(ctx context.Context, streamAuth *StreamAuthorization, batch []*flowpb.Flow, filters []flowFilter, since time.Time, limit int) ([]*flowpb.Flow, int) {
@@ -548,6 +549,14 @@ type flowFilter struct {
 	parsedAddrs []netip.Addr
 	// parsedPrefixes holds CIDR prefixes from proto.GetIps().
 	parsedPrefixes []netip.Prefix
+	// serviceNames holds the entries of proto.GetServiceNames().
+	serviceNames []serviceName
+}
+
+// serviceName is a service_names entry. An empty namespace matches a Service of that name in any
+// Namespace.
+type serviceName struct {
+	namespace, name string
 }
 
 // parseFlowFilter parses and validates a FlowFilter proto, returning a flowFilter
@@ -569,6 +578,17 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 		if dir == flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM {
 			return flowFilter{}, fmt.Errorf("service_names filter does not support FROM direction")
 		}
+	}
+	for _, s := range f.GetServiceNames() {
+		namespace, name, qualified := strings.Cut(s, "/")
+		if !qualified {
+			pf.serviceNames = append(pf.serviceNames, serviceName{name: s})
+			continue
+		}
+		if namespace == "" || name == "" || strings.Contains(name, "/") {
+			return flowFilter{}, fmt.Errorf("invalid service name %q: expected name or namespace/name", s)
+		}
+		pf.serviceNames = append(pf.serviceNames, serviceName{namespace: namespace, name: name})
 	}
 
 	for _, ipStr := range f.GetIps() {
@@ -607,61 +627,87 @@ func matchFlow(f *flowpb.Flow, filters []flowFilter, since time.Time) bool {
 	return true
 }
 
+// matchFilter reports whether f matches pf. Its criteria are AND-ed:
+//   - flow_types and service_names apply to the flow as a whole, whatever the direction:
+//     service_names matches the flow's destination Service, by name or by Namespace and name.
+//   - The directional criteria (namespaces, pod_names, pod_label_selector, ips) are all matched
+//     against the same endpoint, which the direction picks, so that for example namespaces and
+//     pod_names select a single Pod. With BOTH, either endpoint may be the one that matches.
 func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {
 	filter := pf.proto
 	k8s := f.GetK8S()
-	direction := filter.GetDirection()
-
-	if len(filter.GetNamespaces()) > 0 {
-		if !matchNamespace(k8s, filter.GetNamespaces(), direction) {
-			return false
-		}
-	}
-	if len(filter.GetPodNames()) > 0 {
-		if !matchPodNames(k8s, filter.GetPodNames(), direction) {
-			return false
-		}
-	}
-	if pf.podLabelSelector != nil {
-		if !matchLabelSelector(k8s, pf.podLabelSelector, direction) {
-			return false
-		}
-	}
 	if len(filter.GetFlowTypes()) > 0 {
 		if k8s == nil || !containsFlowType(filter.GetFlowTypes(), k8s.GetFlowType()) {
 			return false
 		}
 	}
-	if len(filter.GetServiceNames()) > 0 {
-		if k8s == nil {
-			return false
-		}
-		svcName := destinationServiceName(k8s.GetDestinationServicePortName())
-		if !slices.Contains(filter.GetServiceNames(), svcName) {
+	if len(pf.serviceNames) > 0 {
+		namespace, name := destinationService(k8s.GetDestinationServicePortName())
+		if !slices.ContainsFunc(pf.serviceNames, func(s serviceName) bool {
+			return s.name == name && (s.namespace == "" || s.namespace == namespace)
+		}) {
 			return false
 		}
 	}
+	switch filter.GetDirection() {
+	case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM:
+		return matchEndpoint(f, pf, true)
+	case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO:
+		return matchEndpoint(f, pf, false)
+	default:
+		return matchEndpoint(f, pf, true) || matchEndpoint(f, pf, false)
+	}
+}
+
+// matchEndpoint reports whether one endpoint of f, its source if source is true and its
+// destination otherwise, meets every directional criterion of pf. A filter with no directional
+// criterion matches either endpoint.
+func matchEndpoint(f *flowpb.Flow, pf *flowFilter, source bool) bool {
+	filter := pf.proto
+	k8s := f.GetK8S()
+	var namespace, podName string
+	var podLabels *flowpb.Labels
+	var ip []byte
+	if source {
+		namespace, podName = k8s.GetSourcePodNamespace(), k8s.GetSourcePodName()
+		podLabels, ip = k8s.GetSourcePodLabels(), f.GetIp().GetSource()
+	} else {
+		namespace, podName = k8s.GetDestinationPodNamespace(), k8s.GetDestinationPodName()
+		podLabels, ip = k8s.GetDestinationPodLabels(), f.GetIp().GetDestination()
+		if namespace == "" {
+			// A destination without a Pod Namespace, such as a Service backed by Node or
+			// external IPs (e.g. default/kubernetes), is in its Service's Namespace. This
+			// cannot reveal a withheld Namespace: redaction removes the Service whenever it
+			// withholds the destination's Namespace.
+			namespace, _ = destinationService(k8s.GetDestinationServicePortName())
+		}
+	}
+
+	needsK8s := len(filter.GetNamespaces()) > 0 || len(filter.GetPodNames()) > 0 || pf.podLabelSelector != nil
+	if needsK8s && k8s == nil {
+		return false
+	}
+	if len(filter.GetNamespaces()) > 0 && !slices.Contains(filter.GetNamespaces(), namespace) {
+		return false
+	}
+	if len(filter.GetPodNames()) > 0 && !slices.Contains(filter.GetPodNames(), podName) {
+		return false
+	}
+	if pf.podLabelSelector != nil && !pf.podLabelSelector.Matches(labelsFromProto(podLabels)) {
+		return false
+	}
 	if len(pf.parsedAddrs) > 0 || len(pf.parsedPrefixes) > 0 {
-		if !matchParsedIPs(f, pf.parsedAddrs, pf.parsedPrefixes, direction) {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return false
+		}
+		if !slices.Contains(pf.parsedAddrs, addr) && !slices.ContainsFunc(pf.parsedPrefixes, func(p netip.Prefix) bool {
+			return p.Contains(addr)
+		}) {
 			return false
 		}
 	}
 	return true
-}
-
-func matchLabelSelector(k8s *flowpb.Kubernetes, sel labels.Selector, direction flowpb.FlowFilterDirection) bool {
-	if k8s == nil {
-		return false
-	}
-	checkSrc := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
-	checkDst := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
-	if checkSrc && sel.Matches(labelsFromProto(k8s.GetSourcePodLabels())) {
-		return true
-	}
-	if checkDst && sel.Matches(labelsFromProto(k8s.GetDestinationPodLabels())) {
-		return true
-	}
-	return false
 }
 
 func labelsFromProto(l *flowpb.Labels) labels.Set {
@@ -669,82 +715,6 @@ func labelsFromProto(l *flowpb.Labels) labels.Set {
 		return labels.Set{}
 	}
 	return labels.Set(l.GetLabels())
-}
-
-func matchNamespace(k8s *flowpb.Kubernetes, namespaces []string, direction flowpb.FlowFilterDirection) bool {
-	if k8s == nil {
-		return false
-	}
-	for _, ns := range namespaces {
-		switch direction {
-		case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM:
-			if k8s.GetSourcePodNamespace() == ns {
-				return true
-			}
-		case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO:
-			if k8s.GetDestinationPodNamespace() == ns {
-				return true
-			}
-		default:
-			if k8s.GetSourcePodNamespace() == ns || k8s.GetDestinationPodNamespace() == ns {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchPodNames(k8s *flowpb.Kubernetes, podNames []string, direction flowpb.FlowFilterDirection) bool {
-	if k8s == nil {
-		return false
-	}
-	for _, name := range podNames {
-		switch direction {
-		case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM:
-			if k8s.GetSourcePodName() == name {
-				return true
-			}
-		case flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO:
-			if k8s.GetDestinationPodName() == name {
-				return true
-			}
-		default:
-			if k8s.GetSourcePodName() == name || k8s.GetDestinationPodName() == name {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchParsedIPs(f *flowpb.Flow, addrs []netip.Addr, prefixes []netip.Prefix, direction flowpb.FlowFilterDirection) bool {
-	ip := f.GetIp()
-	if ip == nil {
-		return false
-	}
-	srcAddr, srcOK := netip.AddrFromSlice(ip.GetSource())
-	dstAddr, dstOK := netip.AddrFromSlice(ip.GetDestination())
-
-	checkSrc := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
-	checkDst := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
-
-	for _, v := range addrs {
-		if checkSrc && srcOK && srcAddr == v {
-			return true
-		}
-		if checkDst && dstOK && dstAddr == v {
-			return true
-		}
-	}
-	for _, v := range prefixes {
-		if checkSrc && srcOK && v.Contains(srcAddr) {
-			return true
-		}
-		if checkDst && dstOK && v.Contains(dstAddr) {
-			return true
-		}
-	}
-	return false
 }
 
 func containsFlowType(types []flowpb.FlowType, t flowpb.FlowType) bool {
@@ -756,18 +726,15 @@ func containsFlowType(types []flowpb.FlowType, t flowpb.FlowType) bool {
 	return false
 }
 
-// destinationServiceName extracts the bare service name from a
+// destinationService extracts the Service's Namespace and bare name from a
 // DestinationServicePortName value. That field is set by the flow exporter from
 // proxy.ServicePortName.String(), which produces "namespace/name:portName" (or
 // "namespace/name" when the port has no named port).
-func destinationServiceName(s string) string {
-	slash := strings.Index(s, "/")
-	if slash < 0 {
-		return ""
+func destinationService(s string) (namespace, name string) {
+	namespace, s, ok := strings.Cut(s, "/")
+	if !ok {
+		return "", ""
 	}
-	s = s[slash+1:]
-	if colon := strings.Index(s, ":"); colon >= 0 {
-		s = s[:colon]
-	}
-	return s
+	name, _, _ = strings.Cut(s, ":")
+	return namespace, name
 }

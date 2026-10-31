@@ -117,22 +117,25 @@ func newPodK8S(srcNS, srcName, dstNS, dstName string) *flowpb.Kubernetes {
 	}
 }
 
-func TestDestinationServiceName(t *testing.T) {
+func TestDestinationService(t *testing.T) {
 	tests := []struct {
-		input string
-		want  string
+		input         string
+		wantNamespace string
+		wantName      string
 	}{
-		{input: "", want: ""},
-		{input: "default/frontend", want: "frontend"},
-		{input: "default/frontend:http", want: "frontend"},
-		{input: "production/api-gateway:grpc", want: "api-gateway"},
-		{input: "ns/svc:", want: "svc"},
-		{input: "bareword", want: ""},
-		{input: "a/b:c:d", want: "b"},
+		{input: "", wantNamespace: "", wantName: ""},
+		{input: "default/frontend", wantNamespace: "default", wantName: "frontend"},
+		{input: "default/frontend:http", wantNamespace: "default", wantName: "frontend"},
+		{input: "production/api-gateway:grpc", wantNamespace: "production", wantName: "api-gateway"},
+		{input: "ns/svc:", wantNamespace: "ns", wantName: "svc"},
+		{input: "bareword", wantNamespace: "", wantName: ""},
+		{input: "a/b:c:d", wantNamespace: "a", wantName: "b"},
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%q", tc.input), func(t *testing.T) {
-			assert.Equal(t, tc.want, destinationServiceName(tc.input))
+			namespace, name := destinationService(tc.input)
+			assert.Equal(t, tc.wantNamespace, namespace)
+			assert.Equal(t, tc.wantName, name)
 		})
 	}
 }
@@ -244,6 +247,36 @@ func TestMatchFilter_Namespaces(t *testing.T) {
 			assert.Equal(t, tc.want, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
+
+	t.Run("TO: destination without a Pod is in its Service's namespace", func(t *testing.T) {
+		k8s := newPodK8S("ns-a", "client", "", "")
+		k8s.DestinationServicePortName = "default/kubernetes:https"
+		filter := &flowpb.FlowFilter{
+			Namespaces: []string{"default"},
+			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO,
+		}
+		assert.True(t, matchFlow(newFlow("f", k8s), mustParseFilters(filter), time.Time{}))
+	})
+
+	t.Run("FROM: source without a Pod is not in the Service's namespace", func(t *testing.T) {
+		k8s := newPodK8S("", "", "", "")
+		k8s.DestinationServicePortName = "default/kubernetes:https"
+		filter := &flowpb.FlowFilter{
+			Namespaces: []string{"default"},
+			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+		}
+		assert.False(t, matchFlow(newFlow("f", k8s), mustParseFilters(filter), time.Time{}))
+	})
+
+	t.Run("BOTH: destination Pod outside the namespace, Service in it", func(t *testing.T) {
+		k8s := newPodK8S("ns-1", "client", "ns-2", "backend")
+		k8s.DestinationServicePortName = "foo/svc:http"
+		filter := &flowpb.FlowFilter{
+			Namespaces: []string{"foo"},
+			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH,
+		}
+		assert.False(t, matchFlow(newFlow("f", k8s), mustParseFilters(filter), time.Time{}))
+	})
 }
 
 func TestMatchFilter_PodNames(t *testing.T) {
@@ -366,6 +399,54 @@ func TestMatchFilter_ServiceNames(t *testing.T) {
 			filter:      []string{"frontend"},
 			wantMatch:   true,
 		},
+		{
+			name:        "qualified name matches namespace/name:port",
+			svcPortName: "default/frontend:http",
+			filter:      []string{"default/frontend"},
+			wantMatch:   true,
+		},
+		{
+			name:        "qualified name matches namespace/name",
+			svcPortName: "default/frontend",
+			filter:      []string{"default/frontend"},
+			wantMatch:   true,
+		},
+		{
+			name:        "qualified name does not match the same name in another namespace",
+			svcPortName: "production/frontend:http",
+			filter:      []string{"default/frontend"},
+			wantMatch:   false,
+		},
+		{
+			name:        "qualified name does not match another name in the namespace",
+			svcPortName: "default/backend:http",
+			filter:      []string{"default/frontend"},
+			wantMatch:   false,
+		},
+		{
+			name:        "qualified name does not match an empty DestinationServicePortName",
+			svcPortName: "",
+			filter:      []string{"default/frontend"},
+			wantMatch:   false,
+		},
+		{
+			name:        "plain and qualified entries: plain one matches",
+			svcPortName: "production/frontend:http",
+			filter:      []string{"frontend", "default/backend"},
+			wantMatch:   true,
+		},
+		{
+			name:        "plain and qualified entries: qualified one matches",
+			svcPortName: "default/backend:http",
+			filter:      []string{"frontend", "default/backend"},
+			wantMatch:   true,
+		},
+		{
+			name:        "plain and qualified entries: neither matches",
+			svcPortName: "production/backend:http",
+			filter:      []string{"frontend", "default/backend"},
+			wantMatch:   false,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -374,6 +455,18 @@ func TestMatchFilter_ServiceNames(t *testing.T) {
 			assert.Equal(t, tc.wantMatch, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
+
+	t.Run("TO matches the destination Service", func(t *testing.T) {
+		// service_names always matches the destination Service, whatever the direction.
+		filter := &flowpb.FlowFilter{
+			ServiceNames: []string{"frontend"},
+			Direction:    flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO,
+		}
+		match := newFlow("f", &flowpb.Kubernetes{DestinationServicePortName: "default/frontend:http"})
+		noMatch := newFlow("f", &flowpb.Kubernetes{DestinationServicePortName: "default/backend:http"})
+		assert.True(t, matchFlow(match, mustParseFilters(filter), time.Time{}))
+		assert.False(t, matchFlow(noMatch, mustParseFilters(filter), time.Time{}))
+	})
 }
 
 func TestMatchFilter_IPs(t *testing.T) {
@@ -441,6 +534,15 @@ func TestMatchFilter_IPs(t *testing.T) {
 			assert.Equal(t, tc.wantMatch, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
+
+	t.Run("record without Kubernetes metadata", func(t *testing.T) {
+		// An IP is not Kubernetes metadata, so a filter on IPs alone still matches a record
+		// that has none.
+		noK8s := newFlowWithIPs("10.0.0.1", "192.168.1.5")
+		noK8s.K8S = nil
+		filter := &flowpb.FlowFilter{Ips: []string{"10.0.0.1"}}
+		assert.True(t, matchFlow(noK8s, mustParseFilters(filter), time.Time{}))
+	})
 }
 
 func TestMatchFilter_LabelSelector(t *testing.T) {
@@ -512,6 +614,361 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 			assert.Equal(t, tc.wantMatch, got)
 		})
 	}
+
+	t.Run("nil k8s field, selector matching empty labels", func(t *testing.T) {
+		// "!app" matches a Pod without labels, so only the missing Kubernetes metadata can make
+		// this record fail it.
+		filters := mustParseFilters(&flowpb.FlowFilter{PodLabelSelector: "!app"})
+		assert.True(t, matchFlow(newFlow("f", &flowpb.Kubernetes{}), filters, time.Time{}))
+		assert.False(t, matchFlow(newFlow("f", nil), filters, time.Time{}))
+	})
+}
+
+// The directional criteria of one filter describe a single endpoint: a flow matches only if the
+// endpoint the direction picks meets all of them, not if each is met by a different endpoint.
+func TestMatchFilter_CriteriaMatchOneEndpoint(t *testing.T) {
+	const (
+		both = flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH
+		from = flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
+		to   = flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
+	)
+	labeled := func(srcNS, srcName, srcApp, dstNS, dstName, dstApp string) *flowpb.Kubernetes {
+		k8s := newPodK8S(srcNS, srcName, dstNS, dstName)
+		k8s.SourcePodLabels = &flowpb.Labels{Labels: map[string]string{"app": srcApp}}
+		k8s.DestinationPodLabels = &flowpb.Labels{Labels: map[string]string{"app": dstApp}}
+		return k8s
+	}
+	toService := func(srcNS, srcName, dstNS, dstName, svcPortName string) *flowpb.Kubernetes {
+		k8s := newPodK8S(srcNS, srcName, dstNS, dstName)
+		k8s.DestinationServicePortName = svcPortName
+		return k8s
+	}
+	withIPs := func(k8s *flowpb.Kubernetes, srcIP, dstIP string) *flowpb.Flow {
+		f := newFlowWithIPs(srcIP, dstIP)
+		f.K8S = k8s
+		return f
+	}
+
+	tests := []struct {
+		name      string
+		flow      *flowpb.Flow
+		filter    *flowpb.FlowFilter
+		wantMatch bool
+	}{
+		{
+			name:      "BOTH: namespace and Pod name on the source",
+			flow:      newFlow("f", newPodK8S("ns-a", "redis-0", "ns-b", "web")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodNames: []string{"redis-0"}, Direction: both},
+			wantMatch: true,
+		},
+		{
+			name:      "BOTH: namespace and Pod name on the destination",
+			flow:      newFlow("f", newPodK8S("ns-b", "web", "ns-a", "redis-0")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodNames: []string{"redis-0"}, Direction: both},
+			wantMatch: true,
+		},
+		{
+			name:      "BOTH: Pod name on the source, namespace on the destination",
+			flow:      newFlow("f", newPodK8S("ns-b", "redis-0", "ns-a", "web")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodNames: []string{"redis-0"}, Direction: both},
+			wantMatch: false,
+		},
+		{
+			name:      "FROM: namespace and Pod name on the source",
+			flow:      newFlow("f", newPodK8S("ns-a", "redis-0", "ns-b", "web")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodNames: []string{"redis-0"}, Direction: from},
+			wantMatch: true,
+		},
+		{
+			name:      "TO: namespace and Pod name on the source only",
+			flow:      newFlow("f", newPodK8S("ns-a", "redis-0", "ns-b", "web")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodNames: []string{"redis-0"}, Direction: to},
+			wantMatch: false,
+		},
+		{
+			name:      "BOTH: namespace on the source, labels on the destination",
+			flow:      newFlow("f", labeled("ns-a", "web", "web", "ns-b", "db-0", "db")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-a"}, PodLabelSelector: "app=db", Direction: both},
+			wantMatch: false,
+		},
+		{
+			name:      "BOTH: namespace and labels on the destination",
+			flow:      newFlow("f", labeled("ns-a", "web", "web", "ns-b", "db-0", "db")),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-b"}, PodLabelSelector: "app=db", Direction: both},
+			wantMatch: true,
+		},
+		{
+			name:      "BOTH: namespace on the destination, IP on the source",
+			flow:      withIPs(newPodK8S("ns-a", "web", "ns-b", "db-0"), "10.0.0.1", "10.0.0.2"),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-b"}, Ips: []string{"10.0.0.1"}, Direction: both},
+			wantMatch: false,
+		},
+		{
+			name:      "BOTH: namespace and IP on the destination",
+			flow:      withIPs(newPodK8S("ns-a", "web", "ns-b", "db-0"), "10.0.0.1", "10.0.0.2"),
+			filter:    &flowpb.FlowFilter{Namespaces: []string{"ns-b"}, Ips: []string{"10.0.0.2"}, Direction: both},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			// namespaces restricts the endpoints, not the Service.
+			name: "BOTH: Service in the namespace, source and backend Pod in other namespaces",
+			flow: newFlow("f", toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "BOTH: Service of that name in another namespace, source in the namespace",
+			flow: newFlow("f", toService("ns-b", "client", "ns-c", "frontend-x", "ns-c/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "TO: Service of that name in another namespace, source in the namespace",
+			flow: newFlow("f", toService("ns-b", "client", "ns-c", "frontend-x", "ns-c/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    to,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "TO: Service in another namespace, backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-c/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    to,
+			},
+			wantMatch: true,
+		},
+		{
+			// A selector-less Service, for example, can have its backend in another namespace.
+			name: "BOTH: qualified Service, source and backend Pod in other namespaces",
+			flow: newFlow("f", toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				ServiceNames: []string{"ns-b/frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "TO: qualified Service, backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"ns-b/frontend"},
+				Direction:    to,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "TO: qualified Service, backend Pod in another namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"ns-b/frontend"},
+				Direction:    to,
+			},
+			wantMatch: false,
+		},
+		{
+			// A Service such as default/kubernetes, whose backend is not a Pod: the destination
+			// is in its Service's namespace.
+			name: "BOTH: Service in the namespace, backend without a Pod",
+			flow: newFlow("f", toService("ns-a", "client", "", "", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			// service_names applies to the flow whatever the direction, and the Pod name to
+			// either endpoint.
+			name: "BOTH: Pod name on the source, Service on the destination",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				PodNames:     []string{"client"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: Service and its backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				PodNames:     []string{"frontend-x"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: Service in the namespace, named backend Pod in another namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				PodNames:     []string{"frontend-x"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "BOTH: Service and its labeled backend Pod in the namespace",
+			flow: func() *flowpb.Flow {
+				k8s := labeled("ns-a", "client", "client", "ns-b", "frontend-x", "frontend")
+				k8s.DestinationServicePortName = "ns-b/frontend:http"
+				return newFlow("f", k8s)
+			}(),
+			filter: &flowpb.FlowFilter{
+				Namespaces:       []string{"ns-b"},
+				PodLabelSelector: "app=frontend",
+				ServiceNames:     []string{"frontend"},
+				Direction:        both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: Service in the namespace, labeled backend Pod in another namespace",
+			flow: func() *flowpb.Flow {
+				k8s := labeled("ns-a", "client", "client", "ns-c", "frontend-x", "frontend")
+				k8s.DestinationServicePortName = "ns-b/frontend:http"
+				return newFlow("f", k8s)
+			}(),
+			filter: &flowpb.FlowFilter{
+				Namespaces:       []string{"ns-b"},
+				PodLabelSelector: "app=frontend",
+				ServiceNames:     []string{"frontend"},
+				Direction:        both,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "BOTH: Service and its backend IP in the namespace",
+			flow: withIPs(
+				toService("ns-a", "client", "ns-b", "frontend-x", "ns-b/frontend:http"), "10.0.0.1", "10.0.0.2"),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				Ips:          []string{"10.0.0.2"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: Service in the namespace, backend IP in another namespace",
+			flow: withIPs(
+				toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http"), "10.0.0.1", "10.0.0.2"),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				Ips:          []string{"10.0.0.2"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "BOTH: Service in the namespace, backend CIDR in another namespace",
+			flow: withIPs(
+				toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http"), "10.0.0.1", "10.0.1.2"),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				Ips:          []string{"10.0.1.0/24"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: false,
+		},
+		{
+			name: "BOTH: Service in another namespace, named backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-c/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				PodNames:     []string{"frontend-x"},
+				ServiceNames: []string{"frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "BOTH: qualified Service in another namespace, named backend Pod in the namespace",
+			flow: newFlow("f", toService("ns-a", "client", "ns-b", "frontend-x", "ns-c/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-b"},
+				PodNames:     []string{"frontend-x"},
+				ServiceNames: []string{"ns-b/frontend"},
+				Direction:    both,
+			},
+			wantMatch: false,
+		},
+		{
+			// One filter selects a Pod calling a Service in another namespace, although with
+			// BOTH the Pod could also be the Service's backend.
+			name: "BOTH: named source Pod in the namespace, qualified Service in another",
+			flow: newFlow("f", toService("ns-a", "client", "ns-c", "frontend-x", "ns-b/frontend:http")),
+			filter: &flowpb.FlowFilter{
+				Namespaces:   []string{"ns-a"},
+				PodNames:     []string{"client"},
+				ServiceNames: []string{"ns-b/frontend"},
+				Direction:    both,
+			},
+			wantMatch: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.wantMatch, matchFlow(tc.flow, mustParseFilters(tc.filter), time.Time{}))
+		})
+	}
+}
+
+// Criteria on different endpoints go in different filters, each with its own direction, since
+// all filters must match.
+func TestMatchFlow_FiltersDescribeDifferentEndpoints(t *testing.T) {
+	filters := mustParseFilters(
+		&flowpb.FlowFilter{
+			Namespaces: []string{"ns-a"},
+			PodNames:   []string{"client"},
+			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+		},
+		&flowpb.FlowFilter{
+			ServiceNames: []string{"ns-b/frontend"},
+		},
+	)
+	flowTo := func(srcNS, srcName, backendNS, svcPortName string) *flowpb.Flow {
+		k8s := newPodK8S(srcNS, srcName, backendNS, "frontend-x")
+		k8s.DestinationServicePortName = svcPortName
+		return newFlow("f", k8s)
+	}
+	assert.True(t, matchFlow(flowTo("ns-a", "client", "ns-b", "ns-b/frontend:http"), filters, time.Time{}))
+	// The Service filter selects the Service wherever its backend is.
+	assert.True(t, matchFlow(flowTo("ns-a", "client", "ns-c", "ns-b/frontend:http"), filters, time.Time{}))
+	assert.False(t, matchFlow(flowTo("ns-c", "client", "ns-b", "ns-b/frontend:http"), filters, time.Time{}))
+	assert.False(t, matchFlow(flowTo("ns-a", "client", "ns-b", "ns-b/backend:http"), filters, time.Time{}))
+	assert.False(t, matchFlow(flowTo("ns-a", "client", "ns-b", "ns-c/frontend:http"), filters, time.Time{}))
 }
 
 func TestGetFlows_ReceivesAllFlows(t *testing.T) {
@@ -749,6 +1206,28 @@ func TestGetFlows_InvalidIP(t *testing.T) {
 	assert.Empty(t, stream.responses)
 }
 
+func TestGetFlows_InvalidServiceName(t *testing.T) {
+	for _, name := range []string{"/frontend", "default/", "/", "default/frontend/http"} {
+		t.Run(name, func(t *testing.T) {
+			buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+			t.Cleanup(func() { buf.Shutdown() })
+
+			svc := newTestService(buf)
+			stream := newFakeStream(context.Background())
+			req := &flowpb.GetFlowsRequest{
+				Filters: []*flowpb.FlowFilter{{ServiceNames: []string{"frontend", name}}},
+			}
+
+			err := svc.GetFlows(req, stream)
+			require.Error(t, err)
+			st, ok := status.FromError(err)
+			require.True(t, ok)
+			assert.Equal(t, codes.InvalidArgument, st.Code())
+			assert.Empty(t, stream.responses)
+		})
+	}
+}
+
 func TestGetFlows_ServiceNamesWithFromDirection(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 	t.Cleanup(func() { buf.Shutdown() })
@@ -875,6 +1354,43 @@ func TestGetFlows_ScopeDenied(t *testing.T) {
 		assert.Equal(t, codes.PermissionDenied, status.Code(err))
 		// Nothing at all is sent to a client whose request was denied.
 		assert.Empty(t, stream.responses)
+	})
+}
+
+// A destination without a Pod Namespace is in its Service's Namespace for filters only: the scope
+// of a stream still admits a record by its Pod Namespaces.
+func TestGetFlows_ServiceNamespaceSelectsInFiltersNotInScope(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		toAPIServer := newPodK8S("ns-a", "client", "", "")
+		toAPIServer.DestinationServicePortName = "default/kubernetes:https"
+		buf.Produce(newFlow("ns-a->default/kubernetes", toAPIServer))
+		// Keeps the assertion on the stream opened for default from passing on a stream that sends
+		// nothing.
+		buf.Produce(newFlow("default->ns-b", newPodK8S("default", "client", "ns-b", "server")))
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "default"), flowsGrant(listVerb, ""))
+		getFlowIDs := func(req *flowpb.GetFlowsRequest) []string {
+			stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+			errCh := make(chan error, 1)
+			go func() { errCh <- svc.GetFlows(req, stream) }()
+			time.Sleep(2 * exporter.ConsumeDeadline)
+			synctest.Wait()
+			require.NoError(t, <-errCh)
+			var ids []string
+			for _, f := range collectFlows(stream.responses) {
+				ids = append(ids, f.GetId())
+			}
+			return ids
+		}
+
+		inDefault := []*flowpb.FlowFilter{{Namespaces: []string{"default"}}}
+		assert.ElementsMatch(t, []string{"ns-a->default/kubernetes", "default->ns-b"},
+			getFlowIDs(&flowpb.GetFlowsRequest{ClusterWide: true, Filters: inDefault}))
+		assert.ElementsMatch(t, []string{"default->ns-b"},
+			getFlowIDs(&flowpb.GetFlowsRequest{Namespaces: []string{"default"}, Filters: inDefault}))
 	})
 }
 

@@ -171,11 +171,19 @@ func (*ExportResponse) Descriptor() ([]byte, []int) {
 
 // FlowFilter specifies optional criteria to narrow which flows are returned.
 // All specified filters are AND-ed; values within a repeated field are OR-ed.
-// An absent or fully-empty filter matches all flows.
+// An absent or fully-empty filter matches all flows. Filters match a record as
+// the client receives it, so a field withheld from the client matches as if
+// the record did not carry it.
 type FlowFilter struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Match flows where source or destination Pod namespace is in this list
-	// (direction semantics are affected by the direction field).
+	// Match flows where source or destination namespace is in this list
+	// (direction semantics are affected by the direction field). An endpoint's
+	// namespace is its Pod's; a destination without a Pod namespace (e.g. the
+	// backend of default/kubernetes) is in its Service's namespace. The
+	// Service's namespace counts for filters only: GetFlowsRequest.namespaces
+	// admits a record by its Pod namespaces, so a flow from ns-a to
+	// default/kubernetes reaches a stream opened for ns-a, not one opened for
+	// default.
 	//
 	// A Namespace outside GetFlowsRequest.namespaces is allowed, and is how a
 	// flow is selected by its peer rather than by its own end: every record that
@@ -190,10 +198,13 @@ type FlowFilter struct {
 	// Match flows where source or destination Pod labels match this selector.
 	// Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
 	PodLabelSelector string `protobuf:"bytes,3,opt,name=pod_label_selector,json=podLabelSelector,proto3" json:"pod_label_selector,omitempty"`
-	// Match flows where the destination Service name is in this list.
-	// Provide the plain Service name without a namespace prefix (e.g. "frontend",
-	// not "default/frontend"). The match is exact on the name only; to restrict
-	// to a specific namespace combine this filter with the namespaces field.
+	// Match flows where the destination Service is in this list. An entry is
+	// either a plain Service name (e.g. "frontend"), which matches a Service of
+	// that name in any namespace, or a Service name prefixed by its namespace
+	// (e.g. "default/frontend"), which matches that Service only. The namespaces
+	// field restricts the endpoints, not the Service: to restrict a Service to a
+	// namespace, prefix its name. This filter always matches the destination,
+	// whatever the direction.
 	ServiceNames []string `protobuf:"bytes,4,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	// Match flows based on their type.
 	FlowTypes []FlowType `protobuf:"varint,5,rep,packed,name=flow_types,json=flowTypes,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType" json:"flow_types,omitempty"`
@@ -201,7 +212,9 @@ type FlowFilter struct {
 	// direction field). CIDR notation is supported (e.g. "10.0.0.0/8").
 	Ips []string `protobuf:"bytes,6,rep,name=ips,proto3" json:"ips,omitempty"`
 	// Controls which endpoint of a flow the directional filters (namespaces,
-	// pod_names, pod_label_selector, ips) are matched against.
+	// pod_names, pod_label_selector, ips) are matched against. All of them are
+	// matched against the same endpoint, so that e.g. namespaces and pod_names
+	// together select a Pod by namespace and name.
 	// FROM applies filters to the source (sender) side, TO applies them to the
 	// destination (receiver) side, and BOTH (default) matches either side.
 	//   BOTH (default) - match source OR destination
