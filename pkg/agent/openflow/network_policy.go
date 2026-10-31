@@ -1379,8 +1379,8 @@ func (f *featureNetworkPolicy) addActionToConjunctiveMatch(clause *clause, match
 
 // BatchInstallPolicyRuleFlows installs flows for NetworkPolicy rules in case of agent restart. It calculates and
 // accumulates all Openflow entry updates required and installs all of them on OVS bridge in one bundle.
-// It resets the global conjunctive match flow cache upon failure, and should NOT be used after any rule is installed
-// via the InstallPolicyRuleFlows method. Otherwise the cache would be out of sync.
+// It restores the global conjunctive match flow cache to its pre-call state upon failure, and should NOT be used
+// after any rule is installed via the InstallPolicyRuleFlows method. Otherwise the cache would be out of sync.
 func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
@@ -1388,11 +1388,15 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 	var allFlowMessages []*openflow15.FlowMod
 	var conjunctions []*policyRuleConjunction
 
+	// Contexts already in the cache (e.g. those of the DNS interception conjunction) are realized on OVS and must
+	// survive a rejected bundle, as nothing else would recreate them.
+	restoreCache := c.featureNetworkPolicy.snapshotConjMatchFlowCache()
 	for _, rule := range ofPolicyRules {
 		conj := c.featureNetworkPolicy.calculateActionFlowChangesForRule(rule)
 		if err := c.featureNetworkPolicy.addRuleToConjunctiveMatch(conj, rule); err != nil {
-			// Reset the global conjunctive match flow cache since it may have been partially updated.
-			c.featureNetworkPolicy.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
+			// Restore the global conjunctive match flow cache since it may have been partially updated, including
+			// by the failed rule.
+			restoreCache(append(conjunctions, conj))
 			return fmt.Errorf("error calculating conjunctive match flows for %s: %w", conj.policyRuleString(), err)
 		}
 		allFlowMessages = append(allFlowMessages, append(conj.actionFlows, conj.metricFlows...)...)
@@ -1418,9 +1422,9 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 
 	// Send the changed Openflow entries to the OVS bridge.
 	if err := c.ofEntryOperations.AddAll(allFlowMessages); err != nil {
-		// Reset the global conjunctive match flow cache since the OpenFlow bundle, which contains
+		// Restore the global conjunctive match flow cache since the OpenFlow bundle, which contains
 		// all the match flows to be installed, was not applied successfully.
-		c.featureNetworkPolicy.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
+		restoreCache(conjunctions)
 		return err
 	}
 	// Update conjMatchFlowContexts as the expected status.
@@ -1429,6 +1433,43 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 		c.featureNetworkPolicy.policyCache.Add(conj)
 	}
 	return nil
+}
+
+// snapshotConjMatchFlowCache records the current globalConjMatchFlowCache and returns a function which restores it,
+// undoing the changes made to it by addRuleToConjunctiveMatch for the provided conjunctions and the match flows
+// recomputed in BatchInstallPolicyRuleFlows.
+// Neither this method nor the returned function acquires locks. The caller must exclude flow replay and concurrent
+// cache updates throughout the snapshot, batch changes, and restoration. BatchInstallPolicyRuleFlows holds
+// replayMutex.RLock, which excludes ReplayFlows (taking the write lock), and runs before policy workers start.
+func (f *featureNetworkPolicy) snapshotConjMatchFlowCache() func(conjunctions []*policyRuleConjunction) {
+	cache := make(map[string]*conjMatchFlowContext, len(f.globalConjMatchFlowCache))
+	flows := make(map[string]*openflow15.FlowMod, len(f.globalConjMatchFlowCache))
+	for key, ctx := range f.globalConjMatchFlowCache {
+		cache[key] = ctx
+		flows[key] = ctx.flow
+	}
+	return func(conjunctions []*policyRuleConjunction) {
+		for _, conj := range conjunctions {
+			if conj == nil {
+				continue
+			}
+			for _, clause := range []*clause{conj.fromClause, conj.toClause, conj.serviceClause} {
+				if clause == nil {
+					continue
+				}
+				for key := range clause.matches {
+					if ctx, found := cache[key]; found {
+						delete(ctx.actions, conj.id)
+						ctx.delDenyAllRule(conj.id)
+					}
+				}
+			}
+		}
+		for key, ctx := range cache {
+			ctx.flow = flows[key]
+		}
+		f.globalConjMatchFlowCache = cache
+	}
 }
 
 // applyConjunctiveMatchFlows installs OpenFlow entries on the OVS bridge, and then updates the conjMatchFlowContext.
