@@ -89,6 +89,23 @@ func TestConvertProtocolHTTP(t *testing.T) {
 			},
 			expected: `http.host; content:".foo.";`,
 		},
+		{
+			name: "with wildcard host, wildcard path",
+			http: &v1beta.HTTPProtocol{
+				Host: "*",
+				Path: "**",
+			},
+			expected: "",
+		},
+		{
+			name: "with wildcard host, exact path, method",
+			http: &v1beta.HTTPProtocol{
+				Host:   "*",
+				Method: "GET",
+				Path:   "/index.html",
+			},
+			expected: `http.uri; content:"/index.html"; startswith; endswith; http.method; content:"GET";`,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -115,10 +132,73 @@ func TestConvertProtocolTLS(t *testing.T) {
 			},
 			expected: `tls.sni; content:"google.com"; startswith; endswith;`,
 		},
+		{
+			name: "with wildcard SNI",
+			tls: &v1beta.TLSProtocol{
+				SNI: "*",
+			},
+			expected: "",
+		},
+		{
+			name: "with multiple wildcard SNI",
+			tls: &v1beta.TLSProtocol{
+				SNI: "**",
+			},
+			expected: "",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, convertProtocolTLS(tc.tls))
+		})
+	}
+}
+
+func TestConvertContent(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  string
+		expected string
+	}{
+		{
+			name:     "empty",
+			content:  "",
+			expected: "",
+		},
+		{
+			name:     "single wildcard",
+			content:  "*",
+			expected: "",
+		},
+		{
+			name:     "multiple wildcards",
+			content:  "***",
+			expected: "",
+		},
+		{
+			name:     "exact match",
+			content:  "/index.html",
+			expected: `content:"/index.html"; startswith; endswith;`,
+		},
+		{
+			name:     "prefix match",
+			content:  "/public/*",
+			expected: `content:"/public/"; startswith;`,
+		},
+		{
+			name:     "suffix match",
+			content:  "*.foo.com",
+			expected: `content:".foo.com"; endswith;`,
+		},
+		{
+			name:     "pattern match",
+			content:  "*/v2/*",
+			expected: `content:"/v2/";`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, convertContent(tc.content))
 		})
 	}
 }
