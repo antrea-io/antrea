@@ -1103,7 +1103,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 
 	ingressNode := controlPlaneNodeName()
 	backendNode1 := workerNodeName(1)

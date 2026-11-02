@@ -616,6 +616,12 @@ func (c *client) InstallNodeFlows(hostname string,
 			if c.networkConfig.NeedsEgressSymmetricPath(c.enableEgress) {
 				flows = append(flows, c.featurePodConnectivity.l3FwdFlowEgressReturnViaTun(localGatewayMAC, *peerPodCIDR, peerNodeIP))
 			}
+			// The traffic of DSR Services keeps the Service IP as its destination, which the Node network cannot
+			// route to the peer Node, so it goes through the tunnel even though Pod-to-Pod traffic to the peer is
+			// routed.
+			if c.networkConfig.NeedsDSRTunnelToRoutedPeers() {
+				flows = append(flows, c.featurePodConnectivity.l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC, *peerPodCIDR, peerNodeIP)...)
+			}
 		}
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(peerNodeIP))
