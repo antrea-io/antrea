@@ -181,3 +181,18 @@ kube-router-vhrf5   1/1       Running   0          1m
 
 Antrea can be deployed either before or after kube-router, with the `NoEncap`
 mode.
+
+### Egress in NoEncap Mode
+
+By default, [Egress](egress.md) sends the traffic of a Pod through a tunnel
+when the Egress IP is on another Node, while Pod-to-Pod traffic remains routed.
+Antrea then creates the tunnel interface (`antrea-tun0`) and reduces the Pod MTU
+by the encapsulation overhead, as it does in `Encap` mode, and the Node network
+must allow the tunnel traffic between Nodes.
+
+With the `l2` value of the `egress.dispatch` option, and the `EgressDispatchL2`
+feature gate, the Node of the Pod sends that traffic unchanged to the MAC
+address of the Egress Node instead. Antrea then creates no tunnel interface for
+Egress. All Nodes must be in one L2 segment. Refer to
+[Egress without a tunnel in noEncap mode](egress.md#egress-without-a-tunnel-in-noencap-mode)
+for the requirements and the effects.

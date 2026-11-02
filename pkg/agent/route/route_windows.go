@@ -517,6 +517,10 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
+func (c *Client) SetEgressRemotePodIPs(mark uint32, podIPs sets.Set[string]) error {
+	return errors.New("SetEgressRemotePodIPs is not implemented on Windows")
+}
+
 // TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	netNatStaticMapping := &winnet.NetNatStaticMapping{
@@ -661,6 +665,18 @@ func (c *Client) AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
 
 func (c *Client) DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
 	return errors.New("DeleteEgressRule is not implemented on Windows")
+}
+
+func (c *Client) AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *iputil.DualStackIPs) error {
+	return errors.New("AddL2DispatchPeerRoutes is not implemented on Windows")
+}
+
+func (c *Client) DeleteL2DispatchPeerRoutes(peerIndex uint32) error {
+	return errors.New("DeleteL2DispatchPeerRoutes is not implemented on Windows")
+}
+
+func (c *Client) ListL2DispatchPeers() (map[uint32]*iputil.DualStackIPs, error) {
+	return nil, nil
 }
 
 func (c *Client) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, ipsetEntries sets.Set[string], isIPv6 bool) error {
