@@ -46,10 +46,11 @@ var (
 			SessionState: bgp.SessionActive,
 		},
 		{
-			Address:      "192.168.77.200",
-			Port:         179,
-			ASN:          65001,
-			SessionState: bgp.SessionEstablished,
+			Address:         "192.168.77.200",
+			Port:            179,
+			ASN:             65001,
+			SessionState:    bgp.SessionEstablished,
+			BFDSessionState: bgp.BFDSessionUp,
 		},
 		{
 			Address:      "fec0::196:168:77:251",
@@ -78,9 +79,10 @@ func TestBGPPeerQuery(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
 				{
-					Peer:  "192.168.77.200:179",
-					ASN:   65001,
-					State: "Established",
+					Peer:            "192.168.77.200:179",
+					ASN:             65001,
+					State:           "Established",
+					BFDSessionState: "Up",
 				},
 				{
 					Peer:  "192.168.77.201:179",
@@ -117,9 +119,10 @@ func TestBGPPeerQuery(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
 				{
-					Peer:  "192.168.77.200:179",
-					ASN:   65001,
-					State: "Established",
+					Peer:            "192.168.77.200:179",
+					ASN:             65001,
+					State:           "Established",
+					BFDSessionState: "Up",
 				},
 				{
 					Peer:  "192.168.77.201:179",

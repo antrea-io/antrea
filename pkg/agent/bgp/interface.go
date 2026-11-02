@@ -83,6 +83,19 @@ const (
 	SessionEstablished SessionState = "Established"
 )
 
+type BFDSessionState string
+
+const (
+	// BFDSessionUnknown indicates an unknown BFD session state.
+	BFDSessionUnknown BFDSessionState = "Unknown"
+	// The following are the states of the BFD state machine.
+	// For more details see https://datatracker.ietf.org/doc/html/rfc5880#section-6.2.
+	BFDSessionAdminDown BFDSessionState = "AdminDown"
+	BFDSessionDown      BFDSessionState = "Down"
+	BFDSessionInit      BFDSessionState = "Init"
+	BFDSessionUp        BFDSessionState = "Up"
+)
+
 type RouteType int
 
 const (
@@ -122,6 +135,9 @@ type PeerStatus struct {
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
 	UptimeSeconds              int
+	// BFDSessionState is the state of the BFD session towards the peer. It's empty when BFD is not enabled for the
+	// peer.
+	BFDSessionState BFDSessionState
 }
 
 // Route represents a BGP route. Currently only prefix (e.g., "192.168.0.0/24") is needed. More attributes might be

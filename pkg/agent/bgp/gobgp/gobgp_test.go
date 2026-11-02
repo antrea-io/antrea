@@ -75,6 +75,69 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 			},
 		},
 		{
+			name: "Established peer with BFD enabled",
+			peer: &gobgpapi.Peer{
+				Conf: &gobgpapi.PeerConf{
+					NeighborAddress: "192.168.1.1",
+					PeerAsn:         65001,
+				},
+				Transport: &gobgpapi.Transport{
+					RemotePort: 179,
+				},
+				State: &gobgpapi.PeerState{
+					SessionState: gobgpapi.PeerState_SESSION_STATE_ESTABLISHED,
+					BfdState: &gobgpapi.BfdPeerState{
+						SessionState: gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP,
+					},
+				},
+				Timers: &gobgpapi.Timers{
+					State: &gobgpapi.TimersState{
+						Uptime: &timestamppb.Timestamp{Seconds: time.Now().Unix() - 3600},
+					},
+				},
+			},
+			expected: &bgp.PeerStatus{
+				Address:         "192.168.1.1",
+				ASN:             65001,
+				Port:            179,
+				SessionState:    bgp.SessionEstablished,
+				UptimeSeconds:   3600,
+				BFDSessionState: bgp.BFDSessionUp,
+			},
+		},
+		{
+			// The BFD session state is left empty rather than reported as unknown, so that a peer without BFD is
+			// not confused with one whose BFD state could not be determined.
+			name: "Established peer without BFD enabled",
+			peer: &gobgpapi.Peer{
+				Conf: &gobgpapi.PeerConf{
+					NeighborAddress: "192.168.1.1",
+					PeerAsn:         65001,
+				},
+				Transport: &gobgpapi.Transport{
+					RemotePort: 179,
+				},
+				State: &gobgpapi.PeerState{
+					SessionState: gobgpapi.PeerState_SESSION_STATE_ESTABLISHED,
+					BfdState: &gobgpapi.BfdPeerState{
+						SessionState: gobgpapi.BfdSessionState_BFD_SESSION_STATE_UNSPECIFIED,
+					},
+				},
+				Timers: &gobgpapi.Timers{
+					State: &gobgpapi.TimersState{
+						Uptime: &timestamppb.Timestamp{Seconds: time.Now().Unix() - 3600},
+					},
+				},
+			},
+			expected: &bgp.PeerStatus{
+				Address:       "192.168.1.1",
+				ASN:           65001,
+				Port:          179,
+				SessionState:  bgp.SessionEstablished,
+				UptimeSeconds: 3600,
+			},
+		},
+		{
 			name: "Idle peer",
 			peer: &gobgpapi.Peer{
 				Conf: &gobgpapi.PeerConf{
@@ -142,6 +205,12 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 			Port:                       ptr.To(int32(179)),
 			MultihopTTL:                ptr.To(int32(2)),
 			GracefulRestartTimeSeconds: ptr.To(int32(120)),
+			BFD: &v1alpha1.BFDConfig{
+				Enabled:                         true,
+				MinReceiveIntervalMilliseconds:  ptr.To(int32(300)),
+				MinTransmitIntervalMilliseconds: ptr.To(int32(500)),
+				DetectionMultiplier:             ptr.To(int32(4)),
+			},
 		},
 		Password: "password",
 	}
@@ -154,7 +223,40 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(179), peer.GetTransport().GetRemotePort())
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
+	assert.True(t, peer.GetBfd().GetEnabled())
+	// The gobgp API expects the BFD intervals in microseconds.
+	assert.Equal(t, uint32(300000), peer.GetBfd().GetRequiredMinimumReceive())
+	assert.Equal(t, uint32(500000), peer.GetBfd().GetDesiredMinimumTxInterval())
+	assert.Equal(t, uint32(4), peer.GetBfd().GetDetectionMultiplier())
 
+	peerConfigWithoutBFD := bgp.PeerConfig{
+		BGPPeer: &v1alpha1.BGPPeer{
+			Address: "192.168.0.1",
+			ASN:     65000,
+		},
+	}
+
+	peer, err = convertPeerConfigToGoBGPPeer(peerConfigWithoutBFD)
+	assert.NoError(t, err)
+	assert.Nil(t, peer.GetBfd())
+
+	// A BFD configuration that is present but not enabled must not turn BFD on, whatever its other fields hold.
+	peerConfigWithDisabledBFD := bgp.PeerConfig{
+		BGPPeer: &v1alpha1.BGPPeer{
+			Address: "192.168.0.1",
+			ASN:     65000,
+			BFD: &v1alpha1.BFDConfig{
+				Enabled:                         false,
+				MinReceiveIntervalMilliseconds:  ptr.To(int32(300)),
+				MinTransmitIntervalMilliseconds: ptr.To(int32(500)),
+				DetectionMultiplier:             ptr.To(int32(4)),
+			},
+		},
+	}
+
+	peer, err = convertPeerConfigToGoBGPPeer(peerConfigWithDisabledBFD)
+	assert.NoError(t, err)
+	assert.Nil(t, peer.GetBfd())
 }
 
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
@@ -174,6 +276,25 @@ func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
 
 	for _, test := range tests {
 		output := convertGoBGPSessionStateToSessionState(test.input)
+		assert.Equal(t, test.expected, output)
+	}
+}
+
+func TestConvertGoBGPBFDSessionStateToBFDSessionState(t *testing.T) {
+	tests := []struct {
+		input    gobgpapi.BfdSessionState
+		expected bgp.BFDSessionState
+	}{
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_UNSPECIFIED, bgp.BFDSessionUnknown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_ADMIN_DOWN, bgp.BFDSessionAdminDown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_DOWN, bgp.BFDSessionDown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_INIT, bgp.BFDSessionInit},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP, bgp.BFDSessionUp},
+		{gobgpapi.BfdSessionState(999), bgp.BFDSessionUnknown},
+	}
+
+	for _, test := range tests {
+		output := convertGoBGPBFDSessionStateToBFDSessionState(test.input)
 		assert.Equal(t, test.expected, output)
 	}
 }
