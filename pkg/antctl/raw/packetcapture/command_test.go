@@ -198,6 +198,73 @@ func TestPacketCaptureRun(t *testing.T) {
 	}
 }
 
+func TestPacketCaptureRunCleanup(t *testing.T) {
+	tcs := []struct {
+		name      string
+		deleteErr error
+		expectOut string
+	}{
+		{
+			name: "delete succeeds",
+		},
+		{
+			name:      "delete fails",
+			deleteErr: fmt.Errorf("apiserver unavailable"),
+			expectOut: "error when deleting PacketCapture: apiserver unavailable\n",
+		},
+	}
+
+	for _, tt := range tcs {
+		t.Run(tt.name, func(t *testing.T) {
+			client := antreafakeclient.NewSimpleClientset()
+			client.PrependReactor("create", "packetcaptures", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				obj := action.(k8stesting.CreateAction).GetObject().(*v1alpha1.PacketCapture)
+				obj.Status.FilePath = fmt.Sprintf("%s:/tmp/antrea/packages/%s.pcapng", antreaAgentPod.Name, antreaAgentPod.Name)
+				obj.Status.Conditions = []v1alpha1.PacketCaptureCondition{
+					{
+						Type:   v1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionTrue,
+					},
+				}
+				return false, obj, nil
+			})
+			if tt.deleteErr != nil {
+				client.PrependReactor("delete", "packetcaptures", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tt.deleteErr
+				})
+			}
+			getCopier = func(config *rest.Config, client kubernetes.Interface) raw.PodFileCopier {
+				return &testPodFile{}
+			}
+			defer func() {
+				getCopier = getPodFileCopier
+			}()
+			option := packetCaptureOptions{
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "tcp,tcp_src=50060,tcp_dst=80",
+				number: testNum,
+			}
+			buf := new(bytes.Buffer)
+			err := packetCaptureRun(context.TODO(), buf, nil, k8sClient, client, &option)
+			require.NoError(t, err)
+
+			var deleted bool
+			for _, action := range client.Actions() {
+				if action.Matches("delete", "packetcaptures") {
+					deleted = true
+				}
+			}
+			assert.True(t, deleted, "PacketCapture should be deleted after the command completes")
+			if tt.expectOut != "" {
+				assert.Contains(t, buf.String(), tt.expectOut)
+			} else {
+				assert.NotContains(t, buf.String(), "error when deleting PacketCapture")
+			}
+		})
+	}
+}
+
 func TestTokenizeTCPFlags(t *testing.T) {
 	tcs := []struct {
 		name        string
