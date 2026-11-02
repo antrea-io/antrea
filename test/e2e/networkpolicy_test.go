@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilexec "k8s.io/client-go/util/exec"
 
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -215,6 +217,49 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	}
 }
 
+// checkNoConnectionEventually verifies that clientName cannot connect to the given server, retrying
+// until the NetworkPolicy which is expected to drop the traffic has actually been enforced by the
+// Antrea Agent. NetworkPolicies are computed and realized asynchronously, so a connection can still
+// succeed for a short time after the policy has been created, after the Agent has restarted, or
+// after the Agent has reconnected to the Controller and resynced its policies. Note that
+// runNetcatCommandFromTestPod already retries when a connection fails, but it returns as soon as one
+// attempt succeeds, hence the need to retry here. The timeout has to accommodate a full
+// (unsuccessful) invocation of runNetcatCommandFromTestPod, which takes about 25s.
+func (data *TestData) checkNoConnectionEventually(t *testing.T, clientName, serverIP string, serverPort int32, serverDesc string) {
+	t.Helper()
+	// Whether we observed the connection succeed at least once, and the last error which
+	// prevented us from running nc, if any. When we give up, a successful connection takes
+	// precedence in the failure message: only if we never observed one do we report that we
+	// could not determine the outcome.
+	connected := false
+	var lastExecErr error
+	if err := wait.PollUntilContextTimeout(context.Background(), time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+		err := data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, serverPort)
+		// Only a non-zero exit status of nc tells us that the connection was refused. Any
+		// other error means we failed to run the command at all - typically because the
+		// exec connection to the Node broke, which is not unlikely given that these checks
+		// run right after an Agent restart - and proves nothing, so we keep polling instead
+		// of reporting success.
+		var exitErr utilexec.CodeExitError
+		if errors.As(err, &exitErr) {
+			return true, nil
+		}
+		if err != nil {
+			lastExecErr = err
+			t.Logf("Ignoring error when running nc from Pod %s, will retry: %v", clientName, err)
+		} else {
+			connected = true
+		}
+		return false, nil
+	}); err != nil {
+		if !connected {
+			t.Fatalf("Could never determine whether Pod %s can connect %s, last error when running nc: %v",
+				clientName, serverDesc, lastExecErr)
+		}
+		t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, serverDesc)
+	}
+}
+
 func testDifferentNamedPorts(t *testing.T, data *TestData) {
 	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
 	defer cleanupFn()
@@ -311,19 +356,17 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	npCheck := func(server0IP, server1IP string) {
 		server0Address := net.JoinHostPort(server0IP, fmt.Sprint(server0Port))
 		server1Address := net.JoinHostPort(server1IP, fmt.Sprint(server1Port))
+		// client1 cannot connect to both servers. These checks come first: once they pass, we
+		// know that the NetworkPolicy has been realized, and the checks below actually
+		// validate the ingress rule instead of the absence of any policy.
+		data.checkNoConnectionEventually(t, client1Name, server0IP, server0Port, server0Address)
+		data.checkNoConnectionEventually(t, client1Name, server1IP, server1Port, server1Address)
 		// client0 can connect to both servers.
 		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server0IP, server0Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Address)
 		}
 		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server1IP, server1Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server1Address)
-		}
-		// client1 cannot connect to both servers.
-		if err = data.runNetcatCommandFromTestPod(client1Name, data.testNamespace, server0IP, server0Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server0Address)
-		}
-		if err = data.runNetcatCommandFromTestPod(client1Name, data.testNamespace, server1IP, server1Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Address)
 		}
 	}
 
@@ -441,9 +484,7 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	}()
 
 	npCheck := func(serverIP string) {
-		if err = data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, serverPort); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
-		}
+		data.checkNoConnectionEventually(t, clientName, serverIP, serverPort, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -495,9 +536,7 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	defer cleanupNetpol0()
 
 	preCheckFunc := func(server0IP, server1IP string) {
-		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server0IP, 80); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client0Name, server0Name)
-		}
+		data.checkNoConnectionEventually(t, client0Name, server0IP, 80, server0Name)
 		if err = data.runNetcatCommandFromTestPod(client1Name, data.testNamespace, server1IP, 80); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client1Name, server1Name)
 		}
@@ -551,11 +590,11 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionTrue)
 
 	npCheck := func(server0IP, server1IP string) {
+		// Check the dropped connection first: once it is dropped, we know that the Agent has
+		// resynced its policies, and the check below is not racy either.
+		data.checkNoConnectionEventually(t, client1Name, server1IP, 80, server1Name)
 		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server0IP, 80); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Name)
-		}
-		if err = data.runNetcatCommandFromTestPod(client1Name, data.testNamespace, server1IP, 80); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Name)
 		}
 	}
 

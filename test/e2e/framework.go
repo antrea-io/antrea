@@ -2607,7 +2607,10 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
+	// Wrap with %w so that callers can tell a non-zero exit status of nc (the connection was
+	// refused) apart from a failure to run the command at all (e.g. the exec connection to the
+	// Node broke), which are very different outcomes for a connectivity check.
+	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%w>", stdout, stderr, err)
 }
 
 func (data *TestData) runWgetCommandOnToolboxWithRetry(podName string, ns string, url string, maxAttempts int) (string, string, error) {
@@ -3073,11 +3076,24 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	if err != nil {
 		return fmt.Errorf("failed to list antrea-agent pods: %v", err)
 	}
+	// Collecting coverage data is best-effort: it requires exec'ing into the antrea-agent
+	// container right after the process has been sent SIGINT, and the container may already be
+	// restarting - or the Node may be temporarily unreachable - by then. In particular, with
+	// FlexibleIPAM the Agent moves the Node's network configuration from the OVS bridge back to
+	// the uplink interface as it shuts down (see Initializer.RestoreOVSBridge), which briefly
+	// disrupts connectivity to that Node's kubelet and makes the exec fail. Losing the coverage
+	// data for one Agent is not a reason to fail the whole test run, so we log the error, move on
+	// to the next Pod, and only report an error if no Pod could be handled at all.
+	var errs []error
 	for _, pod := range pods.Items {
 		podName := pod.Name
 		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", "antrea-agent", covDir); err != nil {
-			return fmt.Errorf("error when gracefully exiting Antrea Agent: %w", err)
+			log.Errorf("Error when gracefully exiting Antrea Agent Pod '%s' and collecting its coverage data: %v", podName, err)
+			errs = append(errs, err)
 		}
+	}
+	if len(errs) > 0 && len(errs) == len(pods.Items) {
+		return fmt.Errorf("error when gracefully exiting Antrea Agent: could not collect coverage data for any Pod: %w", errors.Join(errs...))
 	}
 	return nil
 }

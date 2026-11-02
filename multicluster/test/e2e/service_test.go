@@ -370,22 +370,19 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePod(t *testing.T) {
 	}
 	defer data.deleteACNP(westCluster, acnpBuilder.Name)
 
-	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Connected, eastRegularClientName, westExpSvcIP)
 
 	// Update Pod Label to match the Stretched NetworkPolicy selector.
 	if err = data.updatePod(eastCluster, multiClusterTestNamespace, eastRegularClientName, func(pod *corev1.Pod) { pod.Labels["foo"] = "bar" }); err != nil {
 		t.Errorf("Failure -- fail to update eastRegularClientPod: %v", err)
 	}
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Dropped, eastRegularClientName, westExpSvcIP)
 
 	// Revert Pod Label update to test this Pod won't be selected again.
 	if err = data.updatePod(eastCluster, multiClusterTestNamespace, eastRegularClientName, func(pod *corev1.Pod) { delete(pod.Labels, "foo") }); err != nil {
 		t.Errorf("Failure -- fail to update eastRegularClientPod: %v", err)
 	}
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Connected, eastRegularClientName, westExpSvcIP)
 }
 
 func (data *MCTestData) testStretchedNetworkPolicyUpdateNS(t *testing.T) {
@@ -409,22 +406,16 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdateNS(t *testing.T) {
 	}
 	defer data.deleteACNP(westCluster, acnpBuilder.Name)
 
-	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
-
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Connected, eastGwClientName, westExpSvcIP)
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Connected, eastRegularClientName, westExpSvcIP)
 
 	// Update NS label to match the Stretched NetworkPolicy selector.
 	if err = data.updateNamespace(eastCluster, multiClusterTestNamespace, func(ns *corev1.Namespace) { ns.Labels["foo"] = "bar" }); err != nil {
 		t.Errorf("Failure -- fail to update multiClusterTestNamespace: %v", err)
 	}
 
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
-
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Dropped, eastGwClientName, westExpSvcIP)
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Dropped, eastRegularClientName, westExpSvcIP)
 
 	// Revert Namespace Label update.
 	if err = data.updateNamespace(eastCluster, multiClusterTestNamespace, func(ns *corev1.Namespace) { delete(ns.Labels, "foo") }); err != nil {
@@ -452,20 +443,43 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePolicy(t *testing.T) {
 	}
 	defer data.deleteACNP(westCluster, acnpBuilder.Name)
 
-	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Connected, eastRegularClientName, westExpSvcIP)
 
 	// Update the policy to select the eastRegularClient.
 	acnpBuilder.AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, nil, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error updateing ACNP %s: %v", acnpBuilder.Name, err)
 	}
-	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	data.assertStretchedNetworkPolicyProbe(t, antreae2e.Dropped, eastRegularClientName, westExpSvcIP)
 }
 
 func getStretchedNetworkPolicyErrorMessage(client string) string {
 	return fmt.Sprintf("Failure -- wrong result from probing exported Service from %s clientPod after applying Stretched NetworkPolicy", client)
+}
+
+const (
+	// stretchedNetworkPolicyProbeTimeout is how long we wait for a probe to return the expected
+	// result after a Stretched NetworkPolicy - or one of the Pod / Namespace labels that it
+	// selects on - has been updated.
+	stretchedNetworkPolicyProbeTimeout = 30 * time.Second
+	// stretchedNetworkPolicyProbeInterval is how long we wait between two probes.
+	stretchedNetworkPolicyProbeInterval = 1 * time.Second
+)
+
+// assertStretchedNetworkPolicyProbe probes the exported west cluster Service from the given east
+// cluster client Pod, until the expected connectivity is observed or the timeout expires.
+//
+// Unlike the creation of an ACNP, updating a Stretched NetworkPolicy - or the Pod / Namespace
+// labels that it selects on - cannot be waited on with WaitForACNPCreationAndRealization: the
+// LabelIdentity of the client Pod has to be exported to the leader cluster and imported by the west
+// cluster before the updated policy is enforced there, which is asynchronous. Probing only once
+// right after the update is therefore racy.
+func (data *MCTestData) assertStretchedNetworkPolicyProbe(t *testing.T, expected antreae2e.PodConnectivityMark, clientPodName, dstAddr string) {
+	t.Helper()
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, clientPodName, "client", dstAddr, mcWestClusterTestService, 80, corev1.ProtocolTCP)
+		assert.Equal(c, expected, connectivity)
+	}, stretchedNetworkPolicyProbeTimeout, stretchedNetworkPolicyProbeInterval, getStretchedNetworkPolicyErrorMessage(clientPodName))
 }
 
 func (data *MCTestData) createClientPodInCluster(t *testing.T, cluster string, nodeName string, podName string) {
