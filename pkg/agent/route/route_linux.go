@@ -2273,7 +2273,10 @@ func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 // moment because the marks are not permanent and could change upon restart.
 func (c *Client) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {
 	klog.InfoS("Restoring IP routes and rules for Egress")
-	routes, err := c.netlink.RouteList(nil, netlink.FAMILY_ALL)
+	// RouteList returns only the routes in the main table. Filtering by table with the table unspecified returns the
+	// routes in all tables, which include the ones created for Egress.
+	filter := &netlink.Route{Table: unix.RT_TABLE_UNSPEC}
+	routes, err := c.netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, netlink.RT_FILTER_TABLE)
 	if err != nil {
 		return err
 	}
@@ -2283,7 +2286,9 @@ func (c *Client) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {
 		if route.Table < minTableID || route.Table > maxTableID {
 			continue
 		}
-		c.netlink.RouteDel(&route)
+		if err := c.netlink.RouteDel(&route); err != nil {
+			klog.ErrorS(err, "Failed to delete Egress route", "route", route)
+		}
 	}
 	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
