@@ -94,6 +94,47 @@ func TestAllocateNext(t *testing.T) {
 	}
 }
 
+func TestAllocateNextBoundary(t *testing.T) {
+	allocator := newIPRangeAllocator("192.168.1.10", "192.168.1.10")
+	assert.Equal(t, 1, allocator.Total())
+	assert.Equal(t, 1, allocator.Free())
+
+	ip, err := allocator.AllocateNext()
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("192.168.1.10"), ip)
+	assert.True(t, allocator.Has(ip))
+	assert.Equal(t, 1, allocator.Used())
+	assert.Equal(t, 0, allocator.Free())
+
+	// Next allocation must fail and not allocate 192.168.1.11 (offset max).
+	_, err = allocator.AllocateNext()
+	require.Error(t, err)
+
+	outOfRangeIP := net.ParseIP("192.168.1.11")
+	assert.False(t, allocator.Has(outOfRangeIP))
+	assert.Error(t, allocator.Release(outOfRangeIP))
+
+	// Releasing the allocated IP should make it available again.
+	require.NoError(t, allocator.Release(ip))
+	assert.Equal(t, 0, allocator.Used())
+	assert.Equal(t, 1, allocator.Free())
+
+	reallocatedIP, err := allocator.AllocateNext()
+	require.NoError(t, err)
+	assert.Equal(t, ip, reallocatedIP)
+}
+
+func TestAllocateNextAllValid(t *testing.T) {
+	allocator := newIPRangeAllocator("10.0.0.1", "10.0.0.5")
+	for i := 0; i < 5; i++ {
+		ip, err := allocator.AllocateNext()
+		require.NoError(t, err)
+		assert.True(t, allocator.Has(ip), "allocated IP %v should satisfy Has()", ip)
+	}
+	_, err := allocator.AllocateNext()
+	require.Error(t, err)
+}
+
 func TestAllocateIP(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -143,6 +143,9 @@ func (a *SingleIPAllocator) AllocateIP(ip net.IP) error {
 }
 
 func (a *SingleIPAllocator) allocateOffset(i int) (net.IP, bool) {
+	if i < 0 || i >= a.max {
+		return nil, false
+	}
 	if a.allocated.Bit(i) == 0 {
 		ip := utilnet.AddIPOffset(a.base, i)
 		if a.checkReserved(ip) != nil {
@@ -163,7 +166,7 @@ func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	if a.count >= a.max-len(a.reservedIPs) {
 		return nil, fmt.Errorf("no available IP")
 	}
-	for i := 0; i <= a.max; i++ {
+	for i := 0; i < a.max; i++ {
 		if ip, ok := a.allocateOffset(i); ok {
 			return ip, nil
 		}
