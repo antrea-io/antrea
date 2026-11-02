@@ -263,8 +263,9 @@ type BGPPolicySpec struct {
 	// will be effective and enforced; others serve as alternatives.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
 
-	// LocalASN is the AS number used by the BGP process. It accepts values in the range of 1-65535.
-	LocalASN int32 `json:"localASN"`
+	// LocalASN is the AS number used by the BGP process. It accepts values in the range of 1-4294967294.
+	// The value 4294967295 is reserved per RFC7300 and cannot be used.
+	LocalASN uint32 `json:"localASN"`
 
 	// ListenPort is the port on which the BGP process listens, and the default value is 179.
 	ListenPort *int32 `json:"listenPort,omitempty"`
@@ -297,7 +298,7 @@ type Confederation struct {
 	Identifier int32 `json:"identifier,omitempty"`
 
 	// MemberASNs lists the ASNs of other members in the confederation.
-	MemberASNs []int32 `json:"memberASNs,omitempty"`
+	MemberASNs []uint32 `json:"memberASNs,omitempty"`
 }
 
 type ServiceIPType string
@@ -335,7 +336,7 @@ type BGPPeer struct {
 	Port *int32 `json:"port,omitempty"`
 
 	// The AS number of the BGP peer.
-	ASN int32 `json:"asn"`
+	ASN uint32 `json:"asn"`
 
 	// The Time To Live (TTL) value used in BGP packets sent to the BGP peer. The range of the value is from 1 to 255,
 	// and the default value is 1.

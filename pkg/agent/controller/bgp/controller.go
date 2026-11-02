@@ -106,9 +106,9 @@ type bgpPolicyState struct {
 	// The port on which the local BGP server listens.
 	listenPort int32
 	// The AS number used by the local BGP server.
-	localASN int32
-	// The router ID used by the local BGP server.
-	routerID string
+	localASN uint32
+	listenPort int32
+	routerID  string
 	// The confederation config used by the local BGP server.
 	confederationConfig *confederationConfig
 	// routes stores all BGP routes advertised to BGP peers.
@@ -734,7 +734,7 @@ func (c *Controller) getPeerConfigs(peers []v1alpha1.BGPPeer) map[string]bgp.Pee
 	return peerConfigs
 }
 
-func generateBGPPeerKey(address string, asn int32) string {
+func generateBGPPeerKey(address string, asn uint32) string {
 	return fmt.Sprintf("%s-%d", address, asn)
 }
 

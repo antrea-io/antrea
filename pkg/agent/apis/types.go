@@ -222,7 +222,7 @@ func (r ServiceExternalIPInfo) SortRows() bool {
 type BGPPolicyResponse struct {
 	BGPPolicyName           string   `json:"name,omitempty"`
 	RouterID                string   `json:"routerID,omitempty"`
-	LocalASN                int32    `json:"localASN,omitempty"`
+	LocalASN                uint32   `json:"localASN,omitempty"`
 	ListenPort              int32    `json:"listenPort,omitempty"`
 	ConfederationIdentifier int32    `json:"confederationIdentifier,omitempty"`
 	MemberASNs              []uint32 `json:"memberASNs,omitempty"`
@@ -239,9 +239,9 @@ func (r BGPPolicyResponse) GetTableRow(maxColumnLength int) []string {
 		confederationIdentifierStr = strconv.Itoa(int(r.ConfederationIdentifier))
 	}
 	for _, memberASN := range r.MemberASNs {
-		memberASNs = append(memberASNs, strconv.Itoa(int(memberASN)))
+		memberASNs = append(memberASNs, strconv.FormatUint(uint64(memberASN), 10))
 	}
-	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort)),
+	return []string{r.BGPPolicyName, r.RouterID, strconv.FormatUint(uint64(r.LocalASN), 10), strconv.Itoa(int(r.ListenPort)),
 		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength)}
 }
 
@@ -252,7 +252,7 @@ func (r BGPPolicyResponse) SortRows() bool {
 // BGPPeerResponse describes the response struct of bgppeers command.
 type BGPPeerResponse struct {
 	Peer  string `json:"peer,omitempty"`
-	ASN   int32  `json:"asn,omitempty"`
+	ASN   uint32 `json:"asn,omitempty"`
 	State string `json:"state,omitempty"`
 }
 
