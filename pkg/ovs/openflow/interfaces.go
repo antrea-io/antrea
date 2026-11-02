@@ -223,6 +223,7 @@ type Action interface {
 	LoadToRegField(field *RegField, value uint32) FlowBuilder
 	LoadRegMark(marks ...*RegMark) FlowBuilder
 	LoadPktMarkRange(value uint32, to *Range) FlowBuilder
+	LoadPktMark(value uint32, mask *uint32) FlowBuilder
 	LoadIPDSCP(value uint8) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder

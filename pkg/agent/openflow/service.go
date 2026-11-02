@@ -160,6 +160,9 @@ func (f *featureService) initFlows() []*openflow15.FlowMod {
 		}
 		if f.enableDSR {
 			flows = append(flows, f.dsrServiceNoDNATFlows()...)
+			if f.networkConfig.SupportsDSRL2Dispatch() {
+				flows = append(flows, f.l2ForwardOutputDSRL2DispatchFlow())
+			}
 		}
 	} else {
 		// This installs the flows to enable Service connectivity. Upstream kube-proxy is leveraged to provide load-balancing,

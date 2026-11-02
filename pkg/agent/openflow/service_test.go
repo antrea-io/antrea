@@ -106,13 +106,34 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 	return flows
 }
 
+// serviceInitFlowsDSRL2Dispatch returns the flows of an IPv4 Node whose DSR Services can use the l2 dispatch, in
+// noEncap or hybrid mode. Compared to serviceInitFlows with DSR, the hairpin flow in SNATMark excludes the packets
+// which the l2 dispatch sends back to the Antrea gateway, and those packets are output to their in-port, which must be
+// the Antrea gateway. In noEncap mode, there is no flow for the connections to remote Endpoints through the tunnel.
+func serviceInitFlowsDSRL2Dispatch(trafficEncapMode config.TrafficEncapModeType) []string {
+	var flows []string
+	for _, flow := range serviceInitFlows(true, true, true, true) {
+		switch flow {
+		case "cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))":
+			if trafficEncapMode == config.TrafficEncapModeNoEncap {
+				continue
+			}
+		case "cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))":
+			flow = "cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff,reg4=0x0/0x40000000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))"
+		}
+		flows = append(flows, flow)
+	}
+	return append(flows, "cookie=0x1030000000000, table=Output, priority=210,reg0=0x200002/0x60000f,reg4=0x40000000/0x40000000 actions=IN_PORT")
+}
+
 func Test_featureService_initFlows(t *testing.T) {
 	testCases := []struct {
-		name          string
-		enableIPv4    bool
-		enableIPv6    bool
-		clientOptions []clientOptionsFn
-		expectedFlows []string
+		name             string
+		enableIPv4       bool
+		enableIPv6       bool
+		clientOptions    []clientOptionsFn
+		trafficEncapMode config.TrafficEncapModeType
+		expectedFlows    []string
 	}{
 		{
 			name:          "IPv4,Proxy",
@@ -157,10 +178,32 @@ func Test_featureService_initFlows(t *testing.T) {
 			clientOptions: []clientOptionsFn{disableProxy},
 			expectedFlows: serviceInitFlows(false, true, false, false),
 		},
+		{
+			name:             "IPv4,DSR,l2 dispatch,noEncap",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchL2)},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows:    serviceInitFlowsDSRL2Dispatch(config.TrafficEncapModeNoEncap),
+		},
+		{
+			name:             "IPv4,DSR,l2 dispatch,hybrid",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows:    serviceInitFlowsDSRL2Dispatch(config.TrafficEncapModeHybrid),
+		},
+		{
+			// The l2 dispatch is not available in encap mode, so the flows do not change.
+			name:             "IPv4,DSR,DSRDispatchL2 feature gate,encap",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedFlows:    serviceInitFlows(true, true, true, true),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap, tc.clientOptions...)
+			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
 
 			flows := getFlowStrings(fc.featureService.initFlows())
