@@ -50,7 +50,14 @@ func HandleMutationLabels() http.HandlerFunc {
 		klog.V(2).Info("Received request to mutate resource labels")
 		var reqBody []byte
 		if r.Body != nil {
-			reqBody, _ = io.ReadAll(r.Body)
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+			var err error
+			reqBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				klog.ErrorS(err, "Failed to read mutation webhook request body")
+				http.Error(w, "failed to read request body", http.StatusBadRequest)
+				return
+			}
 		}
 		if len(reqBody) == 0 {
 			klog.Errorf("Mutation webhook labelsmutator received empty request body")
