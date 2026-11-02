@@ -484,12 +484,12 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	peerToDeleteKeys := prePeerKeys.Difference(curPeerKeys)
 
 	bgpServer := c.bgpPolicyState.bgpServer
-	for key := range peerToAddKeys {
-		peerConfig := curPeerConfigs[key]
-		if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
+	for key := range peerToDeleteKeys {
+		peerConfig := prePeerConfigs[key]
+		if err := bgpServer.RemovePeer(ctx, peerConfig); err != nil {
 			return err
 		}
-		c.bgpPolicyState.peerConfigs[key] = peerConfig
+		delete(c.bgpPolicyState.peerConfigs, key)
 	}
 	for key := range peerToUpdateKeys {
 		peerConfig := curPeerConfigs[key]
@@ -498,12 +498,12 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 		}
 		c.bgpPolicyState.peerConfigs[key] = peerConfig
 	}
-	for key := range peerToDeleteKeys {
-		peerConfig := prePeerConfigs[key]
-		if err := bgpServer.RemovePeer(ctx, peerConfig); err != nil {
+	for key := range peerToAddKeys {
+		peerConfig := curPeerConfigs[key]
+		if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
 			return err
 		}
-		delete(c.bgpPolicyState.peerConfigs, key)
+		c.bgpPolicyState.peerConfigs[key] = peerConfig
 	}
 
 	return nil
