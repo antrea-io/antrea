@@ -54,6 +54,18 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	}
 	existingServiceAccounts := &corev1.ServiceAccountList{
 		Items: []corev1.ServiceAccount{
+			// The default ServiceAccount is present in every Namespace. Keep one in
+			// the leader Namespace with the requested ClusterID to verify that a
+			// caller using a same-named ServiceAccount elsewhere is still denied.
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "default",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "east",
+					},
+				},
+			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "mcs1",
@@ -402,7 +414,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		AdmissionRequest: *reqAllowCopy,
 	}
 	reqOtherNSCreate.UserInfo = authenticationv1.UserInfo{
-		Username: "system:serviceaccount:kube-system:any-sa",
+		Username: "system:serviceaccount:kube-system:default",
 		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
 		Groups: []string{
 			"system:serviceaccounts",
@@ -583,7 +595,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			expectedMsg:        "is not in Namespace",
 		},
 		{
-			name:               "Deny MemberClusterAnnounce creation by ServiceAccount from another Namespace",
+			name:               "Deny MemberClusterAnnounce creation by same-named ServiceAccount from another Namespace",
 			existingClusterSet: existingClusterSet,
 			req:                reqOtherNSCreate,
 			isAllowed:          false,
