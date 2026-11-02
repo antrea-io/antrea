@@ -48,6 +48,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AntreaClusterNetworkPolicyStatsList{},
 		&AntreaNetworkPolicyStats{},
 		&AntreaNetworkPolicyStatsList{},
+		&ClusterNetworkPolicyStats{},
+		&ClusterNetworkPolicyStatsList{},
 		&NetworkPolicyStats{},
 		&NetworkPolicyStatsList{},
 		&MulticastGroup{},

@@ -207,7 +207,8 @@ Stats API, which can be accessed by kubectl get commands, e.g. `kubectl get netw
 includes total number of sessions, packets, and bytes allowed or denied by a NetworkPolicy. It is collected
 asynchronously so there may be a delay of up to 1 minute for changes to be reflected in API responses. The feature
 supports K8s NetworkPolicies and Antrea-native policies, the latter of which requires
-`AntreaPolicy` to be enabled. Usage examples:
+`AntreaPolicy` to be enabled. Upstream K8s `ClusterNetworkPolicies` (`policy.networking.k8s.io`) are also supported,
+which requires the `ClusterNetworkPolicy` feature gate to be enabled. Usage examples:
 
 ```bash
 # List stats of all K8s NetworkPolicies.
@@ -228,8 +229,15 @@ NAMESPACE     NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
 default       access-http           3          36        5199    2020-09-07T13:19:38Z
 foo           bar                   1          12        1221    2020-09-07T13:22:42Z
 
+# List stats of all K8s ClusterNetworkPolicies. Note that stats of the Antrea-native
+# ClusterNetworkPolicy CRD are exposed as antreaclusternetworkpolicystats instead.
+> kubectl get clusternetworkpolicystats
+NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
+sample-cnp            3          36        5199    2020-09-07T13:19:38Z
+
 # List per-rule statistics for Antrea ClusterNetworkPolicy cluster-access-dns.
-# Both Antrea NetworkPolicy and Antrea ClusterNetworkPolicy support per-rule statistics.
+# Antrea NetworkPolicy, Antrea ClusterNetworkPolicy and K8s ClusterNetworkPolicy
+# all support per-rule statistics.
 > kubectl get antreaclusternetworkpolicystats cluster-access-dns -o json
 {
     "apiVersion": "stats.antrea.io/v1alpha1",
