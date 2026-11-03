@@ -37,7 +37,8 @@ RUN set -eux; \
 
 FROM golang:${GO_VERSION} AS iptables-wrapper
 
-ARG IPTABLES_WRAPPER_SHA=c6b9b2d4ee8701f3d476768ab8732d1b85ec7fef
+# Commit for the iptables-wrapper-v4 tag.
+ARG IPTABLES_WRAPPER_SHA=2deed57c5147181fb072cbe684121438cd1b4b8e
 
 # Can be updated to "git clone --depth 1 --revision ${IPTABLES_WRAPPER_SHA}" when Git 2.49+ is included in the golang image.
 RUN git clone https://github.com/kubernetes-sigs/iptables-wrappers.git /iptables-wrappers && \
@@ -53,12 +54,12 @@ LABEL description="An Ubuntu based Docker base image for Antrea."
 
 USER root
 
-COPY --from=iptables-wrapper /iptables-wrappers/iptables-wrapper-installer.sh /
-COPY --from=iptables-wrapper /iptables-wrappers/bin/iptables-wrapper /
+# Upstream recommends installing iptables-wrapper alongside the iptables binaries.
+COPY --from=iptables-wrapper /iptables-wrappers/bin/iptables-wrapper /usr/sbin/
 
 RUN apt-get update && apt-get install -y --no-install-recommends ipset jq inotify-tools gpg-agent software-properties-common nftables && \
     add-apt-repository ppa:oisf/suricata-${SURICATA_VERSION} && apt-get update && apt-get install -y suricata && \
     apt-get remove -y gpg-agent software-properties-common && apt-get autoremove -y && rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
-    /iptables-wrapper-installer.sh
+    /usr/sbin/iptables-wrapper install
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
