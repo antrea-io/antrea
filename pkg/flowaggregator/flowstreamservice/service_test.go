@@ -20,10 +20,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -2296,22 +2298,49 @@ func (r *stateRecorder) snapshot() []State {
 
 // fakeListener is an in-memory net.Listener, so that Run can be exercised without a real socket
 // (which cannot be used inside a synctest bubble, and would tie the tests to a free port on the
-// host). Accept blocks until Close, or returns acceptErr right away if it is set.
+// host). Accept returns the server end of each connection Dial opens, and blocks until Close
+// otherwise, or returns acceptErr right away if it is set.
 type fakeListener struct {
+	conns     chan net.Conn
 	closeCh   chan struct{}
 	closeOnce sync.Once
 	closed    atomic.Bool
 	acceptErr error
 }
 
-func newFakeListener() *fakeListener { return &fakeListener{closeCh: make(chan struct{})} }
+func newFakeListener() *fakeListener {
+	return &fakeListener{conns: make(chan net.Conn), closeCh: make(chan struct{})}
+}
 
 func (l *fakeListener) Accept() (net.Conn, error) {
 	if l.acceptErr != nil {
 		return nil, l.acceptErr
 	}
-	<-l.closeCh
-	return nil, net.ErrClosed
+	select {
+	case conn := <-l.conns:
+		return conn, nil
+	case <-l.closeCh:
+		return nil, net.ErrClosed
+	}
+}
+
+// Dial opens an in-memory connection to the listener and returns its client end. It has the
+// signature grpc.WithContextDialer expects.
+func (l *fakeListener) Dial(ctx context.Context, _ string) (net.Conn, error) {
+	server, client := net.Pipe()
+	select {
+	case l.conns <- server:
+		return client, nil
+	case <-l.closeCh:
+		err := net.ErrClosed
+		server.Close()
+		client.Close()
+		return nil, err
+	case <-ctx.Done():
+		server.Close()
+		client.Close()
+		return nil, ctx.Err()
+	}
 }
 
 func (l *fakeListener) Close() error {
@@ -2328,6 +2357,71 @@ func newTestCert(t *testing.T) (certPEM, keyPEM []byte) {
 	certPEM, keyPEM, err := tlstest.GenerateCert([]string{"127.0.0.1"}, time.Now(), time.Hour, true, false, 0, "P256", false)
 	require.NoError(t, err)
 	return certPEM, keyPEM
+}
+
+// testServer is a FlowStreamService running on a fakeListener, which gRPC clients can connect to
+// over TLS without a real socket, so that it can run inside a synctest bubble.
+type testServer struct {
+	buf      ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	lis      *fakeListener
+	roots    *x509.CertPool
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	// done is closed once Run has returned, with its error in err.
+	done chan struct{}
+	err  error
+}
+
+// runTestServer runs svc, which must be backed by buf, until stop is called or the test ends.
+func runTestServer(t *testing.T, svc *FlowStreamService, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *testServer {
+	certPEM, keyPEM := newTestCert(t)
+	require.NoError(t, svc.UpdateCertificate(certPEM, keyPEM))
+	roots := x509.NewCertPool()
+	require.True(t, roots.AppendCertsFromPEM(certPEM))
+	s := &testServer{
+		buf:    buf,
+		lis:    newFakeListener(),
+		roots:  roots,
+		stopCh: make(chan struct{}),
+		done:   make(chan struct{}),
+	}
+	go func() {
+		defer close(s.done)
+		s.err = svc.Run(s.lis, s.stopCh, func(State) {})
+	}()
+	t.Cleanup(func() {
+		s.stop()
+		assert.NoError(t, s.wait())
+	})
+	return s
+}
+
+// stop stops the server the way the Flow Aggregator does: by closing stopCh and shutting down the
+// ring buffer.
+func (s *testServer) stop() {
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+		s.buf.Shutdown()
+	})
+}
+
+// wait waits for Run to return and returns its error.
+func (s *testServer) wait() error {
+	<-s.done
+	return s.err
+}
+
+// newClient returns a client connection to the server, closed when the test ends. opts are added to
+// the options it needs to reach the server and trust its certificate.
+func (s *testServer) newClient(t *testing.T, opts ...grpc.DialOption) *grpc.ClientConn {
+	opts = append([]grpc.DialOption{
+		grpc.WithContextDialer(s.lis.Dial),
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{RootCAs: s.roots, ServerName: "127.0.0.1"})),
+	}, opts...)
+	conn, err := grpc.NewClient("passthrough:///flow-stream-service", opts...)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	return conn
 }
 
 // TestRun_StateTransitionsAndShutdown covers the normal lifecycle: Serving once the server is up,
@@ -2537,4 +2631,94 @@ func TestRun_CertificateRotation(t *testing.T) {
 	buf.Produce(newFlow("after-rotation", &flowpb.Kubernetes{}))
 	recvFlow(followStream, "after-rotation")
 	assert.Equal(t, []State{StateServing}, rec.snapshot())
+}
+
+// TestRun_StopEndsStreamsOfReadingClients covers the stop as the Flow Aggregator normally makes it:
+// once the ring buffer is shut down, a follow stream whose client keeps reading receives every
+// record left and ends cleanly, and Run returns without waiting for gracefulStopTimeout.
+func TestRun_StopEndsStreamsOfReadingClients(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		srv := runTestServer(t, newTestService(buf), buf)
+		client := flowpb.NewFlowStreamServiceClient(srv.newClient(t))
+		stream, err := client.GetFlows(t.Context(), &flowpb.GetFlowsRequest{Follow: true})
+		require.NoError(t, err)
+		_, err = stream.Recv()
+		require.NoError(t, err)
+
+		buf.Produce(newFlow("before-stop", &flowpb.Kubernetes{}))
+		start := time.Now()
+		srv.stop()
+		var got []string
+		for {
+			resp, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			require.NoError(t, err)
+			for _, f := range resp.GetFlows() {
+				got = append(got, f.GetId())
+			}
+		}
+		assert.Equal(t, []string{"before-stop"}, got)
+		require.NoError(t, srv.wait())
+		assert.Less(t, time.Since(start), gracefulStopTimeout)
+	})
+}
+
+// TestRun_StopClosesStreamsOfStalledClients covers a follow stream whose client stopped reading.
+// Its handler blocks in Send and never sees the ring buffer shut down, and even a handler that
+// returns leaves its trailers queued behind data the client has not accepted, so the stream would
+// hold the graceful stop for as long as the client kept it open. Run must close it once
+// gracefulStopTimeout has passed, and not before, and the client gets Unavailable.
+func TestRun_StopClosesStreamsOfStalledClients(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](1024)
+		srv := runTestServer(t, newTestService(buf), buf)
+		// A fixed window caps how much the client accepts without reading. A default client
+		// stalls the same way, but its window grows with its bandwidth estimate first.
+		conn := srv.newClient(t, grpc.WithInitialWindowSize(64*1024), grpc.WithInitialConnWindowSize(64*1024))
+		stream, err := flowpb.NewFlowStreamServiceClient(conn).GetFlows(t.Context(), &flowpb.GetFlowsRequest{Follow: true})
+		require.NoError(t, err)
+		_, err = stream.Recv()
+		require.NoError(t, err)
+
+		// The client stops reading here. These records add up to far more than the client's window
+		// and the server's write quota hold, so the handler ends up blocked in Send.
+		labels := &flowpb.Labels{Labels: map[string]string{"padding": strings.Repeat("x", 4096)}}
+		for i := range 512 {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{SourcePodLabels: labels}))
+		}
+		time.Sleep(exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		start := time.Now()
+		srv.stop()
+		require.NoError(t, srv.wait())
+		assert.Equal(t, gracefulStopTimeout, time.Since(start))
+		for err == nil {
+			_, err = stream.Recv()
+		}
+		assert.Equal(t, codes.Unavailable, status.Code(err), "unexpected error: %v", err)
+	})
+}
+
+// TestRun_StopBoundsStalledHandshakes covers a peer that connects and never completes its TLS
+// handshake. A stop, graceful or not, waits for the handshakes in progress, so it is the connection
+// timeout that bounds this case, and it must do so within gracefulStopTimeout, even for a handshake
+// started right before the stop.
+func TestRun_StopBoundsStalledHandshakes(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		srv := runTestServer(t, newTestService(buf), buf)
+		conn, err := srv.lis.Dial(t.Context(), "")
+		require.NoError(t, err)
+		defer conn.Close()
+		synctest.Wait()
+
+		start := time.Now()
+		srv.stop()
+		require.NoError(t, srv.wait())
+		assert.LessOrEqual(t, time.Since(start), gracefulStopTimeout)
+	})
 }

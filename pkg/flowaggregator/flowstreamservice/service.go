@@ -49,6 +49,17 @@ const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
 	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	flowStreamPort = 14740
+	// gracefulStopTimeout bounds how long Run waits, once stopCh is closed, for streams to end on
+	// their own before it closes the connections left. It is well under the 30s termination grace
+	// period a Pod gets by default, so that the Flow Aggregator exits on its own rather than being
+	// killed.
+	gracefulStopTimeout = 10 * time.Second
+	// connectionTimeout bounds the TLS and HTTP/2 handshakes of a new connection, instead of grpc-go's
+	// 120s default. A stop, graceful or not, waits for the handshakes in progress, so this is also what
+	// bounds a stop held by a peer that connects and never completes its handshake. No connection is
+	// accepted once the stop starts, so as long as this is no longer than gracefulStopTimeout, every
+	// handshake left has ended by the time gracefulStopTimeout has passed.
+	connectionTimeout = 10 * time.Second
 )
 
 // State is where a FlowStreamService server is in its serving lifecycle. The Flow Aggregator maps
@@ -195,7 +206,8 @@ func (s *FlowStreamService) getCertificate(*tls.ClientHelloInfo) (*tls.Certifica
 // UpdateCertificate, which must have been called first.
 // When the service was constructed with a non-nil authenticator, clients must present a valid
 // Kubernetes bearer token or client certificate, or the call is rejected before GetFlows runs.
-// Run blocks until stopCh is closed.
+// Run blocks until stopCh is closed, and then until the server has stopped, which takes at most
+// gracefulStopTimeout.
 //
 // setState is called as the server moves through its lifecycle, so that the caller can back it
 // with something a readiness/liveness check can read live (e.g. an atomic's Store method); Run
@@ -249,6 +261,8 @@ func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setSta
 		// the authenticator applies — an attacker can always open more connections — and it is set high
 		// enough not to preempt that cap; see the maxStreamsPerConn field.
 		grpc.MaxConcurrentStreams(s.maxStreamsPerConn),
+		// See connectionTimeout. This option is experimental in grpc-go.
+		grpc.ConnectionTimeout(connectionTimeout),
 	}
 	if s.authenticator != nil {
 		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))
@@ -274,11 +288,23 @@ func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setSta
 	}()
 	<-stopCh
 	transition(StateStopping)
-	// GracefulStop waits for all active GetFlows RPCs to return before shutting down. stopCh is
-	// only closed when the Flow Aggregator stops, as a certificate rotation does not restart the
-	// server, and active streams then drain because the Flow Aggregator also shuts down the ring
-	// buffer, which causes every consumer's ConsumeMultiple to return shutdown=true and GetFlows to
-	// return promptly. A follow stream would otherwise only end when its client goes away.
+	// GracefulStop waits for every GetFlows RPC to return, and for the connections carrying them to
+	// drain. stopCh is only closed when the Flow Aggregator stops, as a certificate rotation does not
+	// restart the server, and the Flow Aggregator then also shuts down the ring buffer. That ends
+	// every stream whose client keeps reading: ConsumeMultiple returns shutdown=true once the
+	// consumer has read every record left, which a lagging consumer still has to work through. A
+	// follow stream would otherwise only end when its client goes away.
+	//
+	// A client that stops reading holds the stop instead: its handler blocks in Send, so it never
+	// sees the shutdown, and even once a handler returns, its connection cannot drain while the
+	// trailers are queued behind data the client has not accepted. A connection still in its
+	// handshake holds the stop as well, for up to connectionTimeout. So once gracefulStopTimeout has
+	// passed, Stop closes every connection left, and their clients get Unavailable.
+	timer := time.AfterFunc(gracefulStopTimeout, func() {
+		klog.InfoS("Timed out waiting for FlowStreamService streams to end, closing them", "timeout", gracefulStopTimeout)
+		server.Stop()
+	})
+	defer timer.Stop()
 	server.GracefulStop()
 	wg.Wait()
 	return nil
