@@ -881,7 +881,9 @@ at by a manually created EndpointSlice. Either way, the Service's tier is
 resolved in its own Namespace, not in its endpoints'. Its IP goes with its name
 because a ClusterIP maps back to the Service it belongs to. On a stream that is
 not cluster-wide, a Service whose name could not be resolved has no Namespace to
-authorize against, and is withheld.
+authorize against, and is withheld. The Service is also withheld, whatever its
+own Namespace grants, when a denied connection withholds the destination
+endpoint's Namespace (see below).
 
 The flow type is deliberately not redacted, so `FLOW_TYPE_INTRA_NODE` still
 reports that the two endpoints share a Node. Paired with an endpoint the client
