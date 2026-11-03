@@ -411,7 +411,9 @@ func (sa *StreamAuthorization) Authorized(ctx context.Context, flows []*flowpb.F
 // Kubernetes metadata at all, is observable only cluster-wide.
 //
 // Each Namespace segment is then disclosed at its own tier, resolved independently of the other's,
-// and cluster-scoped policies are disclosed at the tier the client holds cluster-wide.
+// cluster-scoped policies are disclosed at the tier the client holds cluster-wide, and the
+// destination Service at the tier of its own Namespace, which need not be the destination
+// endpoint's.
 func (sa *StreamAuthorization) authorizeFlow(ctx context.Context, f *flowpb.Flow) *flowpb.Flow {
 	k8s := f.GetK8S()
 	sourceNamespace := k8s.GetSourcePodNamespace()
@@ -427,10 +429,23 @@ func (sa *StreamAuthorization) authorizeFlow(ctx context.Context, f *flowpb.Flow
 	if clusterScopedPolicyApplied(k8s) {
 		cluster = sa.peerTierFloorClusterWide(ctx)
 	}
-	if source == tierFull && destination == tierFull && cluster.identifies() {
+	service := tierFull
+	if hasDestinationService(k8s) {
+		// A Service whose name could not be resolved has no Namespace, and is withheld.
+		serviceNamespace, _ := destinationService(k8s.GetDestinationServicePortName())
+		service = sa.tierFor(ctx, serviceNamespace, sa.namespaces.Has(serviceNamespace))
+	}
+	if source == tierFull && destination == tierFull && service == tierFull && cluster.identifies() {
 		return f
 	}
-	return redactFlow(f, source, destination, cluster)
+	return redactFlow(f, source, destination, cluster, service)
+}
+
+// hasDestinationService reports whether the record carries any field of a destination Service.
+func hasDestinationService(k8s *flowpb.Kubernetes) bool {
+	return k8s.GetDestinationServicePortName() != "" || k8s.GetDestinationServiceUid() != "" ||
+		k8s.GetDestinationServiceIp() != nil || k8s.GetDestinationClusterIp() != nil || //nolint:staticcheck
+		k8s.GetDestinationServicePort() != 0
 }
 
 // reachedDstNamespaceBoundary reports whether the record shows a connection that got as far as the
