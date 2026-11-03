@@ -17,6 +17,8 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,17 +34,17 @@ import (
 )
 
 const (
-	realizedRulePolicyIndex = "policy"
+	ruleRealizationPolicyIndex = "policy"
 )
 
-// StatusManager keeps track of the realized NetworkPolicy rules. It syncs the status of a NetworkPolicy to the
-// antrea-controller once it is realized. A policy is considered realized when all of its desired rules have been
-// realized and all of its undesired rules have been removed.
-// For each new policy, SetRuleRealization is supposed to be called for each of its desired rules while
+// StatusManager keeps track of NetworkPolicy rule realization results. It syncs the status of a NetworkPolicy to the
+// antrea-controller when realization fails or completes. A policy is considered realized when all of its desired rules
+// have been realized and all of its undesired rules have been removed.
+// SetRuleRealization is supposed to be called after each reconciliation of a desired rule, while
 // DeleteRuleRealization is supposed to be called for the removed rules.
 type StatusManager interface {
-	// SetRuleRealization updates the actual status for the given NetworkPolicy rule.
-	SetRuleRealization(ruleID string, policyID types.UID)
+	// SetRuleRealization records the reconciliation result for the given NetworkPolicy rule. A nil error indicates success.
+	SetRuleRealization(ruleID string, policyID types.UID, realizationErr error)
 	// DeleteRuleRealization deletes the actual status for the given NetworkPolicy rule.
 	DeleteRuleRealization(ruleID string)
 	// Resync triggers syncing status with the antrea-controller for the given NetworkPolicy.
@@ -58,27 +60,29 @@ type StatusController struct {
 	statusControlInterface networkPolicyStatusControlInterface
 	// ruleCache provides the desired state of NetworkPolicy rules.
 	ruleCache *ruleCache
-	// realizedRules keeps track of the realized NetworkPolicy rules.
-	realizedRules cache.Indexer
+	// ruleRealizations keeps track of successful and failed NetworkPolicy rule reconciliations.
+	ruleRealizations cache.Indexer
 	// queue maintains the UIDs of the NetworkPolicy that need to be processed.
 	queue workqueue.TypedRateLimitingInterface[types.UID]
 }
 
-// realizedRule is the struct kept by StatusController for storing a realized rule.
+// ruleRealization is the struct kept by StatusController for storing a rule's reconciliation result.
 // It has policyID because "ruleCache" only keeps desired state of policies, so if a rule is no longer in a policy it
 // will be deleted immediately from "ruleCache" while we need to know these rules are actually uninstalled from
 // dataplane before their policies are considered realized.
-type realizedRule struct {
-	ruleID   string
-	policyID types.UID
+type ruleRealization struct {
+	ruleID             string
+	policyID           types.UID
+	realizationFailure bool
+	message            string
 }
 
-func realizedRuleKeyFunc(obj interface{}) (string, error) {
-	return obj.(*realizedRule).ruleID, nil
+func ruleRealizationKeyFunc(obj interface{}) (string, error) {
+	return obj.(*ruleRealization).ruleID, nil
 }
 
-func realizedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
-	rule := obj.(*realizedRule)
+func ruleRealizationPolicyIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*ruleRealization)
 	return []string{string(rule.policyID)}, nil
 }
 
@@ -87,8 +91,8 @@ func newStatusController(antreaClientProvider client.AntreaClientProvider, nodeN
 		statusControlInterface: &networkPolicyStatusControl{antreaClientProvider: antreaClientProvider},
 		nodeName:               nodeName,
 		ruleCache:              ruleCache,
-		realizedRules: cache.NewIndexer(realizedRuleKeyFunc, cache.Indexers{
-			realizedRulePolicyIndex: realizedRulePolicyIndexFunc,
+		ruleRealizations: cache.NewIndexer(ruleRealizationKeyFunc, cache.Indexers{
+			ruleRealizationPolicyIndex: ruleRealizationPolicyIndexFunc,
 		}),
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[types.UID](minRetryDelay, maxRetryDelay),
@@ -99,25 +103,42 @@ func newStatusController(antreaClientProvider client.AntreaClientProvider, nodeN
 	}
 }
 
-func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID) {
-	_, exists, _ := c.realizedRules.GetByKey(ruleID)
-	// This rule has been realized before. The current call must be triggered by group member updates, which doesn't
-	// affect the policy's realization status.
-	if exists {
+func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID, realizationErr error) {
+	result := &ruleRealization{ruleID: ruleID, policyID: policyID, realizationFailure: realizationErr != nil}
+	if realizationErr != nil {
+		result.message = realizationErr.Error()
+	}
+	obj, exists, err := c.ruleRealizations.GetByKey(ruleID)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get rule realization", "ruleID", ruleID)
 		return
 	}
-	c.realizedRules.Add(&realizedRule{ruleID: ruleID, policyID: policyID})
+	// Group member updates and retries only affect policy status if the realization result changes.
+	if exists && *obj.(*ruleRealization) == *result {
+		return
+	}
+	if err := c.ruleRealizations.Add(result); err != nil {
+		klog.ErrorS(err, "Failed to record rule realization", "ruleID", ruleID)
+		return
+	}
 	c.queue.Add(policyID)
 }
 
 func (c *StatusController) DeleteRuleRealization(ruleID string) {
-	obj, exists, _ := c.realizedRules.GetByKey(ruleID)
-	// This rule hasn't been realized before, so it doesn't affect the policy's realization status.
+	obj, exists, err := c.ruleRealizations.GetByKey(ruleID)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get rule realization", "ruleID", ruleID)
+		return
+	}
+	// This rule has no recorded reconciliation result, so it doesn't affect the policy's realization status.
 	if !exists {
 		return
 	}
-	c.realizedRules.Delete(obj)
-	c.queue.Add(obj.(*realizedRule).policyID)
+	if err := c.ruleRealizations.Delete(obj); err != nil {
+		klog.ErrorS(err, "Failed to delete rule realization", "ruleID", ruleID)
+		return
+	}
+	c.queue.Add(obj.(*ruleRealization).policyID)
 }
 
 func (c *StatusController) Resync(policyID types.UID) {
@@ -166,27 +187,32 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	if len(desiredRules) == 0 {
 		return nil
 	}
-	actualRules, _ := c.realizedRules.ByIndex(realizedRulePolicyIndex, string(uid))
-	// desiredRules should match actualRules exactly.
-	if len(desiredRules) != len(actualRules) {
-		return nil
+	actualRules, err := c.ruleRealizations.ByIndex(ruleRealizationPolicyIndex, string(uid))
+	if err != nil {
+		return err
 	}
 	desiredRuleSet := sets.New[string]()
 	for _, r := range desiredRules {
 		desiredRuleSet.Insert(r.ID)
 	}
-	for _, r := range actualRules {
-		ruleID := r.(*realizedRule).ruleID
-		if !desiredRuleSet.Has(ruleID) {
-			return nil
+	var failures []string
+	for _, obj := range actualRules {
+		r := obj.(*ruleRealization)
+		if !desiredRuleSet.Has(r.ruleID) {
+			continue
 		}
-		desiredRuleSet.Delete(ruleID)
+		if r.realizationFailure {
+			failures = append(failures, fmt.Sprintf("rule %s: %s", r.ruleID, r.message))
+		}
+		desiredRuleSet.Delete(r.ruleID)
 	}
-	if len(desiredRuleSet) > 0 {
+	// Report failures even if other rules are still pending. Success requires all desired rules to be
+	// realized and all undesired rules to be removed, including rules whose last reconciliation failed.
+	if len(failures) == 0 && (len(desiredRuleSet) > 0 || len(desiredRules) != len(actualRules)) {
 		return nil
 	}
+	sort.Strings(failures)
 
-	// At this point, all desired rules have been realized and all undesired rules have been removed, report it to the antrea-controller.
 	klog.V(2).Infof("Syncing NetworkPolicyStatus for %s, generation: %v", uid, policy.Generation)
 	status := &v1beta2.NetworkPolicyStatus{
 		ObjectMeta: metav1.ObjectMeta{
@@ -196,7 +222,8 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 			{
 				NodeName:           c.nodeName,
 				Generation:         policy.Generation,
-				RealizationFailure: false,
+				RealizationFailure: len(failures) > 0,
+				Message:            strings.Join(failures, "; "),
 			},
 		},
 	}

@@ -16,12 +16,16 @@ package networkpolicy
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -116,11 +120,128 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 				if i >= tt.realizedRules {
 					break
 				}
-				statusController.SetRuleRealization(rule.ID, tt.policy.UID)
+				statusController.SetRuleRealization(rule.ID, tt.policy.UID, nil)
 			}
 			// TODO: Use a determinate mechanism.
 			time.Sleep(500 * time.Millisecond)
 			assert.Equal(t, tt.expectedStatus, statusControl.getNetworkPolicyStatus())
+		})
+	}
+}
+
+func TestRuleRealizationFailureLifecycle(t *testing.T) {
+	c, ruleCache, statusControl := newTestStatusController()
+	t.Cleanup(c.queue.ShutDown)
+	policy := newNetworkPolicyWithMultipleRules("policy1", "uid1", []string{"addressGroup1"}, nil, []string{"appliedToGroup1"}, nil)
+	policy.Generation = 1
+	ruleCache.AddNetworkPolicy(policy)
+	require.NoError(t, ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", nil)))
+	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
+	require.Len(t, rules, 2)
+
+	checkStatus := func(generation int64, messages ...string) {
+		t.Helper()
+		require.Equal(t, 1, c.queue.Len(), "a changed realization result must enqueue the policy")
+		require.True(t, c.processNextWorkItem())
+		sort.Strings(messages)
+		require.Equal(t, &v1beta2.NetworkPolicyStatus{
+			ObjectMeta: v1.ObjectMeta{Name: policy.Name},
+			Nodes: []v1beta2.NetworkPolicyNodeStatus{{
+				NodeName:           testNode1,
+				Generation:         generation,
+				RealizationFailure: len(messages) > 0,
+				Message:            strings.Join(messages, "; "),
+			}},
+		}, statusControl.getNetworkPolicyStatus())
+	}
+	for _, rule := range rules {
+		c.SetRuleRealization(rule.ID, policy.UID, nil)
+	}
+	checkStatus(1)
+	c.SetRuleRealization(rules[0].ID, policy.UID, nil)
+	assert.Zero(t, c.queue.Len(), "successful group updates must not enqueue an unchanged status")
+
+	// A group update can fail without changing the policy's generation or rule IDs.
+	updateErr := errors.New("conjunctive match flow action limit exceeded")
+	message0 := fmt.Sprintf("rule %s: %s", rules[0].ID, updateErr)
+	c.SetRuleRealization(rules[0].ID, policy.UID, updateErr)
+	checkStatus(1, message0)
+	c.SetRuleRealization(rules[0].ID, policy.UID, errors.New(updateErr.Error()))
+	assert.Zero(t, c.queue.Len(), "repeated failures must not enqueue an unchanged status")
+
+	updateErr = errors.New("OVS update failed")
+	message0 = fmt.Sprintf("rule %s: %s", rules[0].ID, updateErr)
+	c.SetRuleRealization(rules[0].ID, policy.UID, updateErr)
+	checkStatus(1, message0)
+	message1 := fmt.Sprintf("rule %s: %s", rules[1].ID, updateErr)
+	c.SetRuleRealization(rules[1].ID, policy.UID, updateErr)
+	checkStatus(1, message0, message1)
+
+	// A successful retry clears only that rule's failure.
+	c.SetRuleRealization(rules[0].ID, policy.UID, nil)
+	checkStatus(1, message1)
+	c.SetRuleRealization(rules[1].ID, policy.UID, nil)
+	checkStatus(1)
+
+	// A failed rule must remain tracked until it has been removed from the dataplane.
+	c.SetRuleRealization(rules[1].ID, policy.UID, updateErr)
+	checkStatus(1, message1)
+	updatedPolicy := policy.DeepCopy()
+	updatedPolicy.Generation++
+	for i := range updatedPolicy.Rules {
+		if updatedPolicy.Rules[i].Direction == rules[1].Direction {
+			updatedPolicy.Rules = append(updatedPolicy.Rules[:i], updatedPolicy.Rules[i+1:]...)
+			break
+		}
+	}
+	ruleCache.UpdateNetworkPolicy(updatedPolicy)
+	c.Resync(policy.UID)
+	checkStatus(1, message1)
+	c.DeleteRuleRealization(rules[1].ID)
+	checkStatus(2)
+	c.DeleteRuleRealization(rules[1].ID)
+	assert.Zero(t, c.queue.Len(), "deleting an unknown result must not enqueue the policy")
+}
+
+func TestSyncStatusFailureWithPendingRules(t *testing.T) {
+	tests := []struct {
+		name              string
+		failedDesiredRule bool
+		obsoleteRule      bool
+	}{
+		{"successful rule and pending rule", false, false},
+		{"failed rule and pending rule", true, false},
+		{"obsolete failure and pending rule", false, true},
+		{"desired failure with obsolete and pending rules", true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, ruleCache, statusControl := newTestStatusController()
+			t.Cleanup(c.queue.ShutDown)
+			policy := newNetworkPolicyWithMultipleRules("policy1", "uid1", nil, nil, []string{"appliedToGroup1"}, nil)
+			policy.Generation = 1
+			ruleCache.AddNetworkPolicy(policy)
+			require.NoError(t, ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", nil)))
+			rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
+			require.Len(t, rules, 2)
+			// The second desired rule is still pending. An obsolete failure must not affect its status.
+			if tt.obsoleteRule {
+				c.SetRuleRealization("obsolete-rule", policy.UID, errors.New("obsolete failure"))
+			}
+			var realizationErr error
+			if tt.failedDesiredRule {
+				realizationErr = errors.New("address update failed")
+			}
+			c.SetRuleRealization(rules[0].ID, policy.UID, realizationErr)
+			require.NoError(t, c.syncHandler(policy.UID))
+			status := statusControl.getNetworkPolicyStatus()
+			if !tt.failedDesiredRule {
+				assert.Nil(t, status, "an obsolete failure must not be reported for the desired policy")
+				return
+			}
+			require.NotNil(t, status, "a desired rule failure must be reported even when other rules are pending")
+			assert.True(t, status.Nodes[0].RealizationFailure)
+			assert.Equal(t, fmt.Sprintf("rule %s: %s", rules[0].ID, realizationErr), status.Nodes[0].Message)
 		})
 	}
 }
@@ -136,7 +257,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	policy.Generation = 1
 	ruleCache.AddNetworkPolicy(policy)
 	rule1 := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))[0]
-	statusController.SetRuleRealization(rule1.ID, policy.UID)
+	statusController.SetRuleRealization(rule1.ID, policy.UID, nil)
 
 	matchGeneration := func(generation int64) error {
 		return wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
@@ -160,7 +281,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	for _, rule := range rules {
 		// Only call SetRuleRealization for new rule.
 		if rule.ID != rule1.ID {
-			statusController.SetRuleRealization(rule.ID, policy.UID)
+			statusController.SetRuleRealization(rule.ID, policy.UID, nil)
 		}
 	}
 	assert.NoError(t, matchGeneration(policy.Generation), "The generation should be updated to %v but was not updated", policy.Generation)
@@ -193,7 +314,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 	ruleCache.AddNetworkPolicy(policy)
 	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
 	for _, rule := range rules {
-		statusController.SetRuleRealization(rule.ID, policy.UID)
+		statusController.SetRuleRealization(rule.ID, policy.UID, nil)
 	}
 
 	b.ReportAllocs()
