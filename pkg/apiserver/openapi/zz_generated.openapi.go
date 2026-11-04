@@ -4015,6 +4015,30 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the ExternalIPPool's state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 					"usage": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
@@ -4025,7 +4049,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			v1beta1.IPPoolUsage{}.OpenAPIModelName()},
+			v1beta1.IPPoolUsage{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 

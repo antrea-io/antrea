@@ -267,6 +267,11 @@ type SubnetInfo struct {
 
 type ExternalIPPoolStatus struct {
 	Usage IPPoolUsage `json:"usage,omitempty"`
+	// Conditions represent the latest available observations of the ExternalIPPool's state.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,2,rep,name=conditions"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
