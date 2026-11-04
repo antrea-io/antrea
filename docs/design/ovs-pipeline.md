@@ -1294,6 +1294,16 @@ Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the c
 lower priority than K8s NetworkPolicy default drop flows. These flows are similar to flows 3-9 in table
 [AntreaPolicyEgressRule]. For the sake of simplicity, we have not defined any example Baseline policies in this document.
 
+Since a packet can be dropped in this table either by a K8s NetworkPolicy default drop flow or by a Baseline Tier rule,
+`APDenyRegMark` is what tells the two cases apart. The flows of Antrea-native NetworkPolicy rules which deny a packet
+(including Baseline Tier rules) load `APDenyRegMark` together with the rule's `conj_id` in `APConjIDField`, while the
+K8s NetworkPolicy default drop flows load neither. When a dropped packet is sent to the antrea-agent for audit logging
+or for deny connection tracking (exported by the Flow Exporter), the antrea-agent uses `APDenyRegMark` to decide whether
+the drop is attributed to an Antrea-native NetworkPolicy rule or to the K8 sNetworkPolicy isolation, for which no policy
+name is available. The value of `APConjIDField` must not be used for this purpose, as this field shares a register with
+`EndpointIPField`, and can hold the selected Endpoint IP of a Service rather than a `conj_id`. Any new flow which denies
+a packet on behalf of an Antrea-native NetworkPolicy rule in this table must load `APDenyRegMark`.
+
 ### EgressMetric
 
 This table is used to collect egress metrics for Antrea-native NetworkPolicies and K8s NetworkPolicies.
@@ -1817,6 +1827,9 @@ This table is also used to implement Antrea-native NetworkPolicy ingress rules c
 Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the corresponding flows will be created at a
 lower priority than K8s NetworkPolicy default drop flows. These flows are similar to flows 3-9 in table
 [AntreaPolicyIngressRule].
+
+As in table [EgressDefaultRule], `APDenyRegMark` tells a packet dropped by a Baseline Tier rule apart from a packet
+dropped by a K8s NetworkPolicy default drop flow. Please refer to the description of [EgressDefaultRule] for details.
 
 ### IngressMetric
 

@@ -136,6 +136,30 @@ func (c *fakeRuleCache) GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool,
 
 func (c *fakeRuleCache) RunIDAllocatorWorker(stopCh <-chan struct{}) {}
 
+// generateRegMatches returns the match fields for the provided register values, indexed by register
+// ID. As in PacketIn messages, registers which belong to the same xreg are reported in a single
+// match field.
+func generateRegMatches(regData map[int][]byte) []openflow15.MatchField {
+	xregData := make(map[int][]byte)
+	for regID, data := range regData {
+		xregID := regID / 2
+		if _, ok := xregData[xregID]; !ok {
+			xregData[xregID] = make([]byte, 8)
+		}
+		copy(xregData[xregID][4*(regID%2):], data)
+	}
+	var matches []openflow15.MatchField
+	for xregID, data := range xregData {
+		matches = append(matches, openflow15.MatchField{
+			Class:   openflow15.OXM_CLASS_PACKET_REGS,
+			Field:   uint8(xregID),
+			HasMask: false,
+			Value:   &openflow15.ByteArrayField{Data: data},
+		})
+	}
+	return matches
+}
+
 func TestPublishDenyConnection(t *testing.T) {
 	prepareMockTables()
 
@@ -323,6 +347,98 @@ func TestPublishDenyConnection(t *testing.T) {
 			case <-time.After(time.Second):
 				require.Fail(t, "connection update channel did not receive the expected packet")
 			}
+		})
+	}
+}
+
+func TestIsK8sDefaultDeny(t *testing.T) {
+	prepareMockTables()
+
+	// reg0 holds both APDispositionField and APDenyRegMark. The K8s NetworkPolicy default drop flows only load
+	// the disposition, while Antrea-native policy rules which deny a packet also load APDenyRegMark.
+	dispositionRegID := openflow.APDispositionField.GetRegID()
+	dropData := []byte{0x00, 0x00, 0x08, 0x00}
+	dropWithDenyMarkData := []byte{0x00, 0x00, 0x0c, 0x00}
+	rejectData := []byte{0x00, 0x00, 0x10, 0x00}
+	allowData := []byte{0x00, 0x00, 0x00, 0x00}
+	passData := []byte{0x00, 0x00, 0x18, 0x00}
+
+	for _, tc := range []struct {
+		name        string
+		tableID     uint8
+		disposition uint32
+		regData     map[int][]byte
+		expected    bool
+	}{
+		{
+			name:        "drop in ingress default table",
+			tableID:     openflow.IngressDefaultTable.GetID(),
+			disposition: openflow.DispositionDrop,
+			regData:     map[int][]byte{dispositionRegID: dropData},
+			expected:    true,
+		},
+		{
+			name:        "drop in egress default table",
+			tableID:     openflow.EgressDefaultTable.GetID(),
+			disposition: openflow.DispositionDrop,
+			regData:     map[int][]byte{dispositionRegID: dropData},
+			expected:    true,
+		},
+		{
+			name:        "drop with deny mark in default table, e.g. Baseline Tier rule",
+			tableID:     openflow.IngressDefaultTable.GetID(),
+			disposition: openflow.DispositionDrop,
+			regData:     map[int][]byte{dispositionRegID: dropWithDenyMarkData},
+			expected:    false,
+		},
+		{
+			name:        "drop without deny mark outside of default tables",
+			tableID:     openflow.AntreaPolicyIngressRuleTable.GetID(),
+			disposition: openflow.DispositionDrop,
+			regData:     map[int][]byte{dispositionRegID: dropData},
+			expected:    false,
+		},
+		{
+			name:        "allow in default table",
+			tableID:     openflow.IngressDefaultTable.GetID(),
+			disposition: openflow.DispositionAllow,
+			regData:     map[int][]byte{dispositionRegID: allowData},
+			expected:    false,
+		},
+		{
+			name:        "pass in default table",
+			tableID:     openflow.IngressDefaultTable.GetID(),
+			disposition: openflow.DispositionPass,
+			regData:     map[int][]byte{dispositionRegID: passData},
+			expected:    false,
+		},
+		{
+			name:        "reject without deny mark in default table",
+			tableID:     openflow.EgressDefaultTable.GetID(),
+			disposition: openflow.DispositionRej,
+			regData:     map[int][]byte{dispositionRegID: rejectData},
+			expected:    true,
+		},
+		{
+			name:        "no register in PacketIn",
+			tableID:     openflow.IngressDefaultTable.GetID(),
+			disposition: openflow.DispositionDrop,
+			regData:     map[int][]byte{},
+			expected:    false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pktIn := &ofctrl.PacketIn{
+				PacketIn: &openflow15.PacketIn{
+					TableId: tc.tableID,
+					Match: openflow15.Match{
+						Fields: generateRegMatches(tc.regData),
+					},
+				},
+			}
+			actual, err := isK8sDefaultDeny(pktIn.GetMatches(), tc.tableID, tc.disposition)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }

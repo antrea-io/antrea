@@ -251,7 +251,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	}
 
 	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
-	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, disposition)
+	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, tableID, disposition)
 	if err != nil {
 		return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
 	}

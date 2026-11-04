@@ -1833,7 +1833,9 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 }
 
 // conjunctionActionDenyFlow generates the flow to mark the packet to be denied (dropped or rejected) if policyRuleConjunction
-// ID is matched. Any matched flow will be dropped in corresponding metric tables.
+// ID is matched. Any matched flow will be dropped in corresponding metric tables. The flow loads APDenyRegMark together
+// with the conjunction ID, which is how the antrea-agent tells an Antrea-native policy deny from a K8s NetworkPolicy
+// default drop (see isK8sDefaultDeny in pkg/agent/controller/networkpolicy).
 func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, table binding.Table, priority *uint16,
 	disposition uint32, enableLogging bool) binding.Flow {
 	ofPriority := *priority
@@ -2061,7 +2063,11 @@ func (f *featureNetworkPolicy) conjunctiveMatchFlow(tableID uint8, matchPairs []
 	return fb.Cookie(f.cookieAllocator.Request(f.category).Raw()).Done()
 }
 
-// defaultDropFlow generates the flow to drop packets if the match condition is matched.
+// defaultDropFlow generates the flow to drop packets if the match condition is matched. It is used for the K8s
+// NetworkPolicy isolation drop in tables EgressDefaultRule and IngressDefaultRule. The PacketIn message it sends only
+// carries DispositionDropRegMark, and neither APDenyRegMark nor APConjIDField: this is what lets the antrea-agent
+// identify a K8s NetworkPolicy default drop (see isK8sDefaultDeny in pkg/agent/controller/networkpolicy). Do not load
+// APDenyRegMark here.
 func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs []matchPair, enableLogging bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	fb := table.BuildFlow(priorityNormal).Cookie(cookieID)

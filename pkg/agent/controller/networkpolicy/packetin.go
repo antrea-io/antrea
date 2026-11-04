@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -104,12 +105,28 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
-// isK8sDefaultDeny returns whether a packet with the provided disposition was denied by the implicit default drop of
-// K8s NetworkPolicies, rather than by an Antrea-native policy rule. Only Antrea-native policy rules set APDenyRegMark,
-// together with the rule's conjunction ID in APConjIDField. Checking whether APConjIDField is non-zero is not enough
-// to tell the two cases apart, as it shares reg3 with EndpointIPField, which holds the selected Endpoint IP for IPv4
-// Service traffic.
-func isK8sDefaultDeny(matchers *ofctrl.Matchers, disposition uint32) (bool, error) {
+// isK8sDefaultDeny returns whether a packet was denied by the implicit isolation of K8s NetworkPolicies, rather
+// than by an Antrea-native policy rule. tableID is the table which sent the packet to the Agent, and disposition
+// is the value of APDispositionField.
+//
+// A packet is a K8s default deny if and only if all of the following hold:
+//  1. It was sent by one of the K8s default drop tables (EgressDefaultRule or IngressDefaultRule);
+//  2. Its disposition is Drop or Reject;
+//  3. APDenyRegMark is present in the PacketIn message and is not set.
+//
+// APDenyRegMark is only loaded by the flows of Antrea-native policy rules which deny a packet, together with the
+// rule's conjunction ID in APConjIDField (see conjunctionActionDenyFlow); the K8s default drop flows (see
+// defaultDropFlow) load neither.
+//
+// This depends on APDenyRegMark being loaded by every flow which denies a packet on behalf of an Antrea-native
+// policy rule.
+func isK8sDefaultDeny(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) (bool, error) {
+	isDefaultDropTable := slices.ContainsFunc(
+		[]*openflow.Table{openflow.EgressDefaultTable, openflow.IngressDefaultTable},
+		func(table *openflow.Table) bool { return table.IsInitialized() && table.GetID() == tableID })
+	if !isDefaultDropTable {
+		return false, nil
+	}
 	if disposition != openflow.DispositionDrop && disposition != openflow.DispositionRej {
 		return false, nil
 	}
@@ -183,7 +200,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 	disposition := openflow.DispositionToString[id]
 	denyConn.Disposition = disposition
 
-	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, id)
+	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, tableID, id)
 	if err != nil {
 		return fmt.Errorf("error when getting deny mark from reg: %w", err)
 	}
