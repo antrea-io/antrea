@@ -94,6 +94,19 @@ func TestAllocateNext(t *testing.T) {
 	}
 }
 
+func TestAllocateNextOutOfRange(t *testing.T) {
+	allocator := newIPRangeAllocator("1.1.1.10", "1.1.1.12")
+	for i := 0; i < 3; i++ {
+		_, err := allocator.AllocateNext()
+		require.NoError(t, err)
+	}
+	// Bypass the count check to make sure the search never goes past the last offset of the range.
+	allocator.count--
+	ip, err := allocator.AllocateNext()
+	assert.Error(t, err)
+	assert.Nil(t, ip)
+}
+
 func TestAllocateIP(t *testing.T) {
 	tests := []struct {
 		name         string
