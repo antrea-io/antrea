@@ -385,6 +385,7 @@ func makeTestEndpointSliceEndpointAndPort(svcPortName *k8sproxy.ServicePortName,
 }
 
 type proxyOptions struct {
+	localPodCIDR                *net.IPNet
 	proxyAllEnabled             bool
 	proxyLoadBalancerIPs        bool
 	supportNestedService        bool
@@ -455,6 +456,7 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	serviceLabelSelector := generateServiceLabelSelector(serviceProxyName)
 
 	p, _ := newProxier(hostname,
+		o.localPodCIDR,
 		ofClient,
 		ipFamily,
 		routeClient,
@@ -3400,6 +3402,84 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	assert.NotContains(t, fp.endpointsInstalledMap, svcPortName2)
 }
 
+func TestServicesWithSharedEndpointLocality(t *testing.T) {
+	testCases := []struct {
+		name          string
+		isIPv6        bool
+		endpointIP    string
+		podCIDR       string
+		expectedLocal bool
+	}{
+		{
+			name:          "IPv4 inside local PodCIDR",
+			isIPv6:        false,
+			endpointIP:    "10.180.0.1",
+			podCIDR:       "10.180.0.0/24",
+			expectedLocal: true,
+		},
+		{
+			name:          "IPv4 outside local PodCIDR",
+			isIPv6:        false,
+			endpointIP:    "10.181.0.1",
+			podCIDR:       "10.180.0.0/24",
+			expectedLocal: false,
+		},
+		{
+			name:          "IPv6 inside local PodCIDR",
+			isIPv6:        true,
+			endpointIP:    "2001::10:180:0:1",
+			podCIDR:       "2001::/64",
+			expectedLocal: true,
+		},
+		{
+			name:          "IPv6 outside local PodCIDR",
+			isIPv6:        true,
+			endpointIP:    "2001:1::10:180:0:1",
+			podCIDR:       "2001::/64",
+			expectedLocal: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockOFClient, mockRouteClient := getMockClients(ctrl)
+			_, podCIDR, err := net.ParseCIDR(tc.podCIDR)
+			require.NoError(t, err)
+			fp := newFakeProxier(mockRouteClient, mockOFClient, nil, openflow.NewGroupAllocator(), tc.isIPv6, func(o *proxyOptions) {
+				o.localPodCIDR = podCIDR
+			})
+
+			manualPortName := makeSvcPortName("ns", "manual", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+			selectorPortName := makeSvcPortName("ns", "selector", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+			selectorIP := svc2IPv4
+			if tc.isIPv6 {
+				selectorIP = net.ParseIP("2001::10:20:30:42")
+			}
+			manualSvc := makeTestClusterIPService(&manualPortName, svc1IP(tc.isIPv6), nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+			selectorSvc := makeTestClusterIPService(&selectorPortName, selectorIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+			selectorSvc.Spec.Selector = map[string]string{"app": "backend"}
+			manualEP, manualPort := makeTestEndpointSliceEndpointAndPort(&manualPortName, net.ParseIP(tc.endpointIP), int32(svcPort), corev1.ProtocolTCP, false)
+			selectorEP, selectorPort := makeTestEndpointSliceEndpointAndPort(&selectorPortName, net.ParseIP(tc.endpointIP), int32(svcPort), corev1.ProtocolTCP, tc.expectedLocal)
+			if !tc.expectedLocal {
+				selectorEP.NodeName = ptr.To("remote-node")
+			}
+			manualSlice := makeTestEndpointSlice("ns", "manual", []discovery.Endpoint{*manualEP}, []discovery.EndpointPort{*manualPort}, tc.isIPv6)
+			selectorSlice := makeTestEndpointSlice("ns", "selector", []discovery.Endpoint{*selectorEP}, []discovery.EndpointPort{*selectorPort}, tc.isIPv6)
+			makeServiceMap(fp, manualSvc, selectorSvc)
+			makeEndpointSliceMap(fp, manualSlice, selectorSlice)
+
+			expectedEndpoints := []k8sproxy.Endpoint{
+				makeTestEndpointInfo(tc.endpointIP, svcPort, tc.expectedLocal, true, true, false, nil, nil),
+			}
+			mockOFClient.EXPECT().InstallEndpointFlows(protocolTCP(tc.isIPv6), expectedEndpoints).Times(2)
+			mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, expectedEndpoints).Times(2)
+			mockOFClient.EXPECT().InstallServiceFlows(gomock.Any()).Times(2)
+
+			require.NoError(t, fp.syncProxyRules())
+		})
+	}
+}
+
 func getMetrics() map[string]int {
 	values := make(map[string]int)
 	getCounter := func(c *kmetrics.Counter) {
@@ -3860,6 +3940,8 @@ func TestMetrics(t *testing.T) {
 			mockOFClient.EXPECT().UninstallEndpointFlows(gomock.Any(), gomock.Any()).AnyTimes()
 
 			proxyServer, err := NewProxyServer(hostname,
+				nil,
+				nil,
 				nodeManager,
 				mockOFClient,
 				mockRouteClient,
