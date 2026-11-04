@@ -633,6 +633,8 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 					From:          from,
 					To:            []types.Address{},
 					Service:       filterUnresolvablePort(rule.Services),
+					L7Protocols:   rule.L7Protocols,
+					L7RuleVlanID:  rule.L7RuleVlanID,
 					Action:        rule.Action,
 					Name:          rule.Name,
 					Priority:      ofPriority,

@@ -2403,6 +2403,12 @@ func TestReconcilerEgressNamedPortPriority(t *testing.T) {
 							SourceRef: &cnp1, PolicyPriority: &policyPriority, TierPriority: &tierPriority},
 						TargetMembers: appliedToGroup1,
 					}
+					// L7 protocols can be used with IPBlock and FQDN peers, but not with toServices.
+					if kind != "ToServices" {
+						l7RuleVlanID := uint32(1)
+						original.L7Protocols = []v1beta2.L7Protocol{{HTTP: &v1beta2.HTTPProtocol{Path: "/allowed"}}}
+						original.L7RuleVlanID = &l7RuleVlanID
+					}
 					if peer != "none" {
 						member := newAddressGroupMember("1.1.1.1")
 						if peer == "resolved" {
@@ -2448,6 +2454,8 @@ func TestReconcilerEgressNamedPortPriority(t *testing.T) {
 						})
 						require.True(t, registered)
 						assert.Equal(t, expected, *ofRule.Priority)
+						assert.Equal(t, original.L7Protocols, ofRule.L7Protocols, "all groups must carry the rule's L7 protocols")
+						assert.Equal(t, original.L7RuleVlanID, ofRule.L7RuleVlanID, "all groups must redirect traffic to the L7 engine")
 						installed[ofRule.FlowID] = ofRule
 						if len(ofRule.Service) == 1 {
 							originalGroup = ofRule
