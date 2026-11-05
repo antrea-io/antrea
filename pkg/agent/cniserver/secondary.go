@@ -109,3 +109,12 @@ func (pc *podConfigurator) DeleteVLANSecondaryInterface(interfaceConfig *interfa
 	}
 	return nil
 }
+
+// ValidateNetworkAttachmentNamespace verifies that a Pod only references a NetworkAttachmentDefinition
+// within its own namespace to maintain namespace isolation boundaries.
+func ValidateNetworkAttachmentNamespace(podNamespace, networkNamespace string) error {
+	if networkNamespace != "" && networkNamespace != podNamespace {
+		return fmt.Errorf("cross-namespace NetworkAttachmentDefinition reference is not permitted: pod %s cannot reference network in namespace %s", podNamespace, networkNamespace)
+	}
+	return nil
+}
