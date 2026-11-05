@@ -320,10 +320,12 @@ succeeded. Condition transition times are not heartbeat or reconciliation expiry
 After restart, the Agent publishes its new reconciliation result rather than refreshing
 the previous Agent's readiness.
 
-Feature readiness is explicit. A disabled feature reports `Ready=False` with reason
-`FeatureDisabled`; an unsupported platform reports `UnsupportedNode`. An initializing
-feature reports `Ready=Unknown` with reason `ConfigurationUnavailable`. A missing
-`secondaryNetwork` object or missing `Ready` Condition is also unavailable, not disabled.
+Feature readiness is explicit. Windows Agents report `Ready=False` with reason
+`UnsupportedNode`. AntreaNodeConfig and SecondaryNetwork are unsupported on Windows, and
+enabling either feature causes Agent startup to fail. On Linux, a disabled feature reports
+`Ready=False` with reason `FeatureDisabled`. An initializing feature reports `Ready=Unknown`
+with reason `ConfigurationUnavailable`. A missing `secondaryNetwork` object or missing
+`Ready` Condition is also unavailable, not disabled.
 No separate `configurationEnabled` flag is needed.
 
 If static configuration creates `br-secondary` while the ANC requests `br1`, the feature

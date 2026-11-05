@@ -143,12 +143,12 @@ func (monitor *agentMonitor) updateAgentCRD(ctx context.Context, partial bool) (
 		report := monitor.agentCRD.NodeConfigStatus
 		var fallback *metav1.Condition
 		switch {
-		case !monitor.nodeConfigReportingEnabled:
-			fallback = &metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse,
-				Reason: "FeatureDisabled", Message: "AntreaNodeConfig or SecondaryNetwork is disabled on this Agent"}
 		case node.Labels[corev1.LabelOSStable] == "windows":
 			fallback = &metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse,
 				Reason: "UnsupportedNode", Message: "Secondary network configuration is not supported on Windows Nodes"}
+		case !monitor.nodeConfigReportingEnabled:
+			fallback = &metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse,
+				Reason: "FeatureDisabled", Message: "AntreaNodeConfig or SecondaryNetwork is disabled on this Agent"}
 		case report == nil || report.SecondaryNetwork == nil || meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready") == nil:
 			fallback = &metav1.Condition{Type: "Ready", Status: metav1.ConditionUnknown,
 				Reason: "ConfigurationUnavailable", Message: "Agent configuration reconciliation is not available"}
