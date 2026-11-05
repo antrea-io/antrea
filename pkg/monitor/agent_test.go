@@ -213,8 +213,7 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 		{name: "other condition without Ready", enabled: true, report: &v1beta1.AntreaNodeConfigAgentStatus{
 			ConfigUID: "current-config", SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{CurrentBridge: "br-unconfirmed",
 				Conditions: []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, ObservedGeneration: 9}}}}},
-		{name: "Windows without provider", enabled: true, nilProvider: true, windows: true},
-		{name: "Windows ignores provider", enabled: true, windows: true, report: readyNodeConfigReport()},
+		{name: "Windows with disabled features", nilProvider: true, windows: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			previous := readyNodeConfigReport()
@@ -245,14 +244,17 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 			require.Len(t, report.SecondaryNetwork.Conditions, 1)
 			ready := report.SecondaryNetwork.Conditions[0]
 			wantStatus, wantReason := metav1.ConditionUnknown, "ConfigurationUnavailable"
-			if !tt.enabled {
-				wantStatus, wantReason = metav1.ConditionFalse, "FeatureDisabled"
-			} else if tt.windows {
+			if tt.windows {
 				wantStatus, wantReason = metav1.ConditionFalse, "UnsupportedNode"
+			} else if !tt.enabled {
+				wantStatus, wantReason = metav1.ConditionFalse, "FeatureDisabled"
 			}
 			assert.Equal(t, "Ready", ready.Type)
 			assert.Equal(t, wantStatus, ready.Status)
 			assert.Equal(t, wantReason, ready.Reason)
+			if tt.windows {
+				assert.Equal(t, "Secondary network configuration is not supported on Windows Nodes", ready.Message)
+			}
 			assert.Zero(t, ready.ObservedGeneration)
 			assert.Empty(t, report.SecondaryNetwork.CurrentBridge)
 			assert.Empty(t, report.SecondaryNetwork.DesiredBridge)
