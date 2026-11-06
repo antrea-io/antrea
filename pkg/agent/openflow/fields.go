@@ -62,7 +62,11 @@ var (
 	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9)
 	NotRewriteMACRegMark = binding.NewOneBitZeroRegMark(0, 9)
 	// reg0[10]: Mark to indicate the packet is denied(Drop/Reject) for Antrea Policy.
-	// K8s default drop will not be recorded in this reg.
+	// K8s default drop will not be recorded in this reg. This tells an Antrea-native policy deny from a K8s NetworkPolicy
+	// default drop in a PacketIn message, as Baseline Tier rules are installed in the same tables as the K8s default drop
+	// flows, and APConjIDField shares reg3 with EndpointIPField. The antrea-agent relies on this when handling PacketIn
+	// messages (see isK8sDefaultDeny). Any flow which denies (drops or rejects) a packet on behalf of an Antrea-native
+	// policy rule and sends it to the antrea-agent must therefore must load this mark, and no other flow may load it.
 	APDenyRegMark = binding.NewOneBitRegMark(0, 10)
 	// reg0[11..12]: Field to indicate disposition of Antrea Policy. It could have more bits to support more dispositions
 	// that Antrea Policy support in the future. Marks in this field include:

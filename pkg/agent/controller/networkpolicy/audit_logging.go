@@ -251,18 +251,15 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	}
 
 	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
-	if match = getMatchRegField(matchers, openflow.APDenyRegMark.GetField()); match != nil {
-		apDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
-		if err != nil {
-			return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
-		}
-		isK8sDefaultDeny := (apDenyRegVal == 0) && (disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej)
-		if isK8sDefaultDeny {
-			// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
-			ob.npRef = string(v1beta2.K8sNetworkPolicy)
-			fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
-			return nil
-		}
+	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, tableID, disposition)
+	if err != nil {
+		return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
+	}
+	if k8sDefaultDeny {
+		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
+		ob.npRef = string(v1beta2.K8sNetworkPolicy)
+		fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
+		return nil
 	}
 
 	// Set match to corresponding conjunction ID field according to disposition.
