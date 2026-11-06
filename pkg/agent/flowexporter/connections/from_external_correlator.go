@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net/netip"
 	"sync"
-	"time"
 
 	"k8s.io/klog/v2"
 
@@ -30,29 +29,42 @@ import (
 const (
 	// DefaultZone is the conntrack zone used for pre-NAT (default/zone-0) flows.
 	DefaultZone = 0
-	// defaultTTL is the threshold for expiring connections in the FromExternalCorrelator.
-	defaultTTL = time.Minute
-	// defaultCleanUpInterval is how often the background cleanup runs.
-	defaultCleanUpInterval = 5 * time.Second
 )
 
 // ExternalCorrelator correlates default-zone conntrack with Antrea-zone flows for
 // external-to-pod export. Correlation is performed in the poller before fan-out to connection
 // store subscribers, so all destinations see the same already-correlated connection state.
 type ExternalCorrelator interface {
-	IngestDefaultZoneFlow(conn *connection.Connection)
-	CorrelateIfExternal(conn *connection.Connection) bool
+	// Correlate is called once per poll, with the default-zone and Antrea-zone connections
+	// dumped during that poll. It updates the matching Antrea-zone connections in place. The
+	// default zone must have been dumped after the Antrea zones, so that the default-zone half
+	// of every Antrea-zone connection is included in defaultZoneConns, even for a connection
+	// created while the poll was in progress (the default-zone conntrack entry is always
+	// committed before its Antrea-zone counterpart).
+	Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection)
 }
 
 // FromExternalCorrelator correlates default-zone (pre-Antrea DNAT/SNAT) connections with
 // Antrea-zone connections so external client IP information can be preserved on exported flows.
+//
+// It only keeps state across polls for Antrea-zone connections that it has already correlated:
+// if the default-zone half of such a connection disappears before the Antrea-zone half (e.g., it
+// expires between the Antrea-zone dump and the default-zone dump of a poll), the last default-zone
+// snapshot keeps being used for that same Antrea-zone conntrack entry. The snapshot is never
+// applied to a different conntrack entry that reuses the same 5-tuple, such as a later host-to-Pod
+// connection whose source is the gateway IP and whose source port happens to match a past
+// masquerade port.
 type FromExternalCorrelator struct {
-	proxier         proxy.ProxyQuerier
-	nplQuerier      portcache.NPLQuerier
-	connections     map[correlatorKey]connectionItem
-	lock            sync.Mutex
-	ttl             time.Duration
-	cleanUpInterval time.Duration
+	proxier    proxy.ProxyQuerier
+	nplQuerier portcache.NPLQuerier
+	lock       sync.Mutex
+	// connections holds the default-zone snapshots ingested during the current poll.
+	connections map[correlatorKey]defaultZoneSnapshot
+	// matched holds the snapshots used to correlate Antrea-zone connections during the previous
+	// poll, along with the identity of the Antrea-zone conntrack entry they were applied to.
+	matched map[correlatorKey]matchedSnapshot
+	// nextMatched is populated during the current poll, and replaces matched at the end of it.
+	nextMatched map[correlatorKey]matchedSnapshot
 }
 
 // correlatorKey is the five-tuple used to match a default-zone (pre-NAT) conntrack entry to its
@@ -119,31 +131,73 @@ func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapsho
 	}
 }
 
-// connectionItem stores a compact snapshot and expiry metadata for a default-zone flow.
-type connectionItem struct {
-	snapshot  defaultZoneSnapshot
-	timestamp time.Time
+// antreaZoneConnIdentity identifies a single Antrea-zone conntrack entry. Unlike the 5-tuple,
+// which can be reused by a later, unrelated connection, the combination of the conntrack ID and
+// the conntrack start timestamp is specific to one entry (the conntrack ID alone is derived from
+// the entry's address and tuples, so it can be reused when memory is recycled).
+type antreaZoneConnIdentity struct {
+	zone      uint16
+	id        uint32
+	startTime int64
 }
 
-// NewFromExternalCorrelator returns a FromExternalCorrelator with its internal map initialized.
-// proxier is used for GetServiceByIP during IngestDefaultZoneFlow; if nil, every default-zone flow is
-// retained without Service lookup.
+func antreaZoneConnIdentityFromConn(conn *connection.Connection) antreaZoneConnIdentity {
+	identity := antreaZoneConnIdentity{
+		zone: conn.Zone,
+		id:   conn.ID,
+	}
+	// StartTime is only zero if conntrack timestamps could not be enabled (in which case we
+	// can only rely on the conntrack ID).
+	if !conn.StartTime.IsZero() {
+		identity.startTime = conn.StartTime.UnixNano()
+	}
+	return identity
+}
+
+// matchedSnapshot is a default-zone snapshot that was used to correlate an Antrea-zone conntrack
+// entry.
+type matchedSnapshot struct {
+	snapshot defaultZoneSnapshot
+	identity antreaZoneConnIdentity
+}
+
+// NewFromExternalCorrelator returns a FromExternalCorrelator with its internal maps initialized.
+// proxier is used for GetServiceByIP when ingesting default-zone flows; if nil, every default-zone
+// flow is retained without Service lookup.
 // nplQuerier is used to retain default-zone flows whose original destination is a NodePortLocal
 // node port (these are not registered in the proxier's Service map); it may be nil.
-// Note: The caller should run the cleanup loop with go correlator.Run(stopCh) and close stopCh to stop.
 func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier) *FromExternalCorrelator {
 	return &FromExternalCorrelator{
-		proxier:         proxier,
-		nplQuerier:      nplQuerier,
-		connections:     map[correlatorKey]connectionItem{},
-		ttl:             defaultTTL,
-		cleanUpInterval: defaultCleanUpInterval,
+		proxier:     proxier,
+		nplQuerier:  nplQuerier,
+		connections: map[correlatorKey]defaultZoneSnapshot{},
+		matched:     map[correlatorKey]matchedSnapshot{},
+		nextMatched: map[correlatorKey]matchedSnapshot{},
 	}
 }
 
-// Run runs the TTL cleanup loop until stopCh is closed.
-func (c *FromExternalCorrelator) Run(stopCh <-chan struct{}) {
-	c.cleanUpLoop(stopCh)
+// Correlate implements ExternalCorrelator.
+func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, conn := range defaultZoneConns {
+		c.ingestDefaultZoneFlow(conn)
+	}
+	for _, conn := range antreaZoneConns {
+		c.correlateIfExternal(conn)
+	}
+	c.finishPoll()
+}
+
+// finishPoll discards the default-zone snapshots ingested during the poll which were not used:
+// since the default zone is dumped after the Antrea zones, any such snapshot is ingested again
+// during the next poll if its connection is still present, so there is no need to retain it (and
+// retaining it would risk applying it to an unrelated connection later). The snapshots used during
+// the poll are carried over to the next poll.
+func (c *FromExternalCorrelator) finishPoll() {
+	clear(c.connections)
+	c.matched, c.nextMatched = c.nextMatched, c.matched
+	clear(c.nextMatched)
 }
 
 // keyFromDefaultZoneConn builds the correlator key for a default-zone connection.
@@ -183,9 +237,10 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 	}
 }
 
-// IngestDefaultZoneFlow stores default-zone connections that may later pair with Antrea-zone connections.
-// Only connections that map to a Service (when proxier is non-nil) are retained.
-func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connection) {
+// ingestDefaultZoneFlow stores default-zone connections that may pair with Antrea-zone connections
+// during the current poll. Only connections that map to a Service (when proxier is non-nil) are
+// retained. c.lock must be held by the caller.
+func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connection) {
 	if conn == nil || conn.Zone != DefaultZone {
 		return
 	}
@@ -232,77 +287,52 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 	}
 }
 
-// CorrelateIfExternal returns true if it correlates the connection to its default-zone counterpart
-// to preserve the SNAT'd source IP. The correlator map only ever contains entries that were
-// stored by IngestDefaultZoneFlow (which itself only keeps Service flows).
-func (c *FromExternalCorrelator) CorrelateIfExternal(conn *connection.Connection) bool {
+// correlateIfExternal returns true if it correlates the connection to its default-zone counterpart
+// to preserve the SNAT'd source IP. The default-zone snapshot is either one ingested during the
+// current poll (which only keeps Service flows), or, if the default-zone half of the connection is
+// no longer present, the snapshot used for this same Antrea-zone conntrack entry during the
+// previous poll. c.lock must be held by the caller.
+func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
 	if conn == nil || conn.IsFromExternal {
 		return false
 	}
-	snapshot, ok := c.popMatching(conn)
+	key := keyFromAntreaZoneConn(conn)
+	identity := antreaZoneConnIdentityFromConn(conn)
+	snapshot, ok := c.popMatching(key)
 	if !ok {
-		return false
+		// The default-zone conntrack entry is gone, typically because it expired right before the
+		// Antrea-zone entry, between the Antrea-zone dump and the default-zone dump of this poll.
+		// Only reuse the previous snapshot if it was applied to this very conntrack entry: the
+		// 5-tuple may now belong to an unrelated connection (e.g., a host-to-Pod connection using
+		// the gateway IP as the source and a source port that matches a past masquerade port).
+		m, found := c.matched[key]
+		if !found || m.identity != identity {
+			return false
+		}
+		snapshot = m.snapshot
 	}
+	c.nextMatched[key] = matchedSnapshot{snapshot: snapshot, identity: identity}
 	correlateExternal(snapshot, conn)
 	return true
 }
 
-// cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (c *FromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(c.cleanUpInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			c.cleanup(c.ttl)
-		}
-	}
-}
-
-// cleanup loops through the entire store and deleting connections that exceed the ttl.
-func (c *FromExternalCorrelator) cleanup(ttl time.Duration) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	now := time.Now()
-	for key, record := range c.connections {
-		if now.Sub(record.timestamp) > ttl {
-			delete(c.connections, key)
-		}
-	}
-}
-
 // add stores the given default-zone connection along with the NPL Service name resolved for it (if
-// any; empty for non-NPL flows).
+// any; empty for non-NPL flows). c.lock must be held by the caller.
 func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string) {
-	key := keyFromDefaultZoneConn(conn)
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	snapshot := defaultZoneSnapshotFromConn(conn)
 	snapshot.nplServicePortName = nplServicePortName
-	c.connections[key] = connectionItem{
-		snapshot:  snapshot,
-		timestamp: time.Now(),
-	}
+	c.connections[keyFromDefaultZoneConn(conn)] = snapshot
 }
 
-// popMatching removes and returns the default-zone snapshot that pairs with this Antrea-zone
-// connection, if any.
-func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (defaultZoneSnapshot, bool) {
-	key := keyFromAntreaZoneConn(conn)
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	record, exists := c.connections[key]
+// popMatching removes and returns the default-zone snapshot ingested during the current poll for
+// the given Antrea-zone key, if any. c.lock must be held by the caller.
+func (c *FromExternalCorrelator) popMatching(key correlatorKey) (defaultZoneSnapshot, bool) {
+	snapshot, exists := c.connections[key]
 	if !exists {
 		return defaultZoneSnapshot{}, false
 	}
 	delete(c.connections, key)
-	return record.snapshot, true
+	return snapshot, true
 }
 
 // correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone

@@ -18,11 +18,9 @@ import "antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 
 type fakeExternalCorrelator struct{}
 
-func (fakeExternalCorrelator) IngestDefaultZoneFlow(*connection.Connection) {}
+func (fakeExternalCorrelator) Correlate(_, _ []*connection.Connection) {}
 
-func (fakeExternalCorrelator) CorrelateIfExternal(*connection.Connection) bool { return false }
-
-// NewFakeExternalCorrelator returns an ExternalCorrelator with no-op methods for use in tests.
+// NewFakeExternalCorrelator returns an ExternalCorrelator with a no-op method for use in tests.
 func NewFakeExternalCorrelator() ExternalCorrelator {
 	return fakeExternalCorrelator{}
 }

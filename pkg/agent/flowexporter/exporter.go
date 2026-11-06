@@ -112,10 +112,9 @@ type FlowExporter struct {
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
 
-	// fromExternalCorrelator is owned by FlowExporter and wired into the poller. The poller calls
-	// CorrelateIfExternal on each Antrea-zone connection once, before notifying subscribers, so
-	// all destinations see the same already-correlated connection state. FlowExporter.Run starts
-	// its cleanup loop via Run(stopCh).
+	// fromExternalCorrelator is owned by FlowExporter and wired into the poller. The poller
+	// correlates the Antrea-zone connections of each poll once, before notifying subscribers, so
+	// all destinations see the same already-correlated connection state.
 	fromExternalCorrelator *connections.FromExternalCorrelator
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
@@ -342,9 +341,6 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// producers (e.g. denied-connection updates) when there are no export destinations yet.
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
-	if exp.fromExternalCorrelator != nil {
-		go exp.fromExternalCorrelator.Run(stopCh)
-	}
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)

@@ -407,8 +407,8 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
 	// Simulate what the poller does before fan-out: correlate both Antrea-zone connections
-	// with the default-zone snapshot. In production, Poll() calls CorrelateIfExternal on
-	// each Antrea-zone conn before notifying subscribers.
+	// with the default-zone snapshot. In production, Poll() calls Correlate on the Antrea-zone
+	// conns before notifying subscribers.
 	for _, conn := range []*connection.Connection{&antreaZoneConn, &updatedAntreaZoneConn} {
 		conn.FlowKey.SourceAddress = defaultZoneConn.FlowKey.SourceAddress
 		conn.FlowKey.SourcePort = defaultZoneConn.FlowKey.SourcePort
@@ -672,19 +672,16 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 	}
 
 	fe := NewFromExternalCorrelator(nil, nil)
-	stopCh := make(chan struct{})
-	t.Cleanup(func() { close(stopCh) })
-	go fe.Run(stopCh)
 	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
-	// Default-zone snapshots live in the correlator (poller calls IngestDefaultZoneFlow in production).
-	fe.IngestDefaultZoneFlow(defaultZoneConn)
+	// Default-zone snapshots live in the correlator (the poller calls Correlate in production).
+	fe.ingestDefaultZoneFlow(defaultZoneConn)
 	assert.Empty(t, cs.connections, "default-zone connection should not appear in the connection store")
 	assert.Len(t, fe.connections, 1, "default-zone connection should be stored in correlator")
 
 	// Simulate the poller correlating the Antrea-zone connection before delivering it to the
 	// connection store (correlation now happens in Poll() before fan-out, not in AddOrUpdateConn).
-	fe.CorrelateIfExternal(antreaZoneConn)
+	fe.correlateIfExternal(antreaZoneConn)
 	assert.Len(t, fe.connections, 0, "default-zone entry should have been consumed by correlation")
 
 	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{antreaZoneConn}))
