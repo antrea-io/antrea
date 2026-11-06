@@ -95,19 +95,20 @@ func (a *IPPoolAllocator) getPool() (*v1beta1.IPPool, error) {
 	return pool, err
 }
 
-// retryPoolStatusUpdate uses the cache on the first attempt and live reads after
-// conflicts so retries do not depend on the informer observing the latest status.
+// retryPoolStatusUpdate retries IPPool status updates on conflicts.
 func (a *IPPoolAllocator) retryPoolStatusUpdate(update func(*v1beta1.IPPool) error) error {
-	useLiveRead := false
+	isRetry := false
 	return retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		var pool *v1beta1.IPPool
 		var err error
-		if useLiveRead {
+		if isRetry {
+			// Fetch the IPPool from the API server after a conflict to avoid stale cached status.
 			pool, err = a.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
 		} else {
+			// Read the IPPool from the informer cache on the first attempt.
 			pool, err = a.getPool()
 		}
-		useLiveRead = true
+		isRetry = true
 		if err != nil {
 			return err
 		}
@@ -388,7 +389,8 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 			return err
 		}
 
-		// A conflict retry may observe an allocation that the lister has not received yet.
+		// An earlier CNI ADD may have committed this interface's allocation before the informer cache caught up.
+		// The cached precheck can miss it, so recheck this snapshot to avoid allocating another IP after a conflict.
 		if entry := findPodAllocation(ipPool, podOwner.ContainerID, podOwner.IFName); entry != nil {
 			ip = net.ParseIP(entry.IPAddress)
 			subnetInfo = &ipPool.Spec.SubnetInfo
