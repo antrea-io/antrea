@@ -1914,3 +1914,51 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 	t.Run("With OVS meters", func(t *testing.T) { runTests(t, true) })
 	t.Run("Without OVS meters", func(t *testing.T) { runTests(t, false) })
 }
+
+// TestDropFlowLoggingChangeIsReplayed verifies that when a rule changes the logging requirement of an existing default
+// drop flow, the modified drop flow is cached so that replay doesn't restore the previous logging behavior.
+func TestDropFlowLoggingChangeIsReplayed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := opstest.NewMockOFEntryOperations(ctrl)
+	bridge := mocks.NewMockBridge(ctrl)
+	c := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+	f := c.featureNetworkPolicy
+	f.bridge = bridge
+	f.egressTables = map[uint8]struct{}{EgressRuleTable.GetID(): {}, EgressDefaultTable.GetID(): {}}
+	f.globalConjMatchFlowCache = make(map[string]*conjMatchFlowContext)
+	f.policyCache = cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc})
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).AnyTimes()
+
+	from := parseAddresses([]string{"192.168.1.40"})
+	match := generateAddressConjMatch(EgressRuleTable.GetID(), from[0], types.SrcAddress, nil)
+	expectedDropFlow := func(enableLogging bool) string {
+		return getFlowStrings([]*openflow15.FlowMod{getFlowModMessage(f.defaultDropFlow(EgressDefaultTable.ofTable, match.matchPairs, enableLogging), binding.AddMessage)})[0]
+	}
+	newRule := func(id uint32, enableLogging bool) *types.PolicyRule {
+		return &types.PolicyRule{
+			Direction:     v1beta2.DirectionOut,
+			From:          from,
+			To:            parseAddresses([]string{"0.0.0.0/0"}),
+			FlowID:        id,
+			TableID:       EgressRuleTable.GetID(),
+			EnableLogging: enableLogging,
+			PolicyRef:     &v1beta2.NetworkPolicyReference{Type: v1beta2.K8sNetworkPolicy, Namespace: "ns1", Name: "np1", UID: "id1"},
+		}
+	}
+
+	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	require.NoError(t, c.InstallPolicyRuleFlows(newRule(1, false)))
+	require.Contains(t, getFlowStrings(f.replayFlows()), expectedDropFlow(false))
+
+	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(addFlows, modFlows, delFlows []*openflow15.FlowMod) {
+		assert.Contains(t, getFlowStrings(modFlows), expectedDropFlow(true))
+	}).Return(nil).Times(1)
+	require.NoError(t, c.InstallPolicyRuleFlows(newRule(2, true)))
+	ctx := f.globalConjMatchFlowCache[match.generateGlobalMapKey()]
+	require.NotNil(t, ctx)
+	assert.True(t, ctx.dropFlowEnableLogging)
+	replayed := getFlowStrings(f.replayFlows())
+	assert.Contains(t, replayed, expectedDropFlow(true))
+	assert.NotContains(t, replayed, expectedDropFlow(false))
+}
