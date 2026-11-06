@@ -65,7 +65,7 @@ func TestPoller_Poll(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
-			// The default zone is always polled first (returns no connections for this test).
+			// The default zone is polled last (returns no connections for this test).
 			mockDumper.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
 			mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return(tt.conns, len(tt.conns), nil)
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
@@ -160,24 +160,22 @@ const (
 	hostToPodAntreaZoneConnID = 4
 )
 
-func newNodePortTestNetwork(isIPv6 bool) nodePortTestNetwork {
-	if isIPv6 {
-		return nodePortTestNetwork{
-			clientIP:   netip.MustParseAddr("2001:db8::5"),
-			nodeIP:     netip.MustParseAddr("fc00:f853:ccd:e793::3"),
-			podIP:      netip.MustParseAddr("fd00:10:244:1::5"),
-			gatewayIP:  netip.MustParseAddr("fd00:10:244:1::1"),
-			antreaZone: openflow.CtZoneV6,
-		}
-	}
-	return nodePortTestNetwork{
+var (
+	testNetworkIPv4 = nodePortTestNetwork{
 		clientIP:   netip.MustParseAddr("203.0.113.5"),
 		nodeIP:     netip.MustParseAddr("172.18.0.3"),
 		podIP:      netip.MustParseAddr("10.244.1.5"),
 		gatewayIP:  netip.MustParseAddr("10.244.1.1"),
 		antreaZone: openflow.CtZone,
 	}
-}
+	testNetworkIPv6 = nodePortTestNetwork{
+		clientIP:   netip.MustParseAddr("2001:db8::5"),
+		nodeIP:     netip.MustParseAddr("fc00:f853:ccd:e793::3"),
+		podIP:      netip.MustParseAddr("fd00:10:244:1::5"),
+		gatewayIP:  netip.MustParseAddr("fd00:10:244:1::1"),
+		antreaZone: openflow.CtZoneV6,
+	}
+)
 
 // externalToPodConn returns the default-zone and Antrea-zone conntrack entries of a connection
 // from an external client to a local Pod through a NodePort Service, DNAT'd by kube-proxy in the
@@ -312,71 +310,75 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 
 	// Sweep all the positions within the second poll: one per DumpFlows call.
 	dumpsPerPoll := len(NewPoller(nil, nil, nil, 0, true, true, false).zones) + 1
-	for _, isIPv6 := range []bool{false, true} {
-		n := newNodePortTestNetwork(isIPv6)
+	runSubtests := func(n nodePortTestNetwork, family string, snat bool, sc scenario) {
 		proxier := staticProxier{fmt.Sprintf("%s:%d/TCP", n.nodeIP, testNodePort): svc}
-		for _, snat := range []bool{false, true} {
-			for _, sc := range scenarios {
-				if sc.snatOnly && !snat {
-					continue
-				}
-				for pos := range dumpsPerPoll {
-					step := dumpsPerPoll + pos
-					name := fmt.Sprintf("IPv6=%t/SNAT=%t/%s/after dump %d of poll", isIPv6, snat, sc.name, pos)
-					t.Run(name, func(t *testing.T) {
-						ctrl := gomock.NewController(t)
-						podStore := objectstoretest.NewMockPodStore(ctrl)
-						podStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).DoAndReturn(
-							func(ip string, _ time.Time) (*v1.Pod, bool) {
-								return pod, ip == n.podIP.String()
-							}).AnyTimes()
-						cfg := testFlowExporterOptions
-						cfg.NetworkPolicyReadyTime = startTime.Add(time.Hour)
-						store := NewConntrackConnectionStore(nil, podStore, proxier, cfg)
+		for pos := range dumpsPerPoll {
+			step := dumpsPerPoll + pos
+			name := fmt.Sprintf("%s/SNAT=%t/%s/after dump %d of poll", family, snat, sc.name, pos)
+			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				podStore := objectstoretest.NewMockPodStore(ctrl)
+				podStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(ip string, _ time.Time) (*v1.Pod, bool) {
+						return pod, ip == n.podIP.String()
+					}).AnyTimes()
+				cfg := testFlowExporterOptions
+				cfg.NetworkPolicyReadyTime = startTime.Add(time.Hour)
+				store := NewConntrackConnectionStore(nil, podStore, proxier, cfg)
 
-						dumper := &scriptedConntrack{entries: sc.entries(n, snat, step)}
-						p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil), 0, true, true, false)
-						seen := false
-						for i := range numPolls {
-							conns, _, err := p.Poll()
-							require.NoError(t, err)
-							for _, conn := range conns {
-								if conn.ID == hostToPodAntreaZoneConnID {
-									assert.False(t, conn.IsFromExternal, "poll %d: host-to-Pod connection must not be correlated", i)
-									continue
-								}
-								seen = true
-								assert.True(t, conn.IsFromExternal, "poll %d: connection should be correlated", i)
-								assert.Equal(t, n.clientIP, conn.FlowKey.SourceAddress, "poll %d: unexpected source IP", i)
-								assert.Equal(t, uint16(testClientPort), conn.FlowKey.SourcePort, "poll %d: unexpected source port", i)
-								assert.Equal(t, n.nodeIP, conn.OriginalDestinationAddress, "poll %d: unexpected original destination IP", i)
-								assert.Equal(t, uint16(testNodePort), conn.OriginalDestinationPort, "poll %d: unexpected original destination port", i)
-							}
-							require.NoError(t, store.AddOrUpdateConns(conns))
+				dumper := &scriptedConntrack{entries: sc.entries(n, snat, step)}
+				p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil), 0, true, true, false)
+				seen := false
+				for i := range numPolls {
+					conns, _, err := p.Poll()
+					require.NoError(t, err)
+					for _, conn := range conns {
+						if conn.ID == hostToPodAntreaZoneConnID {
+							assert.False(t, conn.IsFromExternal, "poll %d: host-to-Pod connection must not be correlated", i)
+							continue
 						}
-						require.True(t, seen, "the external-to-Pod connection should have been polled")
-
-						// The store should have exactly one record for the external-to-Pod
-						// connection, with the Service information.
-						wantConns := 1
-						if sc.wantHostToPod {
-							wantConns = 2
-						}
-						assert.Len(t, store.connections, wantConns)
-						for key, conn := range store.connections {
-							if key.SourceAddress == n.gatewayIP {
-								assert.True(t, sc.wantHostToPod, "unexpected connection from the gateway IP: %+v", conn)
-								assert.False(t, conn.IsFromExternal)
-								assert.Empty(t, conn.DestinationServicePortName)
-								continue
-							}
-							assert.True(t, conn.IsFromExternal)
-							assert.Equal(t, svc.String(), conn.DestinationServicePortName)
-							assert.Equal(t, pod.Name, conn.DestinationPodName)
-						}
-					})
+						seen = true
+						assert.True(t, conn.IsFromExternal, "poll %d: connection should be correlated", i)
+						assert.Equal(t, n.clientIP, conn.FlowKey.SourceAddress, "poll %d: unexpected source IP", i)
+						assert.Equal(t, uint16(testClientPort), conn.FlowKey.SourcePort, "poll %d: unexpected source port", i)
+						assert.Equal(t, n.nodeIP, conn.OriginalDestinationAddress, "poll %d: unexpected original destination IP", i)
+						assert.Equal(t, uint16(testNodePort), conn.OriginalDestinationPort, "poll %d: unexpected original destination port", i)
+					}
+					require.NoError(t, store.AddOrUpdateConns(conns))
 				}
-			}
+				require.True(t, seen, "the external-to-Pod connection should have been polled")
+
+				// The store should have exactly one record for the external-to-Pod
+				// connection, with the Service information.
+				wantConns := 1
+				if sc.wantHostToPod {
+					wantConns = 2
+				}
+				assert.Len(t, store.connections, wantConns)
+				for key, conn := range store.connections {
+					if key.SourceAddress == n.gatewayIP {
+						assert.True(t, sc.wantHostToPod, "unexpected connection from the gateway IP: %+v", conn)
+						assert.False(t, conn.IsFromExternal)
+						assert.Empty(t, conn.DestinationServicePortName)
+						continue
+					}
+					assert.True(t, conn.IsFromExternal)
+					assert.Equal(t, svc.String(), conn.DestinationServicePortName)
+					assert.Equal(t, pod.Name, conn.DestinationPodName)
+				}
+			})
 		}
 	}
+
+	for _, snat := range []bool{false, true} {
+		for _, sc := range scenarios {
+			if sc.snatOnly && !snat {
+				continue
+			}
+			runSubtests(testNetworkIPv4, "IPv4", snat, sc)
+		}
+	}
+	// Correlation does not depend on the IP family, and the poller always dumps both the IPv4 and
+	// IPv6 Antrea zones: a single IPv6 scenario is enough to cover the IPv6 addresses and zone.
+	runSubtests(testNetworkIPv6, "IPv6", true, scenarios[0])
 }

@@ -37,10 +37,7 @@ const (
 type ExternalCorrelator interface {
 	// Correlate is called once per poll, with the default-zone and Antrea-zone connections
 	// dumped during that poll. It updates the matching Antrea-zone connections in place. The
-	// default zone must have been dumped after the Antrea zones, so that the default-zone half
-	// of every Antrea-zone connection is included in defaultZoneConns, even for a connection
-	// created while the poll was in progress (the default-zone conntrack entry is always
-	// committed before its Antrea-zone counterpart).
+	// default zone must have been dumped after the Antrea zones (see Poller.Poll).
 	Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection)
 }
 
@@ -61,10 +58,10 @@ type FromExternalCorrelator struct {
 	// connections holds the default-zone snapshots ingested during the current poll.
 	connections map[correlatorKey]defaultZoneSnapshot
 	// matched holds the snapshots used to correlate Antrea-zone connections during the previous
-	// poll, along with the identity of the Antrea-zone conntrack entry they were applied to.
-	matched map[correlatorKey]matchedSnapshot
+	// poll, keyed by the identity of the Antrea-zone conntrack entry they were applied to.
+	matched map[antreaZoneConnIdentity]defaultZoneSnapshot
 	// nextMatched is populated during the current poll, and replaces matched at the end of it.
-	nextMatched map[correlatorKey]matchedSnapshot
+	nextMatched map[antreaZoneConnIdentity]defaultZoneSnapshot
 }
 
 // correlatorKey is the five-tuple used to match a default-zone (pre-NAT) conntrack entry to its
@@ -134,31 +131,31 @@ func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapsho
 // antreaZoneConnIdentity identifies a single Antrea-zone conntrack entry. Unlike the 5-tuple,
 // which can be reused by a later, unrelated connection, the combination of the conntrack ID and
 // the conntrack start timestamp is specific to one entry (the conntrack ID alone is derived from
-// the entry's address and tuples, so it can be reused when memory is recycled).
+// the entry's address and tuples, so it can be reused when memory is recycled). The correlator key
+// is also included, as the start timestamp may not be available: without it, the identity would
+// only be made of the zone and of a 32-bit ID, and a collision between unrelated connections would
+// be likely, as the identity is looked up for most Antrea-zone connections in every poll.
 type antreaZoneConnIdentity struct {
+	key       correlatorKey
 	zone      uint16
 	id        uint32
 	startTime int64
 }
 
-func antreaZoneConnIdentityFromConn(conn *connection.Connection) antreaZoneConnIdentity {
+// antreaZoneConnIdentityFromConn returns the identity of the given Antrea-zone connection. key must
+// be the correlator key of the connection, computed before the connection is correlated.
+func antreaZoneConnIdentityFromConn(conn *connection.Connection, key correlatorKey) antreaZoneConnIdentity {
 	identity := antreaZoneConnIdentity{
+		key:  key,
 		zone: conn.Zone,
 		id:   conn.ID,
 	}
 	// StartTime is only zero if conntrack timestamps could not be enabled (in which case we
-	// can only rely on the conntrack ID).
+	// can only rely on the conntrack ID and the correlator key).
 	if !conn.StartTime.IsZero() {
 		identity.startTime = conn.StartTime.UnixNano()
 	}
 	return identity
-}
-
-// matchedSnapshot is a default-zone snapshot that was used to correlate an Antrea-zone conntrack
-// entry.
-type matchedSnapshot struct {
-	snapshot defaultZoneSnapshot
-	identity antreaZoneConnIdentity
 }
 
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal maps initialized.
@@ -171,8 +168,8 @@ func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.
 		proxier:     proxier,
 		nplQuerier:  nplQuerier,
 		connections: map[correlatorKey]defaultZoneSnapshot{},
-		matched:     map[correlatorKey]matchedSnapshot{},
-		nextMatched: map[correlatorKey]matchedSnapshot{},
+		matched:     map[antreaZoneConnIdentity]defaultZoneSnapshot{},
+		nextMatched: map[antreaZoneConnIdentity]defaultZoneSnapshot{},
 	}
 }
 
@@ -297,21 +294,19 @@ func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 		return false
 	}
 	key := keyFromAntreaZoneConn(conn)
-	identity := antreaZoneConnIdentityFromConn(conn)
+	identity := antreaZoneConnIdentityFromConn(conn, key)
 	snapshot, ok := c.popMatching(key)
 	if !ok {
 		// The default-zone conntrack entry is gone, typically because it expired right before the
 		// Antrea-zone entry, between the Antrea-zone dump and the default-zone dump of this poll.
-		// Only reuse the previous snapshot if it was applied to this very conntrack entry: the
-		// 5-tuple may now belong to an unrelated connection (e.g., a host-to-Pod connection using
-		// the gateway IP as the source and a source port that matches a past masquerade port).
-		m, found := c.matched[key]
-		if !found || m.identity != identity {
+		// Only reuse the previous snapshot for this same conntrack entry (see
+		// FromExternalCorrelator).
+		snapshot, ok = c.matched[identity]
+		if !ok {
 			return false
 		}
-		snapshot = m.snapshot
 	}
-	c.nextMatched[key] = matchedSnapshot{snapshot: snapshot, identity: identity}
+	c.nextMatched[identity] = snapshot
 	correlateExternal(snapshot, conn)
 	return true
 }

@@ -112,11 +112,6 @@ type FlowExporter struct {
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
 
-	// fromExternalCorrelator is owned by FlowExporter and wired into the poller. The poller
-	// correlates the Antrea-zone connections of each poll once, before notifying subscribers, so
-	// all destinations see the same already-correlated connection state.
-	fromExternalCorrelator *connections.FromExternalCorrelator
-
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
 	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
 	// export was started and the poller must account for it.
@@ -202,10 +197,9 @@ func NewFlowExporter(
 		npQuerier:           npQuerier,
 		networkPolicyWait:   networkPolicyWait,
 
-		poller:                 poller,
-		ctConnUpdateChannel:    ctConnsUpdateChannel,
-		denyConnUpdateChannel:  denyConnUpdateChannel,
-		fromExternalCorrelator: fromExternalCorrelator,
+		poller:                poller,
+		ctConnUpdateChannel:   ctConnsUpdateChannel,
+		denyConnUpdateChannel: denyConnUpdateChannel,
 
 		staticDestinationRes: staticDestination,
 		destinations:         make(map[string]destinationObj),
