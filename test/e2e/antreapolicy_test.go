@@ -2076,8 +2076,70 @@ func testBaselineNamespaceIsolation(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 }
 
-// testACNPPriorityOverride tests priority overriding in three ACNPs. Those three ACNPs are applied in a specific order to
-// test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
+// testACNPEgressNamedPortPriority checks that the numeric port of a mixed-port rule with IPBlock peers honors ACNP
+// priority. Named ports cannot be resolved for IPBlocks.
+func testACNPEgressNamedPortPriority(t *testing.T) {
+	source := getPod("x", "b")
+	destIPs := podIPs[getPodName("y", "a")]
+	require.NotEmpty(t, destIPs)
+	var peers []crdv1beta1.NetworkPolicyPeer
+	for _, ip := range destIPs {
+		prefix := 128
+		if net.ParseIP(ip).To4() != nil {
+			prefix = 32
+		}
+		peers = append(peers, crdv1beta1.NetworkPolicyPeer{IPBlock: &crdv1beta1.IPBlock{CIDR: fmt.Sprintf("%s/%d", ip, prefix)}})
+	}
+	tcp := v1.ProtocolTCP
+	port80, port81, namedPort81 := intstr.FromInt(80), intstr.FromInt(81), intstr.FromString("serve-81")
+	for _, tc := range []struct {
+		name       string
+		highAction crdv1beta1.RuleAction
+		lowAction  crdv1beta1.RuleAction
+		highResult PodConnectivityMark
+		lowResult  PodConnectivityMark
+	}{
+		{"AllowOverridesDrop", crdv1beta1.RuleActionAllow, crdv1beta1.RuleActionDrop, Connected, Dropped},
+		{"DropOverridesAllow", crdv1beta1.RuleActionDrop, crdv1beta1.RuleActionAllow, Dropped, Connected},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := func(stage string, port int32, expected PodConnectivityMark) {
+				for _, ip := range destIPs {
+					actual, err := k8sUtils.ProbeAddr(source.Namespace(), "pod", source.PodName(), ip, port, ProtocolTCP, &expected)
+					require.NoError(t, err)
+					assert.Equal(t, expected, actual, "%s: %s -> %s:%d", stage, source, ip, port)
+				}
+			}
+			createPolicy := func(name string, priority float64, action crdv1beta1.RuleAction, secondPort intstr.IntOrString) {
+				policy := (&ClusterNetworkPolicySpecBuilder{}).SetName(name).SetTier(defaultTierName).
+					SetPriority(priority).SetAppliedToGroup([]ACNPAppliedToSpec{{
+					PodSelector: map[string]string{"pod": source.PodName()},
+					NSSelector:  map[string]string{"ns": source.Namespace()},
+				}}).Get()
+				policy.Spec.Egress = []crdv1beta1.Rule{{
+					Name: "overlapping-ports", Action: &action, To: peers,
+					Ports: []crdv1beta1.NetworkPolicyPort{{Protocol: &tcp, Port: &port80}, {Protocol: &tcp, Port: &secondPort}},
+				}}
+				created, err := k8sUtils.CreateOrUpdateACNP(policy)
+				require.NoError(t, err)
+				t.Cleanup(func() { assert.NoError(t, k8sUtils.DeleteACNP(name)) })
+				require.NoError(t, waitForResourceReady(t, timeout, created))
+			}
+
+			createPolicy("named-port-priority-low-"+strings.ToLower(tc.name), 20, tc.lowAction, port81)
+			probe("lower-priority policy only", 80, tc.lowResult)
+			probe("lower-priority policy only", 81, tc.lowResult)
+			createPolicy("named-port-priority-high-"+strings.ToLower(tc.name), 10, tc.highAction, namedPort81)
+			probe("higher-priority mixed-port policy", 80, tc.highResult)
+			// The Pod exposes serve-81, but an IPBlock cannot resolve it. Traffic to
+			// port 81 must still match the lower-priority rule's numeric port.
+			probe("unresolved named port", 81, tc.lowResult)
+		})
+	}
+}
+
+// testACNPPriorityOverride tests priority overriding in three ACNPs. Those three ACNPs are applied in a specific order
+// to test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
 func testACNPPriorityOverride(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-priority1").
@@ -5228,6 +5290,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t, data) })                         // Includes evaluation.
 		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t, data) }) // Includes evaluation.
 		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t, data) })                       // Includes evaluation.
+		t.Run("Case=ACNPEgressNamedPortPriority", testACNPEgressNamedPortPriority)
 		t.Run("Case=ANNPPortRange", func(t *testing.T) { testANNPPortRange(t) })
 		t.Run("Case=ANNPBasic", func(t *testing.T) { testANNPBasic(t) })
 		t.Run("Case=ANNPUpdate", func(t *testing.T) { testANNPUpdate(t, data) })                                               // Includes evaluation.
