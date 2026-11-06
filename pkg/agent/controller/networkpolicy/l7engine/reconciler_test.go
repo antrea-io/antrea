@@ -54,6 +54,45 @@ func (f *fakeSuricata) startSuricataFn() {
 	defaultFS.Create(suricataCommandSocket)
 }
 
+func TestEscapeSuricataContent(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  string
+		expected string
+	}{
+		{
+			name:     "empty",
+			content:  "",
+			expected: "",
+		},
+		{
+			name:     "without metacharacters",
+			content:  "www.google.com",
+			expected: "www.google.com",
+		},
+		{
+			name:     "with every escaped character",
+			content:  "\\\";|\n\r\x00",
+			expected: `\\\"\;|7C||0A||0D||00|`,
+		},
+		{
+			name:     "with a pipe already in hexadecimal notation",
+			content:  `a|7C|b`,
+			expected: `a|7C|7C|7C|b`,
+		},
+		{
+			name:     "with a multi-byte character next to an escaped one",
+			content:  `例";`,
+			expected: `例\"\;`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, escapeSuricataContent(tc.content))
+		})
+	}
+}
+
 func TestConvertProtocolHTTP(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -89,6 +128,23 @@ func TestConvertProtocolHTTP(t *testing.T) {
 			},
 			expected: `http.host; content:".foo.";`,
 		},
+		{
+			name: "with metacharacters in host,method,path",
+			http: &v1beta.HTTPProtocol{
+				Host:   `a"b.com`,
+				Method: `GET;`,
+				Path:   `/a";drop`,
+			},
+			expected: `http.uri; content:"/a\"\;drop"; startswith; endswith; http.method; content:"GET\;"; http.host; content:"a\"b.com"; startswith; endswith;`,
+		},
+		{
+			name: "with backslash and pipe, wildcards preserved",
+			http: &v1beta.HTTPProtocol{
+				Host: `*a|b.com`,
+				Path: `/x\y*`,
+			},
+			expected: `http.uri; content:"/x\\y"; startswith; http.host; content:"a|7C|b.com"; endswith;`,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -114,6 +170,13 @@ func TestConvertProtocolTLS(t *testing.T) {
 				SNI: "google.com",
 			},
 			expected: `tls.sni; content:"google.com"; startswith; endswith;`,
+		},
+		{
+			name: "with metacharacters in SNI",
+			tls: &v1beta.TLSProtocol{
+				SNI: `evil";content:"x`,
+			},
+			expected: `tls.sni; content:"evil\"\;content:\"x"; startswith; endswith;`,
 		},
 	}
 	for _, tc := range testCases {
@@ -178,6 +241,23 @@ func TestRuleLifecycle(t *testing.T) {
 			},
 			expectedRules:        `pass http any any -> any any (msg: "Allow http by AntreaNetworkPolicy:test-l7"; http.uri; content:"/index.html"; startswith; endswith; http.method; content:"GET"; http.host; content:"www.google.com"; startswith; endswith; sid: 2;)`,
 			expectedUpdatedRules: `pass http any any -> any any (msg: "Allow http by AntreaNetworkPolicy:test-l7"; sid: 2;)`,
+		},
+		{
+			name: "protocol TLS with metacharacters in SNI",
+			l7Protocols: []v1beta.L7Protocol{
+				{
+					TLS: &v1beta.TLSProtocol{
+						SNI: `evil";content:"x`,
+					},
+				},
+			},
+			updatedL7Protocols: []v1beta.L7Protocol{
+				{
+					TLS: &v1beta.TLSProtocol{},
+				},
+			},
+			expectedRules:        `pass tls any any -> any any (msg: "Allow tls by AntreaNetworkPolicy:test-l7"; tls.sni; content:"evil\"\;content:\"x"; startswith; endswith; sid: 2;)`,
+			expectedUpdatedRules: `pass tls any any -> any any (msg: "Allow tls by AntreaNetworkPolicy:test-l7"; sid: 2;)`,
 		},
 	}
 
