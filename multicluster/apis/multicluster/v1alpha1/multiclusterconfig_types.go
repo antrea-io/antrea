@@ -61,6 +61,10 @@ type MultiClusterConfig struct {
 	// ClusterSet and allow Antrea-native policies to select peers from other clusters
 	// in a ClusterSet.
 	EnableStretchedNetworkPolicy bool `json:"enableStretchedNetworkPolicy,omitempty"`
+	// AntreaNamespace is the Namespace in which Antrea Agent is running. It is used to
+	// validate the ServiceAccount of Antrea Agent when it creates or updates Gateways.
+	// Defaults to "kube-system".
+	AntreaNamespace string `json:"antreaNamespace,omitempty"`
 }
 
 type ControllerMetrics struct {
