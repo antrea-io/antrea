@@ -39,16 +39,16 @@ import (
 var ErrPoolExhausted = errors.New("pool exhausted")
 
 // ipPoolStatusRetry backs off longer than retry.DefaultRetry (5 fixed ~10ms
-// sleeps) but avoids an overly long tail. client-go's retry.DefaultBackoff uses
-// fewer steps with a larger factor for a sub-second total; here we use a mild
-// exponential (1.5) with more attempts than DefaultRetry so many Nodes updating
-// the same IPPool status (shared pools, multi-NIC) can clear conflicts without
-// multi-second CNI stalls.
+// sleeps). It uses a mild exponential backoff with jitter so many
+// Nodes concurrently updating the same IPPool status (shared pools, multi-NIC)
+// can clear conflicts without excessive API stalls.
+// With 15 attempts the last base sleep is about 606ms. Do not set Cap: reaching
+// it terminates RetryOnConflict early instead of just limiting the sleep.
 var ipPoolStatusRetry = wait.Backoff{
-	Steps:    8,
-	Duration: 10 * time.Millisecond,
-	Factor:   1.5,
-	Jitter:   0.1,
+	Steps:    15,
+	Duration: 20 * time.Millisecond,
+	Factor:   1.3,
+	Jitter:   0.2,
 }
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
