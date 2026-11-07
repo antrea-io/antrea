@@ -359,9 +359,7 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // Authorized applies the stream's authorization to a batch of records, yielding the index of
 // flows the client may observe, in order, paired with the form it may observe it in.
 // A record is dropped entirely if the client may not observe it at all, and a redacted copy is
-// yielded for one it may only observe in part. The index is what lets a caller that stops early
-// tell which records it has examined. It reads flows[i] before yielding index i, so the caller may
-// compact the records it keeps into flows[:0] as it goes.
+// yielded for one it may only observe in part. The index is the record's position in flows.
 //
 // The whole iteration is bounded by authorizationCheckTimeout, without which a batch with several
 // never-seen peer Namespaces would stall for multiples of that timeout while the API server is slow

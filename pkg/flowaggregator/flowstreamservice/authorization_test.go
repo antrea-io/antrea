@@ -463,10 +463,9 @@ func TestRevalidate(t *testing.T) {
 	})
 }
 
-// collectAuthorized drains sa.Authorized into a slice, compacting into flows[:0] the same way the
-// stream itself does.
+// collectAuthorized drains sa.Authorized into a new slice.
 func collectAuthorized(ctx context.Context, sa *StreamAuthorization, flows []*flowpb.Flow) []*flowpb.Flow {
-	authorized := flows[:0]
+	var authorized []*flowpb.Flow
 	for _, f := range sa.Authorized(ctx, flows) {
 		authorized = append(authorized, f)
 	}
