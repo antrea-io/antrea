@@ -561,6 +561,14 @@ jobs:
       - uses: ./.github/actions/setup-kind-test
         with:
           load-flow-aggregator: 'true'
+      - name: Raise inotify instance limit
+        # The limit is shared by all the Kind Node containers of the runner. Every Flow Aggregator
+        # creates an inotify watcher on startup and exits if it cannot, which happens when several
+        # instances run on top of the Antrea Agents and the Kubernetes components.
+        run: |
+          current=$(sysctl -n fs.inotify.max_user_instances)
+          echo "fs.inotify.max_user_instances: ${current}"
+          sudo sysctl -w fs.inotify.max_user_instances=$((current * 2))
       - name: Run e2e tests
         run: |
           mkdir log

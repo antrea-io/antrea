@@ -64,7 +64,7 @@ func TestGetDebugCommands(t *testing.T) {
 		{
 			name:     "Antctl running against controller mode",
 			mode:     "controller",
-			expected: [][]string{{"version"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "controllerinfo"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+			expected: [][]string{{"version"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "controllerinfo"}, {"supportbundle"}, {"traceflow"}, {"observe"}, {"get", "featuregates"}},
 		},
 		{
 			name:     "Antctl running against agent mode",

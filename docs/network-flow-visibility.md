@@ -817,6 +817,13 @@ release installed, since Helm will not adopt objects another release owns. A
 release in which the FlowStreamService is disabled, as is always the case in
 `Proxy` mode, does not install the roles.
 
+The chart also binds each Flow Aggregator's own ServiceAccount to
+`antrea-flow-viewer`, cluster-wide, so that `antctl observe` run inside the Flow
+Aggregator Pod works without further setup. That binding is named after the
+release (and `clusterScopedNameSuffix`), so every release has its own, including
+one that sets `installClusterRoles=false`. It exposes nothing the Flow
+Aggregator does not already hold in memory.
+
 Ownership follows the release that installed them, so uninstalling that release
 deletes both roles even while other Flow Aggregator releases are still running.
 To hand them to a surviving release, set `installClusterRoles=true` there and
