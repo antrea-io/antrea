@@ -17,7 +17,6 @@ package connections
 import (
 	"fmt"
 	"net/netip"
-	"sync"
 
 	"k8s.io/klog/v2"
 
@@ -37,7 +36,8 @@ const (
 type ExternalCorrelator interface {
 	// Correlate is called once per poll, with the default-zone and Antrea-zone connections
 	// dumped during that poll. It updates the matching Antrea-zone connections in place. The
-	// default zone must have been dumped after the Antrea zones (see Poller.Poll).
+	// default zone must have been dumped after the Antrea zones (see Poller.Poll). Correlate
+	// must not be called concurrently: the state carried across calls assumes sequential polls.
 	Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection)
 }
 
@@ -54,7 +54,6 @@ type ExternalCorrelator interface {
 type FromExternalCorrelator struct {
 	proxier    proxy.ProxyQuerier
 	nplQuerier portcache.NPLQuerier
-	lock       sync.Mutex
 	// connections holds the default-zone snapshots ingested during the current poll.
 	connections map[correlatorKey]defaultZoneSnapshot
 	// matched holds the snapshots used to correlate Antrea-zone connections during the previous
@@ -175,8 +174,6 @@ func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.
 
 // Correlate implements ExternalCorrelator.
 func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	for _, conn := range defaultZoneConns {
 		c.ingestDefaultZoneFlow(conn)
 	}
@@ -236,7 +233,7 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 
 // ingestDefaultZoneFlow stores default-zone connections that may pair with Antrea-zone connections
 // during the current poll. Only connections that map to a Service (when proxier is non-nil) are
-// retained. c.lock must be held by the caller.
+// retained.
 func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connection) {
 	if conn == nil || conn.Zone != DefaultZone {
 		return
@@ -288,7 +285,7 @@ func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connecti
 // to preserve the SNAT'd source IP. The default-zone snapshot is either one ingested during the
 // current poll (which only keeps Service flows), or, if the default-zone half of the connection is
 // no longer present, the snapshot used for this same Antrea-zone conntrack entry during the
-// previous poll. c.lock must be held by the caller.
+// previous poll.
 func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
 	if conn == nil || conn.IsFromExternal {
 		return false
@@ -312,7 +309,7 @@ func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 }
 
 // add stores the given default-zone connection along with the NPL Service name resolved for it (if
-// any; empty for non-NPL flows). c.lock must be held by the caller.
+// any; empty for non-NPL flows).
 func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string) {
 	snapshot := defaultZoneSnapshotFromConn(conn)
 	snapshot.nplServicePortName = nplServicePortName
@@ -320,7 +317,7 @@ func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePort
 }
 
 // popMatching removes and returns the default-zone snapshot ingested during the current poll for
-// the given Antrea-zone key, if any. c.lock must be held by the caller.
+// the given Antrea-zone key, if any.
 func (c *FromExternalCorrelator) popMatching(key correlatorKey) (defaultZoneSnapshot, bool) {
 	snapshot, exists := c.connections[key]
 	if !exists {

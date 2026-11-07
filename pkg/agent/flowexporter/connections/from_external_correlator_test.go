@@ -27,8 +27,6 @@ import (
 )
 
 func contains(c *FromExternalCorrelator, conn *connection.Connection) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	_, exists := c.connections[keyFromDefaultZoneConn(conn)]
 	return exists
 }
