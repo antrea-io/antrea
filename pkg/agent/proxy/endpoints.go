@@ -20,6 +20,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/v2/pkg/agent/proxy/types"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
@@ -48,6 +49,10 @@ func (t *endpointsChangesTracker) OnEndpointsSynced() {
 
 func (t *endpointsChangesTracker) OnEndpointSliceUpdate(endpointSlice *discovery.EndpointSlice, removeSlice bool) bool {
 	return t.tracker.EndpointSliceUpdate(endpointSlice, removeSlice)
+}
+
+func (t *endpointsChangesTracker) UpdateLocalPodIPs(localPodIPs sets.Set[string]) bool {
+	return t.tracker.UpdateLocalPodIPs(localPodIPs)
 }
 
 func (t *endpointsChangesTracker) Synced() bool {

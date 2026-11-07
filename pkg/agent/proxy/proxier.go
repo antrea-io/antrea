@@ -31,9 +31,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
@@ -44,6 +46,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/proxy/types"
 	"antrea.io/antrea/v2/pkg/agent/route"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	antreaconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
@@ -74,6 +77,10 @@ type Proxier interface {
 	ProxyQuerier
 }
 
+type localEndpointIPUpdater interface {
+	OnLocalEndpointIPsUpdate(sets.Set[string])
+}
+
 // ProxyQuerier is the query interface for retrieving information from the Proxy.
 type ProxyQuerier interface {
 	// GetServiceFlowKeys returns the keys (match strings) of the cached OVS
@@ -90,10 +97,11 @@ type ProxyServer struct {
 	serviceConfig       *config.ServiceConfig
 	nodeConfig          *config.NodeConfig
 
-	nodeManager   *k8sproxy.NodeManager
-	healthzServer *healthcheck.ProxyHealthServer
-	ofClient      openflow.Client
-	proxier       Proxier
+	nodeManager             *k8sproxy.NodeManager
+	healthzServer           *healthcheck.ProxyHealthServer
+	ofClient                openflow.Client
+	proxier                 Proxier
+	endpointLocalityTracker *endpointLocalityTracker
 }
 
 type proxier struct {
@@ -1174,6 +1182,12 @@ func (p *proxier) OnEndpointSlicesSynced() {
 	}
 }
 
+func (p *proxier) OnLocalEndpointIPsUpdate(localPodIPs sets.Set[string]) {
+	if p.endpointsChanges.UpdateLocalPodIPs(localPodIPs) && p.isInitialized() {
+		p.Sync()
+	}
+}
+
 func (p *proxier) matchAddressFamily(eps *discovery.EndpointSlice) bool {
 	switch eps.AddressType {
 	case discovery.AddressTypeIPv4:
@@ -1459,6 +1473,11 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 	return p.ipv4Proxier.GetServiceByIP(serviceStr)
 }
 
+func (p *metaProxierWrapper) OnLocalEndpointIPsUpdate(localPodIPs sets.Set[string]) {
+	p.ipv4Proxier.OnLocalEndpointIPsUpdate(localPodIPs)
+	p.ipv6Proxier.OnLocalEndpointIPsUpdate(localPodIPs)
+}
+
 func newDualStackProxier(
 	hostname string,
 	podIPv4CIDR *net.IPNet,
@@ -1688,6 +1707,14 @@ func (p *ProxyServer) Initialize(ctx context.Context,
 
 	nodeTopologyConfig := config.NewNodeTopologyConfig(ctx, p.nodeManager.NodeInformer(), resyncPeriod)
 	nodeTopologyConfig.RegisterEventHandler(p.proxier)
+}
+
+// InitializeEndpointLocality sets up the informers used to infer local Endpoint IPs from
+// Flexible IPAM allocations.
+func (p *ProxyServer) InitializeEndpointLocality(podInformer cache.SharedIndexInformer, ipPoolInformer crdinformers.IPPoolInformer) {
+	p.endpointLocalityTracker = newEndpointLocalityTracker(podInformer, ipPoolInformer, func(localPodIPs sets.Set[string]) {
+		p.proxier.(localEndpointIPUpdater).OnLocalEndpointIPsUpdate(localPodIPs)
+	})
 }
 
 func needClearConntrackEntries(protocol binding.Protocol) bool {
