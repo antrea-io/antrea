@@ -24,6 +24,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -227,8 +228,8 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	return nil
 }
 
-// handleDeleteEvent will either delete the corrsponding ResourceImport if no more ResourceExport exists
-// or regenerate ResourceImport's Subsets from latest ResourceExports without Endpoints from
+// handleDeleteEvent will either delete the corresponding ResourceImport if no more ResourceExport exists
+// or regenerate ResourceImport's endpoints from latest ResourceExports without endpoints from
 // the deleted ResourceExport.
 func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExport *mcsv1alpha1.ResourceExport) error {
 	reList := &mcsv1alpha1.ResourceExportList{}
@@ -425,7 +426,7 @@ func (r *ResourceExportReconciler) refreshServiceResourceImport(
 }
 
 // refreshEndpointsResourceImport returns a new Endpoints kind of ResourceImport or
-// updates existing one to reflect any change from member cluster's ResourceExport
+// updates existing one to reflect any change from member cluster's ResourceExport.
 func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	resExport *mcsv1alpha1.ResourceExport,
 	resImport *mcsv1alpha1.ResourceImport,
@@ -461,26 +462,98 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	}
 
 	if createResImport {
-		newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
-			Subsets: resExport.Spec.Endpoints.Subsets,
+		epImport, hasData := endpointsImportFromExport(resExport.Spec.Endpoints)
+		if !hasData {
+			klog.InfoS("No endpoint data in ResourceExport, skip creating Endpoints in ResourceImport",
+				"resourceexport", klog.KObj(resExport))
+			return newResImport, false, nil
 		}
+		newResImport.Spec.Endpoints = epImport
 		return newResImport, true, nil
 	}
-	// check all matched Endpoints ResourceExport and generate a new EndpointSubset
-	var newSubsets []corev1.EndpointSubset
-	undeleteItems, err := r.getNotDeletedResourceExports(resExport)
+	undeletedItems, err := r.getNotDeletedResourceExports(resExport)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list ResourceExports, retry later")
 		return newResImport, false, err
 	}
-	for _, re := range undeleteItems {
-		newSubsets = append(newSubsets, re.Spec.Endpoints.Subsets...)
+	// Note: replacing stale cache entry with resExport is unnecessary here because
+	// getNotDeletedResourceExports and Reconcile use the same controller-runtime cache,
+	// and the informer only dispatches events after the local cache store is updated.
+	epImport, hasData := mergeEndpointsImport(undeletedItems)
+	if !hasData {
+		klog.InfoS("No endpoint data across ResourceExports, skip updating ResourceImport",
+			"resourceimport", klog.KObj(resImport))
+		return newResImport, false, nil
 	}
-	newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{Subsets: newSubsets}
+	newResImport.Spec.Endpoints = epImport
 	if apiequality.Semantic.DeepEqual(newResImport.Spec.Endpoints, resImport.Spec.Endpoints) {
 		return newResImport, false, nil
 	}
 	return newResImport, true, nil
+}
+
+// endpointsImportFromExport builds an EndpointsImport from a single EndpointsExport.
+// It prefers the new Endpoints/Ports fields over the deprecated Subsets field.
+// It always populates both Endpoints/Ports and Subsets in the returned EndpointsImport
+// to support rolling upgrades with legacy member controllers.
+func endpointsImportFromExport(export *mcsv1alpha1.EndpointsExport) (*mcsv1alpha1.EndpointsImport, bool) {
+	if export == nil {
+		return nil, false
+	}
+	var endpoints []discoveryv1.Endpoint
+	var ports []discoveryv1.EndpointPort
+	if len(export.Endpoints) > 0 {
+		endpoints = export.Endpoints
+		ports = export.Ports
+	} else if len(export.Subsets) > 0 {
+		endpoints, ports = common.SubsetsToEndpoints(export.Subsets)
+	}
+	if len(endpoints) == 0 {
+		return nil, false
+	}
+	subsets := common.EndpointsToSubsets(endpoints, ports)
+	return &mcsv1alpha1.EndpointsImport{
+		Endpoints: endpoints,
+		Ports:     ports,
+		Subsets:   subsets,
+	}, true
+}
+
+// mergeEndpointsImport merges endpoint data from multiple ResourceExports into a single
+// EndpointsImport. It prefers Endpoints/Ports from each export, falling back to Subsets
+// when Endpoints is empty. It always writes both Endpoints/Ports and converted Subsets
+// so that both new and legacy member controllers can consume the endpoints.
+func mergeEndpointsImport(items []mcsv1alpha1.ResourceExport) (*mcsv1alpha1.EndpointsImport, bool) {
+	var mergedEndpoints []discoveryv1.Endpoint
+	var mergedPorts []discoveryv1.EndpointPort
+	for _, re := range items {
+		if re.Spec.Endpoints == nil {
+			continue
+		}
+		var ep []discoveryv1.Endpoint
+		var p []discoveryv1.EndpointPort
+		if len(re.Spec.Endpoints.Endpoints) > 0 {
+			ep = re.Spec.Endpoints.Endpoints
+			p = re.Spec.Endpoints.Ports
+		} else if len(re.Spec.Endpoints.Subsets) > 0 {
+			ep, p = common.SubsetsToEndpoints(re.Spec.Endpoints.Subsets)
+		}
+		if len(ep) > 0 {
+			mergedEndpoints = append(mergedEndpoints, ep...)
+			if mergedPorts == nil {
+				mergedPorts = p
+			}
+		}
+	}
+	if len(mergedEndpoints) == 0 {
+		return nil, false
+	}
+	subsets := common.EndpointsToSubsets(mergedEndpoints, mergedPorts)
+	return &mcsv1alpha1.EndpointsImport{
+		Endpoints: mergedEndpoints,
+		Ports:     mergedPorts,
+		Subsets:   subsets,
+	}, true
 }
 
 func (r *ResourceExportReconciler) refreshACNPResourceImport(

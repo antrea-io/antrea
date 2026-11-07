@@ -470,17 +470,21 @@ metadata:
 
 For example, once you export the `default/nginx` Service in member cluster
 `test-cluster-west`, it will be automatically imported in member cluster
-`test-cluster-east`. A Service and an Endpoints with name
+`test-cluster-east`. A Service and an EndpointSlice with name
 `default/antrea-mc-nginx` will be created in `test-cluster-east`, as well as
 a ServiceImport CR with name `default/nginx`. Now, Pods in `test-cluster-east`
 can access the imported Service using its ClusterIP, and the requests will be
 routed to the backend `nginx` Pods in `test-cluster-west`. You can check the
-imported Service and ServiceImport with commands:
+imported Service, EndpointSlice and ServiceImport with commands:
 
 ```bash
 $ kubectl get service antrea-mc-nginx -n default
 NAME            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 antrea-mc-nginx ClusterIP   10.107.57.62 <none>        443/TCP   10s
+
+$ kubectl get endpointslice antrea-mc-nginx -n default
+NAME              ADDRESSTYPE   PORTS   ENDPOINTS   AGE
+antrea-mc-nginx   IPv4          443     10.10.1.2   10s
 
 $ kubectl get serviceimport nginx -n default
 NAME      TYPE           IP                AGE

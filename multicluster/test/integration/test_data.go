@@ -29,13 +29,6 @@ var (
 		IP:       "192.168.17.13",
 		Hostname: "pod3",
 	}
-	epPorts = []corev1.EndpointPort{
-		{
-			Name:     "http",
-			Port:     80,
-			Protocol: corev1.ProtocolTCP,
-		},
-	}
 	svcPorts = []corev1.ServicePort{
 		{
 			Name:     "http",
