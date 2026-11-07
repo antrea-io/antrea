@@ -39,7 +39,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/features"
 )
 
@@ -150,7 +150,7 @@ func TestServiceExternalIP(t *testing.T) {
 func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	tests := []struct {
 		name                string
-		ipRange             v1beta1.IPRange
+		ipRange             v1beta2.IPRange
 		nodeSelector        metav1.LabelSelector
 		originalEndpoints   []discoveryv1.Endpoint
 		expectedExternalIP  string
@@ -160,7 +160,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "endpoint created",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -186,7 +186,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint created IPv6",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -212,7 +212,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -246,7 +246,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed IPv6",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -290,7 +290,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			var service *v1.Service
 			var eps *discoveryv1.EndpointSlice
 			ipPool := data.createExternalIPPool(t, "test-service-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
@@ -345,7 +345,7 @@ func createEndpointSlice(serviceName, namespace string, addressType discoveryv1.
 func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 	tests := []struct {
 		name               string
-		ipRange            v1beta1.IPRange
+		ipRange            v1beta2.IPRange
 		nodeSelector       metav1.LabelSelector
 		expectedExternalIP string
 		expectedNodes      sets.Set[string]
@@ -353,7 +353,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "single matching Node",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
@@ -365,7 +365,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "single matching Node with IPv6 range",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
@@ -377,7 +377,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "two matching Nodes",
-			ipRange: v1beta1.IPRange{Start: ipPoolRangeV4.next().getFirstIP(), End: ipPoolRangeV4.getNthIP(2)},
+			ipRange: v1beta2.IPRange{Start: ipPoolRangeV4.next().getFirstIP(), End: ipPoolRangeV4.getNthIP(2)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -393,7 +393,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "no matching Node",
-			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			ipRange: v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"foo": "bar",
@@ -414,7 +414,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			var err error
 			var service *v1.Service
 			ipPool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
@@ -435,7 +435,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				var gotUsed, gotTotal int
 				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 2*time.Second, true,
 					func(ctx context.Context) (done bool, err error) {
-						pool, err := data.CRDClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), ipPool.Name, metav1.GetOptions{})
+						pool, err := data.CRDClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), ipPool.Name, metav1.GetOptions{})
 						if err != nil {
 							return false, fmt.Errorf("failed to get ExternalIPPool: %v", err)
 						}
@@ -460,8 +460,8 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 
 func testServiceSharingLoadBalancerIP(t *testing.T, data *TestData) {
 	ctx := context.Background()
-	pool := data.createExternalIPPool(t, "pool-", v1beta1.IPRange{CIDR: "172.30.0.0/28"}, nil, nil, nil)
-	defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(ctx, pool.Name, metav1.DeleteOptions{})
+	pool := data.createExternalIPPool(t, "pool-", v1beta2.IPRange{CIDR: "172.30.0.0/28"}, nil, nil, nil)
+	defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(ctx, pool.Name, metav1.DeleteOptions{})
 
 	annotationNormal := map[string]string{
 		antreaagenttypes.ServiceExternalIPPoolAnnotationKey: pool.Name,
@@ -526,36 +526,36 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 		name               string
 		originalNode       string
 		newNode            string
-		originalIPRange    v1beta1.IPRange
+		originalIPRange    v1beta2.IPRange
 		originalExternalIP string
-		newIPRange         v1beta1.IPRange
+		newIPRange         v1beta2.IPRange
 		newExternalIP      string
 	}{
 		{
 			name:               "same Node",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(0),
-			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			originalIPRange:    v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			originalExternalIP: ipPoolRangeV4.getFirstIP(),
-			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			newIPRange:         v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			newExternalIP:      ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:               "different Nodes",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			originalIPRange:    v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			originalExternalIP: ipPoolRangeV4.getFirstIP(),
-			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			newIPRange:         v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			newExternalIP:      ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:               "different Nodes in IPv6 cluster",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			originalIPRange:    v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			originalExternalIP: ipPoolRangeV6.getFirstIP(),
-			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			newIPRange:         v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			newExternalIP:      ipPoolRangeV6.getFirstIP(),
 		},
 	}
@@ -568,9 +568,9 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			}
 
 			originalPool := data.createExternalIPPool(t, "originalpool-", tt.originalIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.originalNode})
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), originalPool.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), originalPool.Name, metav1.DeleteOptions{})
 			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.newNode})
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), newPool.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), newPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: originalPool.Name,
@@ -603,17 +603,17 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 func testServiceNodeFailure(t *testing.T, data *TestData) {
 	tests := []struct {
 		name       string
-		ipRange    v1beta1.IPRange
+		ipRange    v1beta2.IPRange
 		expectedIP string
 	}{
 		{
 			name:       "IPv4 cluster",
-			ipRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			ipRange:    v1beta2.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			expectedIP: ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:       "IPv6 cluster",
-			ipRange:    v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			ipRange:    v1beta2.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			expectedIP: ipPoolRangeV6.getFirstIP(),
 		},
 	}
@@ -653,7 +653,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 				},
 			}
 			externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", tt.ipRange, nil, matchExpressions, nil)
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
 			}
@@ -725,9 +725,9 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 				skipIfNotIPv4Cluster(t)
 			}
 			nodes := []string{nodeName(0), nodeName(1)}
-			ipRange := v1beta1.IPRange{CIDR: tt.externalIPCIDR}
+			ipRange := v1beta2.IPRange{CIDR: tt.externalIPCIDR}
 			ipPool := data.createExternalIPPool(t, "ippool-", ipRange, nil, nil, nil)
-			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
+			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 			agnhosts := []string{"agnhost-0", "agnhost-1"}
 			// Create agnhost Pods on each Node.
 			for idx, node := range nodes {
