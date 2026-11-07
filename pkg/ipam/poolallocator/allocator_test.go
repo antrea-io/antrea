@@ -133,6 +133,25 @@ func TestAllocateIP(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAllocateIPv6GatewayBeyondSupportedRange(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	subnetInfo := crdv1b1.SubnetInfo{Gateway: "fd00:0:0:1::1", PrefixLength: 48}
+	pool := &crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipv6-gateway-pool"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{{CIDR: "fd00::/48"}},
+			SubnetInfo: subnetInfo,
+		},
+	}
+	allocator := newTestIPPoolAllocator(pool, stopCh)
+	require.NotNil(t, allocator)
+	_, err := allocator.AllocateIP(net.ParseIP(subnetInfo.Gateway), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.Error(t, err, "the configured subnet gateway must not be allocated to a Pod")
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"fd00::1"})
+}
+
 func TestAllocateNext(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

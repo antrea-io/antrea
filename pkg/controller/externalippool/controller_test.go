@@ -280,6 +280,193 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 29, allocator.Total())
 }
 
+func TestCreateOrUpdateIPAllocatorGateway(t *testing.T) {
+	tests := []struct {
+		name      string
+		ipRange   antreacrds.IPRange
+		gateway   string
+		wantTotal int
+		wantFirst string
+	}{
+		{
+			name:      "IPv4 gateway in CIDR",
+			ipRange:   antreacrds.IPRange{CIDR: "192.168.1.144/28"},
+			gateway:   "192.168.1.145",
+			wantTotal: 13,
+			wantFirst: "192.168.1.146",
+		},
+		{
+			name:      "IPv4 gateway outside CIDR",
+			ipRange:   antreacrds.IPRange{CIDR: "192.168.1.144/28"},
+			gateway:   "192.168.1.1",
+			wantTotal: 14,
+			wantFirst: "192.168.1.145",
+		},
+		{
+			name:      "gateway equals CIDR network address",
+			ipRange:   antreacrds.IPRange{CIDR: "192.168.1.144/28"},
+			gateway:   "192.168.1.144",
+			wantTotal: 14,
+			wantFirst: "192.168.1.145",
+		},
+		{
+			name:      "gateway equals reserved broadcast address",
+			ipRange:   antreacrds.IPRange{CIDR: "192.168.1.144/28"},
+			gateway:   "192.168.1.159",
+			wantTotal: 14,
+			wantFirst: "192.168.1.145",
+		},
+		{
+			name:      "IPv6 gateway in CIDR",
+			ipRange:   antreacrds.IPRange{CIDR: "2001:db8::/124"},
+			gateway:   "2001:db8::1",
+			wantTotal: 14,
+			wantFirst: "2001:db8::2",
+		},
+		{
+			name:      "IPv4 gateway in start-end range",
+			ipRange:   antreacrds.IPRange{Start: "192.168.1.145", End: "192.168.1.158"},
+			gateway:   "192.168.1.145",
+			wantTotal: 13,
+			wantFirst: "192.168.1.146",
+		},
+		{
+			name:      "gateway outside start-end range",
+			ipRange:   antreacrds.IPRange{Start: "192.168.1.146", End: "192.168.1.158"},
+			gateway:   "192.168.1.145",
+			wantTotal: 13,
+			wantFirst: "192.168.1.146",
+		},
+		{
+			name:      "IPv6 gateway in start-end range",
+			ipRange:   antreacrds.IPRange{Start: "2001:db8::1", End: "2001:db8::f"},
+			gateway:   "2001:db8::1",
+			wantTotal: 14,
+			wantFirst: "2001:db8::2",
+		},
+		{
+			name:    "range contains only gateway",
+			ipRange: antreacrds.IPRange{Start: "192.168.1.145", End: "192.168.1.145"},
+			gateway: "192.168.1.145",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newController(nil)
+			pool := newExternalIPPool("pool", "", "", "")
+			pool.Spec.IPRanges = []antreacrds.IPRange{tt.ipRange}
+			pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: tt.gateway, PrefixLength: 24}
+			if net.ParseIP(tt.gateway).To4() == nil {
+				pool.Spec.SubnetInfo.PrefixLength = 64
+			}
+			require.True(t, c.createOrUpdateIPAllocator(pool))
+			allocator, exists := c.getIPAllocator(pool.Name)
+			require.True(t, exists)
+			assert.Equal(t, tt.wantTotal, allocator.Total())
+			assert.Zero(t, allocator.Used())
+			require.Error(t, c.UpdateIPAllocation(pool.Name, net.ParseIP(tt.gateway)))
+			assert.Zero(t, allocator.Used())
+			if tt.wantTotal == 0 {
+				_, err := c.AllocateIPFromPool(pool.Name)
+				require.Error(t, err)
+				return
+			}
+			ip, err := c.AllocateIPFromPool(pool.Name)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFirst, ip.String())
+			// Reusing an existing range must preserve allocations and reservations.
+			assert.False(t, c.createOrUpdateIPAllocator(pool))
+			assert.Equal(t, 1, allocator.Used())
+			for i := 1; i < tt.wantTotal; i++ {
+				ip, err := c.AllocateIPFromPool(pool.Name)
+				require.NoError(t, err)
+				assert.NotEqual(t, tt.gateway, ip.String())
+			}
+			_, err = c.AllocateIPFromPool(pool.Name)
+			require.Error(t, err)
+			assert.Equal(t, tt.wantTotal, allocator.Used())
+			require.Error(t, c.ReleaseIP(pool.Name, net.ParseIP(tt.gateway)))
+		})
+	}
+}
+
+func TestCreateOrUpdateIPAllocatorGatewayNewRange(t *testing.T) {
+	c := newController(nil)
+	pool := newExternalIPPool("pool", "192.168.1.128/28", "", "")
+	pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: "192.168.1.145", PrefixLength: 24}
+	require.True(t, c.createOrUpdateIPAllocator(pool))
+	ip, err := c.AllocateIPFromPool(pool.Name)
+	require.NoError(t, err)
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, antreacrds.IPRange{CIDR: "192.168.1.144/28"})
+	require.True(t, c.createOrUpdateIPAllocator(pool))
+	allocator, exists := c.getIPAllocator(pool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 27, allocator.Total())
+	assert.Equal(t, 1, allocator.Used())
+	assert.Error(t, c.UpdateIPAllocation(pool.Name, ip))
+	assert.Error(t, c.UpdateIPAllocation(pool.Name, net.ParseIP(pool.Spec.SubnetInfo.Gateway)))
+}
+
+func TestRestoreIPAllocationsGateway(t *testing.T) {
+	c := newController(nil)
+	pool := newExternalIPPool("pool", "192.168.1.144/28", "", "")
+	pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: "192.168.1.145", PrefixLength: 28}
+	c.createOrUpdateIPAllocator(pool)
+	c.AddEventHandler(func(string) {})
+	allocations := []IPAllocation{
+		{IPPoolName: pool.Name, IP: net.ParseIP("192.168.1.145")},
+		{IPPoolName: pool.Name, IP: net.ParseIP("192.168.1.146")},
+	}
+	assert.Equal(t, allocations[1:], c.RestoreIPAllocations(allocations))
+	ip, err := c.AllocateIPFromPool(pool.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "192.168.1.147", ip.String())
+}
+
+func TestIPPoolHasIPReserved(t *testing.T) {
+	tests := []struct {
+		name    string
+		ipRange antreacrds.IPRange
+		gateway string
+		ip      string
+	}{
+		{
+			name: "IPv4 CIDR", ipRange: antreacrds.IPRange{CIDR: "192.168.1.144/28"},
+			gateway: "192.168.1.145", ip: "192.168.1.146",
+		},
+		{
+			name: "IPv4 range", ipRange: antreacrds.IPRange{Start: "192.168.1.145", End: "192.168.1.158"},
+			gateway: "192.168.1.145", ip: "192.168.1.146",
+		},
+		{
+			name: "IPv6 CIDR", ipRange: antreacrds.IPRange{CIDR: "2001:db8::/124"},
+			gateway: "2001:db8::1", ip: "2001:db8::2",
+		},
+		{
+			name: "IPv6 range", ipRange: antreacrds.IPRange{Start: "2001:db8::1", End: "2001:db8::f"},
+			gateway: "2001:db8::1", ip: "2001:db8::2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newController(nil)
+			pool := newExternalIPPool("pool", "", "", "")
+			pool.Spec.IPRanges = []antreacrds.IPRange{tt.ipRange}
+			pool.Spec.SubnetInfo = &antreacrds.SubnetInfo{Gateway: tt.gateway, PrefixLength: 28}
+			c.createOrUpdateIPAllocator(pool)
+			assert.False(t, c.IPPoolHasIP(pool.Name, net.ParseIP(tt.gateway)))
+			if tt.ipRange.CIDR == "192.168.1.144/28" {
+				assert.False(t, c.IPPoolHasIP(pool.Name, net.ParseIP("192.168.1.159")),
+					"broadcast IPs must not be valid members of the pool")
+			}
+			ip := net.ParseIP(tt.ip)
+			assert.True(t, c.IPPoolHasIP(pool.Name, ip))
+			require.NoError(t, c.UpdateIPAllocation(pool.Name, ip))
+			assert.True(t, c.IPPoolHasIP(pool.Name, ip), "allocated IPs must remain valid members of the pool")
+		})
+	}
+}
+
 func TestIPPoolEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
