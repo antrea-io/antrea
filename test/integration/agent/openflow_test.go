@@ -365,10 +365,22 @@ func testReplayFlows(t *testing.T) {
 	require.Nil(t, err, "Error when deleting groups from OVS bridge")
 	count2 := countFlows()
 	assert.Zero(t, count2, "Expected no flows after deletion")
-	c.ReplayFlows()
+	require.NoError(t, c.ReplayFlows())
 	count3 := countFlows()
 	t.Logf("Counted %d flows after reconciliation", count3)
 	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")
+
+	// Replaying again on the same connection must not count existing flows twice.
+	flowCounts := make(map[uint]uint)
+	for _, table := range c.GetFlowTableStatus() {
+		flowCounts[table.ID] = table.FlowCount
+	}
+	require.NoError(t, c.ReplayFlows())
+	assert.Equal(t, count3, countFlows(), "Expected same number of flows after another replay")
+	for _, table := range c.GetFlowTableStatus() {
+		assert.Equal(t, flowCounts[table.ID], table.FlowCount, "Flow count changed for table %s", table.Name)
+	}
+	checkOVSFlowMetrics(t, c)
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
