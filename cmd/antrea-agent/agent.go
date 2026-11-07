@@ -77,7 +77,6 @@ import (
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1alpha1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/monitor"
@@ -585,15 +584,11 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
-	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
 	var linkMonitor linkmonitor.Interface
 
 	if o.enableEgress || serviceExternalIPEnabled {
-		externalIPPoolController = externalippool.NewExternalIPPoolController(
-			crdClient, externalIPPoolInformer,
-		)
 		var nodeTransportIP net.IP
 		if nodeConfig.NodeTransportIPv4Addr != nil {
 			nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
@@ -929,7 +924,6 @@ func run(o *Options) error {
 	}
 
 	if o.enableEgress || serviceExternalIPEnabled {
-		go externalIPPoolController.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
 	}
 
