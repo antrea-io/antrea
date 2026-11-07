@@ -980,6 +980,37 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 	}
 
 }
+
+func TestSyncExpiredSupportBundleCollection(t *testing.T) {
+	coreObjects, crdObjects := prepareTopology()
+	expiredCreateTime := time.Now().Add(-70 * time.Minute)
+	bundleCollection := generateSupportBundleResource(bundleConfig{
+		name:            "expired",
+		nodes:           &bundleNodes{names: []string{"n1"}},
+		authType:        v1alpha1.APIKey,
+		secretName:      secretWithAPIKey,
+		secretNamespace: secretNamespace,
+		createTime:      &expiredCreateTime,
+	})
+	crdObjects = append(crdObjects, bundleCollection)
+
+	testClient := newTestClient(coreObjects, crdObjects)
+	controller := newController(testClient)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	testClient.start(stopCh)
+	testClient.waitForSync(stopCh)
+
+	// The collection expired before it was processed: syncing it must neither panic nor create an
+	// internal collection.
+	assert.NotPanics(t, func() {
+		assert.NoError(t, controller.syncSupportBundleCollection("expired"))
+	})
+	_, exists, err := controller.supportBundleCollectionStore.Get("expired")
+	assert.NoError(t, err)
+	assert.False(t, exists)
+}
+
 func TestAddInternalSupportBundleCollection(t *testing.T) {
 	testClient := newTestClient(nil, nil)
 	controller := newController(testClient)
