@@ -29,10 +29,14 @@ import (
 
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	informers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -157,6 +161,289 @@ func TestAllocateNext(t *testing.T) {
 	assert.Equal(t, 21, allocator.Total())
 
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
+}
+
+func TestAllocateNextConflictWithStaleLister(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		additionalConflict bool
+		getError           bool
+		sameOwner          bool
+		fullPool           bool
+		differentInterface bool
+	}{
+		{name: "refetch after conflict"},
+		{name: "refetch after every conflict", additionalConflict: true},
+		{name: "propagate refetch error", getError: true},
+		{name: "reuse allocation for same owner", sameOwner: true},
+		{name: "reuse allocation for same owner in full pool", sameOwner: true, fullPool: true},
+		{name: "allocate separately for different interface", differentInterface: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := context.Background()
+				client := fakepoolclient.NewIPPoolClient()
+				endIP := "10.2.2.20"
+				if tc.fullPool {
+					endIP = "10.2.2.10"
+				}
+				pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "stale-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: endIP}},
+						SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+				// Keep the lister at A without a running informer to update it.
+				indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+				require.NoError(t, indexer.Add(pool.DeepCopy()))
+				lister := crdlisters.NewIPPoolLister(indexer)
+				allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+				require.NoError(t, err)
+				versionA := pool.ResourceVersion
+				otherOwner := crdv1b1.IPAddressOwner{Pod: &crdv1b1.PodOwner{
+					Name: "other-pod", Namespace: testNamespace, ContainerID: "other-container",
+				}}
+				if tc.sameOwner {
+					otherOwner = fakePodOwner
+				} else if tc.differentInterface {
+					otherOwner = *fakePodOwner.DeepCopy()
+					otherOwner.Pod.IFName = "net1"
+				}
+				pool.Status.IPAddresses = []crdv1b1.IPAddressState{{
+					IPAddress: "10.2.2.10", Phase: crdv1b1.IPAddressPhaseAllocated, Owner: otherOwner,
+				}}
+				pool, err = client.CrdV1beta1().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				versionB := pool.ResourceVersion
+				intermediatePool := pool.DeepCopy()
+				expectedVersions := []string{versionA, versionB}
+				expectedIP := "10.2.2.11"
+				expectedGetCalls := 1
+				if tc.sameOwner {
+					expectedVersions = []string{versionA}
+					expectedIP = "10.2.2.10"
+				}
+				if tc.additionalConflict {
+					pool.Status.IPAddresses = append(pool.Status.IPAddresses, crdv1b1.IPAddressState{
+						IPAddress: "10.2.2.11", Phase: crdv1b1.IPAddressPhaseAllocated, Owner: otherOwner,
+					})
+					pool, err = client.CrdV1beta1().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{})
+					require.NoError(t, err)
+					expectedVersions = append(expectedVersions, pool.ResourceVersion)
+					expectedIP = "10.2.2.12"
+					expectedGetCalls++
+				}
+				existingAllocations := pool.DeepCopy().Status.IPAddresses
+				var submittedVersions []string
+				client.PrependReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					updated := action.(k8stesting.UpdateAction).GetObject().(*crdv1b1.IPPool)
+					submittedVersions = append(submittedVersions, updated.ResourceVersion)
+					// Let the fake client's actual ResourceVersion check reject stale writes.
+					return false, nil, nil
+				})
+				getCalls := 0
+				getErr := apierrors.NewServiceUnavailable("live GET failed")
+				client.PrependReactor("get", "ippools", func(k8stesting.Action) (bool, runtime.Object, error) {
+					getCalls++
+					if tc.getError {
+						return true, nil, getErr
+					}
+					if tc.additionalConflict && getCalls == 1 {
+						// Model a GET of B followed by another writer advancing to C.
+						return true, intermediatePool.DeepCopy(), nil
+					}
+					return false, nil, nil
+				})
+
+				ip, subnetInfo, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+				if tc.getError {
+					require.ErrorIs(t, err, getErr)
+					assert.Equal(t, []string{versionA}, submittedVersions)
+					assert.Equal(t, 1, getCalls)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, expectedIP, ip.String())
+					assert.Equal(t, &pool.Spec.SubnetInfo, subnetInfo)
+					assert.Equal(t, expectedVersions, submittedVersions)
+					assert.Equal(t, expectedGetCalls, getCalls)
+				}
+				cached, err := lister.Get(pool.Name)
+				require.NoError(t, err)
+				assert.Equal(t, versionA, cached.ResourceVersion)
+				assert.Empty(t, cached.Status.IPAddresses)
+				stored, err := client.Tracker().Get(crdv1b1.SchemeGroupVersion.WithResource("ippools"), "", pool.Name)
+				require.NoError(t, err)
+				allocations := stored.(*crdv1b1.IPPool).Status.IPAddresses
+				if tc.getError || tc.sameOwner {
+					assert.Equal(t, existingAllocations, allocations)
+				} else {
+					require.Len(t, allocations, len(existingAllocations)+1)
+					assert.Equal(t, existingAllocations, allocations[:len(existingAllocations)])
+					assert.Equal(t, fakePodOwner, allocations[len(existingAllocations)].Owner)
+				}
+			})
+		})
+	}
+}
+
+func TestPoolUsageAfterConflictWithStaleLister(t *testing.T) {
+	for _, operation := range []string{"allocate next", "allocate IP", "release container", "release IP"} {
+		t.Run(operation, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := context.Background()
+				client := fakepoolclient.NewIPPoolClient()
+				allocation := func(ip string, index int) crdv1b1.IPAddressState {
+					return crdv1b1.IPAddressState{
+						IPAddress: ip,
+						Phase:     crdv1b1.IPAddressPhaseAllocated,
+						Owner: crdv1b1.IPAddressOwner{Pod: &crdv1b1.PodOwner{
+							Name:        fmt.Sprintf("pod-%d", index),
+							Namespace:   testNamespace,
+							ContainerID: fmt.Sprintf("container-%d", index),
+							IFName:      "net1",
+						}},
+					}
+				}
+				pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "expanded-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+						SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+					},
+					Status: crdv1b1.IPPoolStatus{
+						IPAddresses: []crdv1b1.IPAddressState{allocation("10.2.2.10", 0)},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+				cachedPool := pool.DeepCopy()
+				indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+				require.NoError(t, indexer.Add(cachedPool.DeepCopy()))
+				lister := crdlisters.NewIPPoolLister(indexer)
+				allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+				require.NoError(t, err)
+
+				// Expand and consume the live pool without updating the lister's 11-address snapshot.
+				expectedIP := "10.2.2.31"
+				if operation == "allocate IP" {
+					// A requested IP must also be available in the cached range to reach the conflict retry.
+					expectedIP = "10.2.2.11"
+				}
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{
+					Start: "10.2.2.30", End: "10.2.2.40",
+				})
+				for i := 1; i <= 10; i++ {
+					if operation == "allocate IP" && i == 1 {
+						continue
+					}
+					pool.Status.IPAddresses = append(pool.Status.IPAddresses, allocation(fmt.Sprintf("10.2.2.%d", 10+i), i))
+				}
+				pool.Status.IPAddresses = append(pool.Status.IPAddresses, allocation("10.2.2.30", 11))
+				if operation == "allocate IP" {
+					pool.Status.IPAddresses = append(pool.Status.IPAddresses, allocation("10.2.2.32", 12))
+				}
+				pool, err = client.CrdV1beta1().IPPools().Update(ctx, pool, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				expectedAllocations := pool.DeepCopy().Status.IPAddresses
+				var submittedVersions []string
+				client.PrependReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					updated := action.(k8stesting.UpdateAction).GetObject().(*crdv1b1.IPPool)
+					submittedVersions = append(submittedVersions, updated.ResourceVersion)
+					return false, nil, nil
+				})
+				getCalls := 0
+				client.PrependReactor("get", "ippools", func(k8stesting.Action) (bool, runtime.Object, error) {
+					getCalls++
+					return false, nil, nil
+				})
+
+				if operation == "allocate next" || operation == "allocate IP" {
+					var ip net.IP
+					var subnetInfo *crdv1b1.SubnetInfo
+					if operation == "allocate next" {
+						ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+					} else {
+						ip = net.ParseIP(expectedIP)
+						subnetInfo, err = allocator.AllocateIP(ip, crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+					}
+					require.NoError(t, err)
+					assert.Equal(t, expectedIP, ip.String())
+					assert.Equal(t, &pool.Spec.SubnetInfo, subnetInfo)
+					expectedAllocations = append(expectedAllocations, crdv1b1.IPAddressState{
+						IPAddress: expectedIP, Phase: crdv1b1.IPAddressPhaseAllocated, Owner: fakePodOwner,
+					})
+				} else {
+					if operation == "release container" {
+						err = allocator.ReleaseContainer("container-0", "net1")
+					} else {
+						err = allocator.Release(net.ParseIP("10.2.2.10"))
+					}
+					require.NoError(t, err)
+					expectedAllocations = expectedAllocations[1:]
+				}
+
+				assert.Equal(t, []string{cachedPool.ResourceVersion, pool.ResourceVersion}, submittedVersions)
+				assert.Equal(t, 1, getCalls, "the conflict should trigger a live read")
+				cached, err := lister.Get(pool.Name)
+				require.NoError(t, err)
+				assert.Equal(t, cachedPool, cached, "the lister must remain stale and unmodified")
+				stored, err := client.Tracker().Get(crdv1b1.SchemeGroupVersion.WithResource("ippools"), "", pool.Name)
+				require.NoError(t, err)
+				updated := stored.(*crdv1b1.IPPool)
+				assert.Equal(t, pool.Spec, updated.Spec)
+				assert.Equal(t, expectedAllocations, updated.Status.IPAddresses)
+				assert.Equal(t, 22, updated.Status.Usage.Total, "capacity must come from the expanded live pool")
+				assert.Equal(t, len(expectedAllocations), updated.Status.Usage.Used)
+			})
+		})
+	}
+}
+
+func TestAllocateNextConflictRetryLimit(t *testing.T) {
+	steps := ipPoolStatusRetry.Steps
+	for _, conflicts := range []int{steps - 1, steps} {
+		t.Run(fmt.Sprintf("%d conflicts", conflicts), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				pool := &crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "retry-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+						SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+					},
+				}
+				allocator := newTestIPPoolAllocator(pool, stopCh)
+				require.NotNil(t, allocator)
+				attempts := 0
+				client := allocator.crdClient.(*fakepoolclient.IPPoolClientset)
+				conflictErr := &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict}}
+				client.PrependReactor("update", "ippools", func(k8stesting.Action) (bool, runtime.Object, error) {
+					attempts++
+					if attempts <= conflicts {
+						return true, nil, conflictErr
+					}
+					return false, nil, nil
+				})
+				ip, _, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+				assert.Equal(t, steps, attempts, "all configured attempts should be available")
+				if conflicts == steps-1 {
+					require.NoError(t, err, "allocation should succeed on the final attempt")
+					assert.Equal(t, net.ParseIP("10.2.2.10").String(), ip.String())
+				} else {
+					require.ErrorIs(t, err, conflictErr)
+				}
+				updated, err := client.CrdV1beta1().IPPools().Get(context.Background(), pool.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				if conflicts == steps-1 {
+					assert.Len(t, updated.Status.IPAddresses, 1)
+				} else {
+					assert.Empty(t, updated.Status.IPAddresses)
+				}
+			})
+		})
+	}
 }
 
 // TestConcurrentAllocateNextSharedIPPool simulates many Nodes (or many Pods on
@@ -363,7 +650,11 @@ func (a *IPPoolAllocator) releasePod(namespace, podName string) error {
 		// Mark allocated IPs from pool status as unavailable
 		for _, ip := range ipPool.Status.IPAddresses {
 			if ip.Owner.Pod != nil && ip.Owner.Pod.Namespace == namespace && ip.Owner.Pod.Name == podName {
-				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
+				allocators, err := a.initIPAllocators(ipPool)
+				if err != nil {
+					return err
+				}
+				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress), allocators.Total())
 
 			}
 		}
