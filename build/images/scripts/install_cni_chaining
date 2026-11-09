@@ -67,6 +67,13 @@ cni_conf_path_antrea="$HOST_CNI_NET_DIR/$cni_conf_name_antrea"
 
 cni_conf_sha=""
 
+# content_sha prints the sha256 of the provided content. Callers pass content
+# read with $(cat ...), which strips trailing newlines, so the file must never
+# be hashed directly: its sha would not match.
+function content_sha {
+    echo -n "$1" | sha256sum | while read -r s _; do echo "$s"; done
+}
+
 function update_cni_conf {
     log_info "install_cni_chaining" "updating CNI conf file $cni_conf_name -> $cni_conf_name_antrea"
 
@@ -84,7 +91,7 @@ function update_cni_conf {
     # 2. perform the necessary changes on the variable contents
     # 3. write the variable contents to the output file if necessary
     content=$(cat $cni_conf_path)
-    cni_conf_sha="$(echo -n "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
+    cni_conf_sha="$(content_sha "$content")"
 
     echo "$content" | grep -sq "azure"
     if [[ $? == 0 ]]; then
@@ -114,11 +121,11 @@ function monitor {
         while read -r directory action filename; do
             if [[ "$filename" == "$cni_conf_name" ]]; then
                 log_info "install_cni_chaining" "inotify event in $directory: $action $filename"
-                sha="$(sha256sum "$directory/$filename" | while read -r s _; do echo "$s"; done)"
-                if [[ "$sha" == "" ]]; then
-                    log_warning "install_cni_chaining" "unable to compute sha, file may have been deleted"
+                if ! content="$(cat "$directory/$filename")"; then
+                    log_warning "install_cni_chaining" "unable to read file, it may have been deleted"
                     continue
                 fi
+                sha="$(content_sha "$content")"
                 if [[ "$sha" == "$cni_conf_sha" ]]; then
                     log_info "install_cni_chaining" "sha matches existing one, ignoring event"
                     continue
