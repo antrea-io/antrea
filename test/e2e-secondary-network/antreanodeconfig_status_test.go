@@ -99,7 +99,7 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 		assert.Equal(t, metav1.ConditionTrue, ready.Status)
 		currentNode, err := k8sClient.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
 		require.NoError(t, err)
-		assert.Equal(t, currentNode.UID, info.NodeConfigStatus.NodeUID)
+		assert.Equal(t, currentNode.UID, info.NodeRef.UID)
 	}
 	waitBridgeAbsent := func(t *testing.T, node string) {
 		t.Helper()

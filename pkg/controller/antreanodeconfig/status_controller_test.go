@@ -48,6 +48,11 @@ import (
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
+const (
+	readyConditionType        = string(crdv1alpha1.AntreaNodeConfigConditionReady)
+	conflictFreeConditionType = string(crdv1alpha1.AntreaNodeConfigConditionConflictFree)
+)
+
 func statusFixture(now time.Time) (*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus) {
 	cfg := &crdv1alpha1.AntreaNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: "config", UID: "config-uid", Generation: 2, CreationTimestamp: metav1.NewTime(now)},
@@ -55,25 +60,34 @@ func statusFixture(now time.Time) (*crdv1alpha1.AntreaNodeConfig, *corev1.Node, 
 	}
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node", UID: "node-uid", Labels: map[string]string{"pool": "one"}}, Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
 	report := &crdv1beta1.AntreaNodeConfigAgentStatus{
-		NodeUID: node.UID, ConfigName: cfg.Name, ConfigUID: cfg.UID,
+		ConfigName: cfg.Name, ConfigUID: cfg.UID,
 		LastHeartbeatTime: metav1.NewTime(now),
 		SecondaryNetwork: &crdv1beta1.SecondaryNetworkStatus{
-			Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Reconciled", ObservedGeneration: cfg.Generation, LastTransitionTime: metav1.NewTime(now)}},
+			Conditions: []metav1.Condition{{Type: string(crdv1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue, Reason: "Reconciled", ObservedGeneration: cfg.Generation, LastTransitionTime: metav1.NewTime(now)}},
 		},
 	}
 	return cfg, node, report
 }
 
+func statusInfo(node *corev1.Node, report *crdv1beta1.AntreaNodeConfigAgentStatus) *crdv1beta1.AntreaAgentInfo {
+	return &crdv1beta1.AntreaAgentInfo{
+		ObjectMeta:       metav1.ObjectMeta{Name: node.Name},
+		NodeRef:          corev1.ObjectReference{Kind: "Node", Name: node.Name, UID: node.UID},
+		NodeConfigStatus: report,
+	}
+}
+
 func TestCalculateStatus(t *testing.T) {
 	now := time.Now()
 	for _, tt := range []struct {
-		name        string
-		change      func(*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus)
-		missing     bool
-		wantStatus  metav1.ConditionStatus
-		wantReason  string
-		wantMessage string
-		realized    int32
+		name          string
+		change        func(*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus)
+		missing       bool
+		staleIdentity bool
+		wantStatus    metav1.ConditionStatus
+		wantReason    string
+		wantMessage   string
+		realized      int32
 	}{
 		{name: "realized", wantStatus: metav1.ConditionTrue, wantReason: "Reconciled", realized: 1},
 		{name: "missing report", missing: true, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
@@ -130,10 +144,9 @@ func TestCalculateStatus(t *testing.T) {
 			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
 			r.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "disabled wrong node", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "disabled wrong node", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
 			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
-			r.NodeUID = "old-node"
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
 		{name: "windows with unsupported report", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
 			n.Labels[corev1.LabelOSStable] = "windows"
@@ -163,11 +176,10 @@ func TestCalculateStatus(t *testing.T) {
 			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
 			r.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "windows wrong node identity", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "windows wrong node identity", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
 			n.Labels[corev1.LabelOSStable] = "windows"
 			r.ConfigName, r.ConfigUID = "", ""
 			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
-			r.NodeUID = "previous-node"
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
 		{name: "identity-free custom failure is not trusted", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
@@ -195,17 +207,21 @@ func TestCalculateStatus(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, node, report := statusFixture(now)
+			info := statusInfo(node, report)
 			if tt.change != nil {
 				tt.change(cfg, node, report)
 			}
+			if tt.staleIdentity {
+				info.NodeRef.UID = "previous-node"
+			}
 			nodes := []*corev1.Node{node}
 			selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
-			reports := map[string]*crdv1beta1.AntreaNodeConfigAgentStatus{node.Name: report}
+			infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: info}
 			if tt.missing {
-				delete(reports, node.Name)
+				delete(infos, node.Name)
 			}
-			status := calculateStatus(cfg, selected, nodes, reports, now)
-			ready := meta.FindStatusCondition(status.Conditions, "Ready")
+			status := calculateStatus(cfg, selected, nodes, infos, now)
+			ready := meta.FindStatusCondition(status.Conditions, string(crdv1alpha1.AntreaNodeConfigConditionReady))
 			require.NotNil(t, ready)
 			assert.Equal(t, tt.wantStatus, ready.Status)
 			assert.Equal(t, tt.wantReason, ready.Reason)
@@ -216,9 +232,9 @@ func TestCalculateStatus(t *testing.T) {
 			assert.Equal(t, cfg.Generation, status.ObservedGeneration)
 			assert.Equal(t, int32(1), status.DesiredNodes)
 			assert.Equal(t, tt.realized, status.RealizedNodes)
-			assert.True(t, meta.IsStatusConditionTrue(status.Conditions, "ConflictFree"))
+			assert.True(t, meta.IsStatusConditionTrue(status.Conditions, string(crdv1alpha1.AntreaNodeConfigConditionConflictFree)))
 			cfg.Status = status
-			assert.Equal(t, status, calculateStatus(cfg, selected, nodes, reports, now.Add(time.Second)), "Unchanged observations must preserve condition transition times")
+			assert.Equal(t, status, calculateStatus(cfg, selected, nodes, infos, now.Add(time.Second)), "Unchanged observations must preserve condition transition times")
 		})
 	}
 }
@@ -237,25 +253,25 @@ func TestCurrentMembershipAndPrecedence(t *testing.T) {
 	unrelated.Name, unrelated.UID, unrelated.Labels = "unrelated", "unrelated-uid", map[string]string{"pool": "other"}
 	nodes := []*corev1.Node{node, shadowed, unrelated}
 	configs := []*crdv1alpha1.AntreaNodeConfig{cfg, older}
-	reports := map[string]*crdv1beta1.AntreaNodeConfigAgentStatus{node.Name: report}
-	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, reports, now)
+	infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}
+	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
 	assert.Equal(t, int32(1), status.DesiredNodes, "Only effective current members form the denominator")
 	assert.Equal(t, int32(1), status.RealizedNodes)
-	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, "Ready"))
-	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, "ConflictFree"))
-	assert.Contains(t, meta.FindStatusCondition(status.Conditions, "ConflictFree").Message, "1 matching Nodes")
+	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, readyConditionType))
+	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, conflictFreeConditionType))
+	assert.Contains(t, meta.FindStatusCondition(status.Conditions, conflictFreeConditionType).Message, "1 matching Nodes")
 	cfg.Status = status
 	node.Labels = map[string]string{"pool": "other"}
-	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, reports, now)
+	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
 	assert.Zero(t, status.DesiredNodes)
 	assert.Zero(t, status.RealizedNodes)
-	assert.Equal(t, "ConfigurationNotSelected", meta.FindStatusCondition(status.Conditions, "Ready").Reason)
-	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, "ConflictFree"))
+	assert.Equal(t, "ConfigurationNotSelected", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
+	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, conflictFreeConditionType))
 	shadowed.Labels = map[string]string{"pool": "other"}
-	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, reports, now)
-	assert.Equal(t, "NoMatchingNodes", meta.FindStatusCondition(status.Conditions, "Ready").Reason)
-	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, "ConflictFree"))
-	status = calculateStatus(cfg, nil, nil, reports, now)
+	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
+	assert.Equal(t, "NoMatchingNodes", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
+	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, conflictFreeConditionType))
+	status = calculateStatus(cfg, nil, nil, infos, now)
 	assert.Zero(t, status.DesiredNodes, "Removed Nodes do not remain in the denominator")
 	assert.Zero(t, status.RealizedNodes)
 }
@@ -265,11 +281,11 @@ func TestInvalidSelector(t *testing.T) {
 	cfg, node, report := statusFixture(now)
 	cfg.Spec.NodeSelector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "key", Operator: metav1.LabelSelectorOpIn}}
 	nodes := []*corev1.Node{node}
-	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg}), nodes, map[string]*crdv1beta1.AntreaNodeConfigAgentStatus{node.Name: report}, now)
+	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg}), nodes, map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}, now)
 	assert.Zero(t, status.DesiredNodes)
-	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, "Ready"))
-	assert.Equal(t, "InvalidNodeSelector", meta.FindStatusCondition(status.Conditions, "Ready").Reason)
-	assert.Equal(t, metav1.ConditionUnknown, meta.FindStatusCondition(status.Conditions, "ConflictFree").Status)
+	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, readyConditionType))
+	assert.Equal(t, "InvalidNodeSelector", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
+	assert.Equal(t, metav1.ConditionUnknown, meta.FindStatusCondition(status.Conditions, conflictFreeConditionType).Status)
 }
 
 func TestRetainedEmptyConfiguration(t *testing.T) {
@@ -279,28 +295,28 @@ func TestRetainedEmptyConfiguration(t *testing.T) {
 	cfg.Generation++
 	nodes := []*corev1.Node{node}
 	selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
-	reports := map[string]*crdv1beta1.AntreaNodeConfigAgentStatus{node.Name: report}
-	status := calculateStatus(cfg, selected, nodes, reports, now)
-	assert.Equal(t, "GenerationNotObserved", meta.FindStatusCondition(status.Conditions, "Ready").Reason)
+	infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}
+	status := calculateStatus(cfg, selected, nodes, infos, now)
+	assert.Equal(t, "GenerationNotObserved", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
 	report.SecondaryNetwork.Conditions[0].ObservedGeneration = cfg.Generation
 	report.SecondaryNetwork.Conditions[0].Status, report.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
 	report.SecondaryNetwork.CurrentBridge = "br-old"
-	status = calculateStatus(cfg, selected, nodes, reports, now)
-	assert.Equal(t, "BridgeInUse", meta.FindStatusCondition(status.Conditions, "Ready").Reason)
+	status = calculateStatus(cfg, selected, nodes, infos, now)
+	assert.Equal(t, "BridgeInUse", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
 	assert.Zero(t, status.RealizedNodes)
 	report.SecondaryNetwork.Conditions[0].Status, report.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionTrue, "Reconciled"
 	report.SecondaryNetwork.CurrentBridge = ""
-	status = calculateStatus(cfg, selected, nodes, reports, now)
+	status = calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, int32(1), status.DesiredNodes)
 	assert.Equal(t, int32(1), status.RealizedNodes)
-	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, "Ready"))
+	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, readyConditionType))
 }
 
 func TestDeterministicRepresentative(t *testing.T) {
 	now := time.Now()
 	cfg, base, report := statusFixture(now)
 	var nodes []*corev1.Node
-	reports := make(map[string]*crdv1beta1.AntreaNodeConfigAgentStatus)
+	infos := make(map[string]*crdv1beta1.AntreaAgentInfo)
 	for i, name := range []string{"a-unknown", "b-draining", "c-failed", "d-ready"} {
 		node := base.DeepCopy()
 		node.Name, node.UID = name, types.UID(name)
@@ -309,7 +325,6 @@ func TestDeterministicRepresentative(t *testing.T) {
 			continue
 		}
 		r := report.DeepCopy()
-		r.NodeUID = node.UID
 		if i < 3 {
 			r.SecondaryNetwork.Conditions[0].Status = metav1.ConditionFalse
 			r.SecondaryNetwork.Conditions[0].Reason = "BridgeInUse"
@@ -318,20 +333,20 @@ func TestDeterministicRepresentative(t *testing.T) {
 			}
 			r.SecondaryNetwork.Conditions[0].Message = strings.Repeat("bridge error ", 100)
 		}
-		reports[name] = r
+		infos[name] = statusInfo(node, r)
 	}
 	selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
-	expected := calculateStatus(cfg, selected, nodes, reports, now)
+	expected := calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, int32(4), expected.DesiredNodes)
 	assert.Equal(t, int32(1), expected.RealizedNodes)
-	ready := meta.FindStatusCondition(expected.Conditions, "Ready")
+	ready := meta.FindStatusCondition(expected.Conditions, readyConditionType)
 	assert.Equal(t, "BridgeInUse", ready.Reason, "False outranks Unknown, then the first Node by name supplies the reason")
 	assert.True(t, strings.HasPrefix(ready.Message, "Node b-draining:"))
 	assert.LessOrEqual(t, len(ready.Message), maxNodeMessageLength)
 	for range len(nodes) {
-		assert.Equal(t, expected, calculateStatus(cfg, selected, nodes, reports, now))
+		assert.Equal(t, expected, calculateStatus(cfg, selected, nodes, infos, now))
 		slices.Reverse(nodes)
-		assert.Equal(t, expected, calculateStatus(cfg, selected, nodes, reports, now))
+		assert.Equal(t, expected, calculateStatus(cfg, selected, nodes, infos, now))
 		slices.Reverse(nodes)
 		nodes = append(nodes[1:], nodes[0])
 	}
@@ -367,7 +382,7 @@ func TestStatusControllerUsesOnlyStatusWrites(t *testing.T) {
 	cfg, node, report := statusFixture(now)
 	cfg.Finalizers = []string{"example.com/unrelated"}
 	original := cfg.DeepCopy()
-	info := &crdv1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: node.Name}, NodeConfigStatus: report}
+	info := statusInfo(node, report)
 	client := fakeclient.NewSimpleClientset(cfg, info)
 	coreClient := k8sfake.NewSimpleClientset(node)
 	factory := crdinformers.NewSharedInformerFactory(client, 0)
@@ -388,7 +403,7 @@ func TestStatusControllerUsesOnlyStatusWrites(t *testing.T) {
 	require.Len(t, client.Actions(), 1)
 	updated := client.Actions()[0].(cgtesting.UpdateAction).GetObject().(*crdv1alpha1.AntreaNodeConfig)
 	assert.Equal(t, original.ObjectMeta, updated.ObjectMeta, "Status observation must not mutate metadata or add finalizers")
-	assert.True(t, meta.IsStatusConditionTrue(updated.Status.Conditions, "Ready"))
+	assert.True(t, meta.IsStatusConditionTrue(updated.Status.Conditions, readyConditionType))
 	require.NoError(t, ancInformer.Informer().GetStore().Update(updated))
 	require.NoError(t, c.syncStatus(context.Background(), cfg.Name))
 	require.Len(t, client.Actions(), 1, "An unchanged summary must not be written")
@@ -396,7 +411,7 @@ func TestStatusControllerUsesOnlyStatusWrites(t *testing.T) {
 	require.NoError(t, c.syncStatus(context.Background(), cfg.Name))
 	require.Len(t, client.Actions(), 2)
 	updated = client.Actions()[1].(cgtesting.UpdateAction).GetObject().(*crdv1alpha1.AntreaNodeConfig)
-	assert.Equal(t, metav1.ConditionUnknown, meta.FindStatusCondition(updated.Status.Conditions, "Ready").Status)
+	assert.Equal(t, metav1.ConditionUnknown, meta.FindStatusCondition(updated.Status.Conditions, readyConditionType).Status)
 	assert.Equal(t, original.ObjectMeta, cfg.ObjectMeta, "Cached objects must remain immutable")
 	assert.Empty(t, coreClient.Actions(), "Aggregation must not read Nodes from the live API")
 }
@@ -524,7 +539,6 @@ func TestAgentInfoEventsRouteCurrentMembership(t *testing.T) {
 			go infoInformer.Informer().Run(stop)
 			require.True(t, cache.WaitForCacheSync(stop, infoInformer.Informer().HasSynced))
 			info := &crdv1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: node.Name}, NodeConfigStatus: report.DeepCopy()}
-			info.NodeConfigStatus.NodeUID = "previous-node-uid"
 			info.NodeConfigStatus.ConfigName, info.NodeConfigStatus.ConfigUID = "previous", "previous-config-uid"
 			if tt.initial {
 				if tt.nilBefore {

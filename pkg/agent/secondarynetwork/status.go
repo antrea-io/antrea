@@ -50,7 +50,8 @@ func (c *Controller) updateNodeConfigStatus(snap *antreanodeconfig.Snapshot, des
 	if c.ovsBridgeClient != nil {
 		feature.CurrentBridge = c.ovsBridgeClient.GetBridgeName()
 	}
-	condition := metav1.Condition{Type: "Ready", Status: metav1.ConditionTrue,
+	readyCondition := string(crdv1beta1.SecondaryNetworkConditionReady)
+	condition := metav1.Condition{Type: readyCondition, Status: metav1.ConditionTrue,
 		ObservedGeneration: generation, Reason: "Reconciled",
 		Message: "Secondary network configuration has been realized"}
 	available := snap != nil && snap.AntreaNodeConfigListError == ""
@@ -79,7 +80,7 @@ func (c *Controller) updateNodeConfigStatus(snap *antreanodeconfig.Snapshot, des
 	}
 	c.statusMutex.Lock()
 	if c.nodeConfigStatus != nil && c.nodeConfigStatus.SecondaryNetwork != nil {
-		if previous := meta.FindStatusCondition(c.nodeConfigStatus.SecondaryNetwork.Conditions, "Ready"); previous != nil {
+		if previous := meta.FindStatusCondition(c.nodeConfigStatus.SecondaryNetwork.Conditions, readyCondition); previous != nil {
 			feature.Conditions = append(feature.Conditions, *previous)
 		}
 	}

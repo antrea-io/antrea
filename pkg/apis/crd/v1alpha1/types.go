@@ -595,6 +595,18 @@ type AntreaNodeConfig struct {
 	Status AntreaNodeConfigStatus `json:"status,omitempty"`
 }
 
+// AntreaNodeConfigConditionType is the type of an AntreaNodeConfig condition.
+type AntreaNodeConfigConditionType string
+
+const (
+	// AntreaNodeConfigConditionReady indicates whether the configuration has been
+	// realized on all selected Nodes.
+	AntreaNodeConfigConditionReady AntreaNodeConfigConditionType = "Ready"
+	// AntreaNodeConfigConditionConflictFree indicates whether all matching Nodes select
+	// this configuration.
+	AntreaNodeConfigConditionConflictFree AntreaNodeConfigConditionType = "ConflictFree"
+)
+
 // AntreaNodeConfigStatus describes the realization of an AntreaNodeConfig.
 type AntreaNodeConfigStatus struct {
 	// ObservedGeneration is the generation processed by the Controller, not necessarily realized.

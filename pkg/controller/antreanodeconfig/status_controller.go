@@ -243,14 +243,14 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	reports := make(map[string]*crdv1beta1.AntreaNodeConfigAgentStatus, len(infos))
+	agentInfos := make(map[string]*crdv1beta1.AntreaAgentInfo, len(infos))
 	for _, info := range infos {
-		reports[info.Name] = info.NodeConfigStatus
+		agentInfos[info.Name] = info
 	}
 	if c.selected == nil || c.cachedVersion != version {
 		c.selected, c.cachedVersion = k8s.SelectAntreaNodeConfigs(nodes, configs), version
 	}
-	status := calculateStatus(cfg, c.selected, nodes, reports, time.Now())
+	status := calculateStatus(cfg, c.selected, nodes, agentInfos, time.Now())
 	if reflect.DeepEqual(cfg.Status, status) {
 		return nil
 	}
@@ -260,19 +260,25 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 	return err
 }
 
-func freshReport(node *corev1.Node, report *crdv1beta1.AntreaNodeConfigAgentStatus, now time.Time) bool {
-	if report == nil || report.NodeUID != node.UID || report.LastHeartbeatTime.IsZero() ||
-		now.Sub(report.LastHeartbeatTime.Time) > agentReportTimeout || report.LastHeartbeatTime.After(now.Add(time.Minute)) {
+func freshReport(node *corev1.Node, info *crdv1beta1.AntreaAgentInfo, now time.Time) bool {
+	if info == nil || info.NodeConfigStatus == nil || info.NodeRef.UID != node.UID {
+		return false
+	}
+	heartbeat := info.NodeConfigStatus.LastHeartbeatTime
+	if heartbeat.IsZero() || now.Sub(heartbeat.Time) > agentReportTimeout || heartbeat.After(now.Add(time.Minute)) {
 		return false
 	}
 	return nodeReadiness(node) == corev1.ConditionTrue
 }
 
 func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[types.UID]*crdv1alpha1.AntreaNodeConfig,
-	nodes []*corev1.Node, reports map[string]*crdv1beta1.AntreaNodeConfigAgentStatus, now time.Time) crdv1alpha1.AntreaNodeConfigStatus {
+	nodes []*corev1.Node, agentInfos map[string]*crdv1beta1.AntreaAgentInfo, now time.Time) crdv1alpha1.AntreaNodeConfigStatus {
 	status := crdv1alpha1.AntreaNodeConfigStatus{ObservedGeneration: cfg.Generation}
-	aggregate := metav1.Condition{Type: "Ready", Status: metav1.ConditionTrue, ObservedGeneration: cfg.Generation,
-		Reason: "Reconciled", Message: "Configuration has been realized on all selected Nodes", LastTransitionTime: metav1.NewTime(now)}
+	aggregate := metav1.Condition{
+		Type: string(crdv1alpha1.AntreaNodeConfigConditionReady), Status: metav1.ConditionTrue,
+		ObservedGeneration: cfg.Generation, Reason: "Reconciled",
+		Message: "Configuration has been realized on all selected Nodes", LastTransitionTime: metav1.NewTime(now),
+	}
 	selector, selectorErr := metav1.LabelSelectorAsSelector(&cfg.Spec.NodeSelector)
 	shadowed := 0
 	var representative string
@@ -285,7 +291,7 @@ func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[type
 			continue
 		}
 		status.DesiredNodes++
-		condition := selectedNodeCondition(cfg, node, reports[node.Name], now)
+		condition := selectedNodeCondition(cfg, node, agentInfos[node.Name], now)
 		if condition.Status == metav1.ConditionTrue {
 			status.RealizedNodes++
 			continue
@@ -311,14 +317,20 @@ func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[type
 	if len(aggregate.Message) > maxNodeMessageLength {
 		aggregate.Message = aggregate.Message[:maxNodeMessageLength-3] + "..."
 	}
-	for _, conditionType := range []string{"Ready", "ConflictFree"} {
-		if previous := meta.FindStatusCondition(cfg.Status.Conditions, conditionType); previous != nil {
+	for _, conditionType := range []crdv1alpha1.AntreaNodeConfigConditionType{
+		crdv1alpha1.AntreaNodeConfigConditionReady,
+		crdv1alpha1.AntreaNodeConfigConditionConflictFree,
+	} {
+		if previous := meta.FindStatusCondition(cfg.Status.Conditions, string(conditionType)); previous != nil {
 			status.Conditions = append(status.Conditions, *previous)
 		}
 	}
 	meta.SetStatusCondition(&status.Conditions, aggregate)
-	conflict := metav1.Condition{Type: "ConflictFree", Status: metav1.ConditionTrue, ObservedGeneration: cfg.Generation,
-		Reason: "NoConflicts", Message: "No matching Nodes select another AntreaNodeConfig", LastTransitionTime: metav1.NewTime(now)}
+	conflict := metav1.Condition{
+		Type: string(crdv1alpha1.AntreaNodeConfigConditionConflictFree), Status: metav1.ConditionTrue,
+		ObservedGeneration: cfg.Generation, Reason: "NoConflicts",
+		Message: "No matching Nodes select another AntreaNodeConfig", LastTransitionTime: metav1.NewTime(now),
+	}
 	if selectorErr != nil {
 		conflict.Status, conflict.Reason, conflict.Message = metav1.ConditionUnknown, "InvalidNodeSelector", "Cannot evaluate conflicts with an invalid Node selector"
 	} else if shadowed > 0 {
@@ -329,17 +341,18 @@ func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[type
 }
 
 func selectedNodeCondition(cfg *crdv1alpha1.AntreaNodeConfig, node *corev1.Node,
-	report *crdv1beta1.AntreaNodeConfigAgentStatus, now time.Time) metav1.Condition {
+	info *crdv1beta1.AntreaAgentInfo, now time.Time) metav1.Condition {
 	condition := metav1.Condition{Status: metav1.ConditionUnknown,
 		Reason: "AgentUnavailable", Message: "Waiting for a fresh Agent configuration report"}
-	if !freshReport(node, report, now) {
+	if !freshReport(node, info, now) {
 		return condition
 	}
+	report := info.NodeConfigStatus
 	condition.Reason, condition.Message = "ConfigurationUnavailable", "Waiting for secondary network configuration status"
 	if report.SecondaryNetwork == nil {
 		return condition
 	}
-	ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+	ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, string(crdv1beta1.SecondaryNetworkConditionReady))
 	if ready == nil {
 		return condition
 	}

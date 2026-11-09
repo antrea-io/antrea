@@ -18,11 +18,8 @@ spec:
             nodeConfigStatus:
               type: object
               required:
-              - nodeUID
               - lastHeartbeatTime
               properties:
-                nodeUID:
-                  type: string
                 configName:
                   type: string
                 configUID:

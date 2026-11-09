@@ -217,7 +217,6 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			previous := readyNodeConfigReport()
-			previous.NodeUID = "old-node-uid"
 			old := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}, NodeConfigStatus: previous}
 			client := fakeclientset.NewSimpleClientset(old)
 			monitor := newAgentMonitor(client, t)
@@ -249,7 +248,7 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 			} else if !tt.enabled {
 				wantStatus, wantReason = metav1.ConditionFalse, "FeatureDisabled"
 			}
-			assert.Equal(t, "Ready", ready.Type)
+			assert.Equal(t, string(v1beta1.SecondaryNetworkConditionReady), ready.Type)
 			assert.Equal(t, wantStatus, ready.Status)
 			assert.Equal(t, wantReason, ready.Reason)
 			if tt.windows {
@@ -258,7 +257,7 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 			assert.Zero(t, ready.ObservedGeneration)
 			assert.Empty(t, report.SecondaryNetwork.CurrentBridge)
 			assert.Empty(t, report.SecondaryNetwork.DesiredBridge)
-			assert.EqualValues(t, "node-uid", report.NodeUID)
+			assert.EqualValues(t, "node-uid", current.NodeRef.UID)
 			assert.False(t, report.LastHeartbeatTime.IsZero())
 			assert.False(t, ready.LastTransitionTime.IsZero())
 			if tt.report == nil || !tt.enabled || tt.windows {
@@ -286,7 +285,7 @@ func readyNodeConfigReport() *v1beta1.AntreaNodeConfigAgentStatus {
 	return &v1beta1.AntreaNodeConfigAgentStatus{
 		ConfigName: "current-config", ConfigUID: "current-uid",
 		SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{CurrentBridge: "br-current",
-			Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue,
+			Conditions: []metav1.Condition{{Type: string(v1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue,
 				ObservedGeneration: 2, Reason: "Reconciled", LastTransitionTime: metav1.Now()}}},
 	}
 }
@@ -295,8 +294,11 @@ func TestSyncAgentNodeConfigStatusNodeIdentity(t *testing.T) {
 	for _, previousUID := range []types.UID{"", "node-uid", "old-node-uid"} {
 		t.Run(string(previousUID), func(t *testing.T) {
 			previous := readyNodeConfigReport()
-			previous.NodeUID = previousUID
-			old := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}, NodeConfigStatus: previous}
+			old := &v1beta1.AntreaAgentInfo{
+				ObjectMeta:       metav1.ObjectMeta{Name: "testAgentCRD"},
+				NodeRef:          corev1.ObjectReference{Kind: "Node", Name: "testAgentCRD", UID: previousUID},
+				NodeConfigStatus: previous,
+			}
 			client := fakeclientset.NewSimpleClientset(old)
 			monitor := newAgentMonitor(client, t)
 			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
@@ -313,7 +315,7 @@ func TestSyncAgentNodeConfigStatusNodeIdentity(t *testing.T) {
 			require.NoError(t, err)
 			report := current.NodeConfigStatus
 			require.NotNil(t, report)
-			assert.EqualValues(t, "node-uid", report.NodeUID)
+			assert.EqualValues(t, "node-uid", current.NodeRef.UID)
 			assert.Empty(t, report.ConfigUID)
 			assert.Equal(t, metav1.ConditionUnknown, report.SecondaryNetwork.Conditions[0].Status)
 		})
@@ -341,7 +343,7 @@ func TestPublishCurrentNodeConfigurationReport(t *testing.T) {
 	assert.Equal(t, original, desired, "Publication must not mutate the provider report")
 	assert.Equal(t, desired.SecondaryNetwork, report.SecondaryNetwork)
 	assert.Equal(t, desired.ConfigUID, report.ConfigUID)
-	assert.EqualValues(t, "node-uid", report.NodeUID)
+	assert.EqualValues(t, "node-uid", current.NodeRef.UID)
 	assert.False(t, report.LastHeartbeatTime.IsZero())
 	report.SecondaryNetwork.Conditions[0].Message = "modified published report"
 	assert.Equal(t, original, desired, "Published conditions must not alias the provider")
@@ -359,7 +361,7 @@ func TestPublishCurrentNodeConfigurationReport(t *testing.T) {
 			assert.Equal(t, unavailable.ConfigUID, current.NodeConfigStatus.ConfigUID)
 		}
 		assert.Empty(t, current.NodeConfigStatus.SecondaryNetwork.CurrentBridge)
-		ready := meta.FindStatusCondition(current.NodeConfigStatus.SecondaryNetwork.Conditions, "Ready")
+		ready := meta.FindStatusCondition(current.NodeConfigStatus.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
 		require.NotNil(t, ready)
 		assert.Equal(t, metav1.ConditionUnknown, ready.Status)
 		assert.Equal(t, "ConfigurationUnavailable", ready.Reason)

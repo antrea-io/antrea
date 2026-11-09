@@ -218,10 +218,11 @@ and Conditions, so its size does not grow with the number of selected Nodes.
 `status.observedGeneration` identifies the spec version processed by the Controller;
 check `Ready=True` for that same generation to determine whether it has been realized.
 
-The common Agent report contains the Node UID, ANC name and UID, and publication heartbeat.
-`nodeConfigStatus.secondaryNetwork` contains the current and desired bridges and its `Ready`
-Condition. That Condition's `observedGeneration` identifies the reconciled configuration
-version; there is no separate report generation or reconciliation timestamp.
+The Agent report identifies the Node incarnation through `nodeRef.uid`, and contains the
+ANC name and UID and the publication heartbeat. `nodeConfigStatus.secondaryNetwork`
+contains the current and desired bridges and its `Ready` Condition. That Condition's
+`observedGeneration` identifies the reconciled configuration version; there is no separate
+report generation or reconciliation timestamp.
 Missing or expired reports and unavailable Nodes produce `Ready=Unknown`. A successful
 report must match the current Node UID, ANC UID, and generation. Nodes without a report
 still count toward `desiredNodes`; they do not count toward `realizedNodes`.
@@ -296,8 +297,9 @@ apiVersion: crd.antrea.io/v1beta1
 kind: AntreaAgentInfo
 metadata:
   name: node-a
+nodeRef:
+  uid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
 nodeConfigStatus:
-  nodeUID: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
   configName: secondary-network-all-linux
   configUID: 11111111-1111-4111-8111-111111111111
   lastHeartbeatTime: "2026-10-29T09:01:00Z"

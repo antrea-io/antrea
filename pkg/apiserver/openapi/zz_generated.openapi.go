@@ -3173,17 +3173,9 @@ func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization. An empty ConfigUID means that the report does not identify a selected configuration, including when configuration support is disabled or the Agent is initializing.",
+				Description: "AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization. The reporting Node incarnation is identified by the containing AntreaAgentInfo NodeRef UID. An empty ConfigUID means that the report does not identify a selected configuration, including when configuration support is disabled or the Agent is initializing.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"nodeUID": {
-						SchemaProps: spec.SchemaProps{
-							Description: "NodeUID identifies the Node incarnation reporting this status.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"configName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ConfigName is the name of the selected AntreaNodeConfig, if any.",
@@ -3193,7 +3185,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref common.Referenc
 					},
 					"configUID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ConfigUID identifies the selected AntreaNodeConfig incarnation, if any.",
+							Description: "ConfigUID identifies the selected AntreaNodeConfig incarnation, if any. The name and generation are not sufficient: generation restarts at 1 when a configuration with the same name is recreated.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3211,7 +3203,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"nodeUID", "lastHeartbeatTime"},
+				Required: []string{"lastHeartbeatTime"},
 			},
 		},
 		Dependencies: []string{
@@ -5931,7 +5923,7 @@ func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCall
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditions includes Ready with the configuration generation observed by this feature.",
+							Description: "Conditions includes SecondaryNetworkConditionReady with the configuration generation observed by this feature.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
