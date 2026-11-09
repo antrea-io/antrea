@@ -202,7 +202,7 @@ func TestOptValidate(t *testing.T) {
 			opts: &joinConfigOptions{
 				namespace: "ns1",
 			},
-			errStr: "flag accessed but not defined: kubeconfig",
+			errStr: `flag "kubeconfig" does not exist`,
 		},
 	}
 
