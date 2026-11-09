@@ -512,6 +512,9 @@ func run(o *Options) error {
 			return fmt.Errorf("error when creating proxyServer: %w", err)
 		}
 		proxyServer.Initialize(ctx, serviceInformer, endpointSliceInformer)
+		if enableAntreaIPAM {
+			proxyServer.InitializeEndpointLocality(localPodInformer.Get(), ipPoolInformer)
+		}
 		proxyQuerier = proxyServer.GetProxyQuerier()
 	}
 

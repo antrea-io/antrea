@@ -135,6 +135,11 @@ func (ect *EndpointsChangeTracker) EndpointSliceUpdate(endpointSlice *discovery.
 	return changeNeeded
 }
 
+// UpdateLocalPodIPs updates the local Pod IPs used to infer Endpoint locality.
+func (ect *EndpointsChangeTracker) UpdateLocalPodIPs(localPodIPs sets.Set[string]) bool {
+	return ect.endpointSliceCache.UpdateLocalPodIPs(localPodIPs)
+}
+
 // checkoutChanges returns a map of pending endpointsChanges and marks them as
 // applied.
 func (ect *EndpointsChangeTracker) checkoutChanges() map[types.NamespacedName]*endpointsChange {
