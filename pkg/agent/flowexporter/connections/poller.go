@@ -107,9 +107,10 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 // The Antrea zones are dumped before the default zone. For a from-external connection, the
 // default-zone (host netfilter) entry is committed before its Antrea-zone counterpart, as the
 // packet traverses the host stack before reaching OVS through the gateway. Dumping the default
-// zone last therefore ensures that the default-zone half of every Antrea-zone connection returned
-// by this poll is available for correlation, even if the connection was created while the poll
-// was in progress. Correlation is performed once all zones have been dumped.
+// zone last therefore means that the default-zone half of every Antrea-zone connection returned by
+// this poll is available for correlation (unless it is removed between the dumps), even if the
+// connection was created while the poll was in progress. Correlation is performed once all zones
+// have been dumped.
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the
 // established connections right before the export.
 func (p *Poller) Poll() ([]*connection.Connection, []int, error) {

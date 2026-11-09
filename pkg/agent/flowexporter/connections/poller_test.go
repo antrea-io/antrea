@@ -273,15 +273,16 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 		wantHostToPod bool
 	}
 	startTime := time.Now()
-	scenarios := []scenario{
-		{
-			// This is the scenario from https://github.com/antrea-io/antrea/issues/8588.
-			name: "connection created during a poll",
-			entries: func(n nodePortTestNetwork, snat bool, step int) []scriptedEntry {
-				dz, az := n.externalToPodConn(snat, startTime)
-				return []scriptedEntry{{dz, step + 1, never}, {az, step + 1, never}}
-			},
+	// This is the scenario from https://github.com/antrea-io/antrea/issues/8588.
+	createdDuringPoll := scenario{
+		name: "connection created during a poll",
+		entries: func(n nodePortTestNetwork, snat bool, step int) []scriptedEntry {
+			dz, az := n.externalToPodConn(snat, startTime)
+			return []scriptedEntry{{dz, step + 1, never}, {az, step + 1, never}}
 		},
+	}
+	scenarios := []scenario{
+		createdDuringPoll,
 		{
 			name: "connection removed during a poll",
 			entries: func(n nodePortTestNetwork, snat bool, step int) []scriptedEntry {
@@ -380,5 +381,5 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 	}
 	// Correlation does not depend on the IP family, and the poller always dumps both the IPv4 and
 	// IPv6 Antrea zones: a single IPv6 scenario is enough to cover the IPv6 addresses and zone.
-	runSubtests(testNetworkIPv6, "IPv6", true, scenarios[0])
+	runSubtests(testNetworkIPv6, "IPv6", true, createdDuringPoll)
 }

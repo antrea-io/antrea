@@ -47,10 +47,10 @@ type ExternalCorrelator interface {
 // It only keeps state across polls for Antrea-zone connections that it has already correlated:
 // if the default-zone half of such a connection disappears before the Antrea-zone half (e.g., it
 // expires between the Antrea-zone dump and the default-zone dump of a poll), the last default-zone
-// snapshot keeps being used for that same Antrea-zone conntrack entry. The snapshot is never
-// applied to a different conntrack entry that reuses the same 5-tuple, such as a later host-to-Pod
-// connection whose source is the gateway IP and whose source port happens to match a past
-// masquerade port.
+// snapshot keeps being used for that same Antrea-zone conntrack entry. As long as conntrack
+// timestamps are available, the snapshot is never applied to a different conntrack entry that
+// reuses the same 5-tuple, such as a later host-to-Pod connection whose source is the gateway IP
+// and whose source port happens to match a past masquerade port (see antreaZoneConnIdentity).
 type FromExternalCorrelator struct {
 	proxier    proxy.ProxyQuerier
 	nplQuerier portcache.NPLQuerier
