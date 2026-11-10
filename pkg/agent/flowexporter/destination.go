@@ -221,7 +221,6 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			// FromExternalCorrelator lifecycle is owned by FlowExporter (Run in FlowExporter.Run, StopCleanUp on exit).
 			d.resetFlowExporter()
 			return
 		case <-exportTicker.C:

@@ -40,11 +40,11 @@ type Poller struct {
 }
 
 // NewPoller creates a conntrack poller. externalCorrelator may be nil; default-zone dumps are
-// never delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
-// Antrea-zone dumps are passed to the notifier.
+// never delivered to subscribers—when externalCorrelator is non-nil they are used for correlation
+// here. Only Antrea-zone dumps are passed to the notifier.
 func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	// The default zone is polled first so correlator state exists before Antrea-zones are polled.
-	zones := []uint16{DefaultZone}
+	// zones only holds the Antrea zones: the default zone is always dumped after them (see Poll).
+	var zones []uint16
 	if v4Enabled {
 		if connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
@@ -99,10 +99,18 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 }
 
 // Poll calls into conntrackDumper to dump each configured zone. Default-zone flows are never
-// returned; when externalCorrelator is non-nil they are ingested here. Non-default-zone dumps
-// are returned as Antrea-zone connections (IPv4/IPv6 per configuration). connsLens has one entry
-// per polled zone (default zone first, then IPv4 Antrea zone, then IPv6 Antrea zone when
-// enabled), each the length of that zone's filtered dump.
+// returned; when externalCorrelator is non-nil they are used to correlate Antrea-zone flows.
+// Non-default-zone dumps are returned as Antrea-zone connections (IPv4/IPv6 per configuration).
+// connsLens has one entry per polled zone (default zone first, then IPv4 Antrea zone, then IPv6
+// Antrea zone when enabled), each the length of that zone's filtered dump.
+//
+// The Antrea zones are dumped before the default zone. For a from-external connection, the
+// default-zone (host netfilter) entry is committed before its Antrea-zone counterpart, as the
+// packet traverses the host stack before reaching OVS through the gateway. Dumping the default
+// zone last therefore means that the default-zone half of every Antrea-zone connection returned by
+// this poll is available for correlation (unless it is removed between the dumps), even if the
+// connection was created while the poll was in progress. Correlation is performed once all zones
+// have been dumped.
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the
 // established connections right before the export.
 func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
@@ -115,7 +123,8 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 	}()
 
 	var antreaConns []*connection.Connection
-	var connsLens []int
+	// The first slot is reserved for the default zone, which is dumped last.
+	connsLens := make([]int, 1, len(p.zones)+1)
 	var totalConns int
 	for _, zone := range p.zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := p.connTrackDumper.DumpFlows(zone)
@@ -124,27 +133,21 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		}
 		totalConns += totalConnsPerZone
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
-		if zone == DefaultZone {
-			if p.externalCorrelator != nil {
-				for _, conn := range filteredConnsListPerZone {
-					if conn != nil {
-						p.externalCorrelator.IngestDefaultZoneFlow(conn)
-					}
-				}
-			}
-			continue
-		}
-		// Correlate Antrea-zone connections with default-zone state before notifying
-		// subscribers. Doing this here — once, centrally, before fan-out — ensures that
-		// all subscribers see the same already-correlated view of each connection pointer.
-		if p.externalCorrelator != nil {
-			for _, conn := range filteredConnsListPerZone {
-				if conn != nil {
-					p.externalCorrelator.CorrelateIfExternal(conn)
-				}
-			}
-		}
 		antreaConns = append(antreaConns, filteredConnsListPerZone...)
+	}
+
+	defaultZoneConns, totalDefaultZoneConns, err := p.connTrackDumper.DumpFlows(DefaultZone)
+	if err != nil {
+		return nil, nil, err
+	}
+	totalConns += totalDefaultZoneConns
+	connsLens[0] = len(defaultZoneConns)
+
+	// Correlate Antrea-zone connections with default-zone state before notifying
+	// subscribers. Doing this here — once, centrally, before fan-out — ensures that
+	// all subscribers see the same already-correlated view of each connection pointer.
+	if p.externalCorrelator != nil {
+		p.externalCorrelator.Correlate(defaultZoneConns, antreaConns)
 	}
 
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
