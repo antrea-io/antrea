@@ -119,14 +119,21 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			queryParams: url.Values{
 				"domain": {"example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^example[.]com$")},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^example[.]com$")},
 		},
 		{
 			name: "Valid regex domain",
 			queryParams: url.Values{
 				"domain": {"*.example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^.*[.]example[.]com$")},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^.*[.]example[.]com$")},
+		},
+		{
+			name: "Uppercase domain matches lowercase cache names",
+			queryParams: url.Values{
+				"domain": {"EXAMPLE.COM"},
+			},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^EXAMPLE[.]COM$")},
 		},
 		{
 			name: "Invalid regex domain",
@@ -149,4 +156,13 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewFilterFromURLQueryCaseInsensitive(t *testing.T) {
+	result, err := newFilterFromURLQuery(url.Values{"domain": {"EXAMPLE.COM"}})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.DomainRegex.MatchString("example.com"))
+	assert.True(t, result.DomainRegex.MatchString("EXAMPLE.COM"))
+	assert.False(t, result.DomainRegex.MatchString("example.org"))
 }

@@ -62,8 +62,9 @@ func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	pattern = strings.ReplaceAll(pattern, ".", "[.]")
 	// Replace "*" with ".*".
 	pattern = strings.ReplaceAll(pattern, "*", ".*")
-	// Anchor the regex match expression.
-	pattern = "^" + pattern + "$"
+	// Anchor the regex match expression. DNS domain comparisons are
+	// case-insensitive (RFC 4343), and the cache stores lowercase names.
+	pattern = "(?i)^" + pattern + "$"
 
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
