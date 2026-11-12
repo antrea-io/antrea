@@ -32,6 +32,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,38 @@ func bindClusterRoleToUser(t *testing.T, data *TestData, userName, clusterRole s
 	})
 }
 
+// bindClusterRoleToUserInNamespace binds a ClusterRole to a user in one Namespace only, for the
+// duration of the test.
+func bindClusterRoleToUserInNamespace(t *testing.T, data *TestData, userName, clusterRole, namespace string) {
+	name := userName + "-" + clusterRole
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: userName}},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: clusterRole},
+	}
+	_, err := data.clientset.RbacV1().RoleBindings(namespace).Create(context.TODO(), rb, metav1.CreateOptions{})
+	require.NoErrorf(t, err, "failed to bind ClusterRole %s to user %s in Namespace %s", clusterRole, userName, namespace)
+	t.Cleanup(func() {
+		assert.NoError(t, data.clientset.RbacV1().RoleBindings(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}))
+	})
+}
+
+// getCoreDNSPodIPv4 returns an IPv4 address of a CoreDNS Pod: a peer that lives in a Namespace other
+// than the test's, which the cluster has already and which accepts TCP connections on port 53.
+func getCoreDNSPodIPv4(t *testing.T, data *TestData) string {
+	pods, err := data.clientset.CoreV1().Pods(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "k8s-app=kube-dns"})
+	require.NoError(t, err)
+	for i := range pods.Items {
+		for _, podIP := range pods.Items[i].Status.PodIPs {
+			if ip := net.ParseIP(podIP.IP); ip != nil && ip.To4() != nil {
+				return podIP.IP
+			}
+		}
+	}
+	require.FailNow(t, "no CoreDNS Pod with an IPv4 address was found")
+	return ""
+}
+
 // writeKubeconfigToStandinPod writes a kubeconfig, built from the given authentication, to a file in
 // the shared stand-in Pod and returns its path. server and caData are what the kubeconfig needs to
 // reach the Kubernetes API server; tests that never contact it can pass placeholders.
@@ -191,6 +224,57 @@ func testAntctlObserveClientCertAuth(t *testing.T, data *TestData, flows observe
 			records = parseObserveJSON(t, stdout)
 			return len(records) > 0, nil
 		}), "a client certificate for an authorized identity should stream flows")
+	})
+
+	// Every other test reads the flows cluster-wide. This one has an identity that may observe the
+	// flows of the test Namespace only, which is what FlowStreamService authorizes with a
+	// SubjectAccessReview in that Namespace, and which discloses the peers in other Namespaces at
+	// the lowest tier: the Namespace and the address of a destination, but not its Pod.
+	t.Run("NamespaceScoped", func(t *testing.T) {
+		// Authorization decisions are cached for ten minutes, so this identity is a new one too.
+		user := "antctl-observe-cert-" + randSeq(6)
+		certPEM, keyPEM := issueClusterClientCert(t, data, user)
+		bindClusterRoleToUser(t, data, user, antctlObserveDiscoveryClusterRoleName)
+		bindClusterRoleToUserInNamespace(t, data, user, "antrea-flow-viewer", data.testNamespace)
+		kubeconfig := writeKubeconfigToStandinPod(t, data, user, apiServer, []byte(caData),
+			&clientcmdapi.AuthInfo{ClientCertificateData: certPEM, ClientKeyData: keyPEM})
+
+		// The destination is a Pod of kube-system, which the identity holds nothing in.
+		coreDNSIP := getCoreDNSPodIPv4(t, data)
+		generateOneFlow(t, data, "perftest-a", coreDNSIP, 53)
+
+		// --pod and --ip narrow the flows of the Namespace down to this one, out of its background traffic.
+		args := []string{"--flow-aggregator-namespace", flowAggregatorNamespace, "--kubeconfig", kubeconfig,
+			"-n", data.testNamespace, "--pod", "perftest-a", "--ip", coreDNSIP}
+		var records []observeRecord
+		require.NoError(t, wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
+			stdout, stderr, err := runObserve(data, append(args, "-o", "json")...)
+			if err != nil {
+				t.Logf("antctl observe failed, retrying: %v: %s", err, stderr)
+				return false, nil
+			}
+			records = parseObserveJSON(t, stdout)
+			return len(records) > 0, nil
+		}), "a Namespace-scoped identity should stream the flows of its Namespace")
+		for _, r := range records {
+			assert.Equal(t, "full", r.SourceDisclosure, "the source is in the Namespace of the identity")
+			assert.Equal(t, "perftest-a", r.SourcePodName)
+			assert.Equal(t, "flow", r.DestinationDisclosure, "the destination is in a Namespace the identity does not hold")
+			assert.Equal(t, metav1.NamespaceSystem, r.DestinationPodNamespace)
+			assert.Empty(t, r.DestinationPodName)
+			assert.Equal(t, coreDNSIP, r.DestinationIP)
+		}
+
+		stdout, stderr, err := runObserve(data, args...)
+		require.NoError(t, err, stderr)
+		assert.Contains(t, stdout, fmt.Sprintf("%s/<redacted>(%s)", metav1.NamespaceSystem, coreDNSIP))
+
+		// The same identity may not observe the Namespace that it only sees the peers of.
+		_, stderr, err = runObserve(data, "--flow-aggregator-namespace", flowAggregatorNamespace, "--kubeconfig", kubeconfig,
+			"-n", metav1.NamespaceSystem, "--max-count", "1")
+		require.Error(t, err)
+		assert.Contains(t, stderr, "PermissionDenied", "the identity holds nothing in kube-system: %s", stderr)
+		assert.NotContains(t, stderr, "Unauthenticated")
 	})
 
 	t.Run("AuthenticatedButNotAuthorized", func(t *testing.T) {
