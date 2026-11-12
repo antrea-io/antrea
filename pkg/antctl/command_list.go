@@ -140,10 +140,11 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	}
 	for _, cmd := range cl.rawCommands {
 
-		if cmd.cobraCommand.Use == "proxy" || cmd.cobraCommand.Use == "packetcapture" {
+		if cmd.cobraCommand.Use == "proxy" || cmd.cobraCommand.Use == "packetcapture" || cmd.cobraCommand.Use == "observe" {
 			// proxy will keep running until interrupted so it
 			// cannot be used as is in e2e tests. For packetcapture, the default values didn't
-			// make much sense in e2e tests.
+			// make much sense in e2e tests. A bare observe needs a Flow Aggregator to discover
+			// and connect to, which these tests don't set up (TestAntctlObserve covers it).
 			continue
 		}
 		if mode == runtime.ModeController && cmd.supportController ||
