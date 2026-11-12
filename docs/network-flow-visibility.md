@@ -834,13 +834,6 @@ release installed, since Helm will not adopt objects another release owns. A
 release in which the FlowStreamService is disabled, as is always the case in
 `Proxy` mode, does not install the roles.
 
-The chart also binds each Flow Aggregator's own ServiceAccount to
-`antrea-flow-viewer`, cluster-wide, so that `antctl observe` run inside the Flow
-Aggregator Pod works without further setup. That binding is named after the
-release (and `clusterScopedNameSuffix`), so every release has its own, including
-one that sets `installClusterRoles=false`. It exposes nothing the Flow
-Aggregator does not already hold in memory.
-
 Ownership follows the release that installed them, so uninstalling that release
 deletes both roles even while other Flow Aggregator releases are still running.
 To hand them to a surviving release, set `installClusterRoles=true` there and
@@ -852,6 +845,16 @@ Existing bindings fail closed during this period. RBAC resolves a binding's
 `roleRef` when it authorizes a request rather than when the binding is created,
 so a binding whose role is missing grants nothing in the meanwhile, and resumes
 working once the role is back.
+
+`antctl observe` run inside the Flow Aggregator Pod needs no binding. The Flow
+Aggregator also serves the FlowStreamService on a Unix socket inside its own
+container, `/var/run/antrea/flow-aggregator/flowstream.sock`, which the chart
+backs with an `emptyDir` volume. Only the user the Flow Aggregator runs as can
+open it, and such a user can already read everything the Flow Aggregator holds
+in memory, so that service neither authenticates nor authorizes its clients, and
+shows every record unredacted. It is only served on that socket, never on the
+TCP port, and it exposes the flows of that Flow Aggregator alone, so the
+Flow Aggregators of several releases do not gain access to each other's flows.
 
 Who currently holds flow visibility can be audited with:
 
