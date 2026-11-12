@@ -709,6 +709,19 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 		pf.serviceNames = append(pf.serviceNames, serviceName{namespace: namespace, name: name})
 	}
 
+	for _, action := range f.GetNetworkPolicyRuleActions() {
+		switch action {
+		case flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW,
+			flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP,
+			flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT:
+		default:
+			// NO_ACTION is reserved: a flow with a rule on one side only carries NO_ACTION on
+			// the other, so matching it against either side would not select the flows no
+			// policy applied to, which is what a client asking for it most likely wants.
+			return flowFilter{}, fmt.Errorf("unsupported network policy rule action %v: expected ALLOW, DROP or REJECT", action)
+		}
+	}
+
 	for _, ipStr := range f.GetIps() {
 		if strings.Contains(ipStr, "/") {
 			prefix, err := netip.ParsePrefix(ipStr)
@@ -746,8 +759,10 @@ func matchFlow(f *flowpb.Flow, filters []flowFilter, since time.Time) bool {
 }
 
 // matchFilter reports whether f matches pf. Its criteria are AND-ed:
-//   - flow_types and service_names apply to the flow as a whole, whatever the direction:
-//     service_names matches the flow's destination Service, by name or by Namespace and name.
+//   - flow_types, service_names and network_policy_rule_actions apply to the flow as a whole,
+//     whatever the direction: service_names matches the flow's destination Service, by name or by
+//     Namespace and name, and network_policy_rule_actions matches the overall outcome of its
+//     ingress and egress rules (see matchRuleAction).
 //   - The directional criteria (namespaces, pod_names, pod_label_selector, ips) are all matched
 //     against the same endpoint, which the direction picks, so that for example namespaces and
 //     pod_names select a single Pod. With BOTH, either endpoint may be the one that matches.
@@ -763,6 +778,13 @@ func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {
 		namespace, name := destinationService(k8s.GetDestinationServicePortName())
 		if !slices.ContainsFunc(pf.serviceNames, func(s serviceName) bool {
 			return s.name == name && (s.namespace == "" || s.namespace == namespace)
+		}) {
+			return false
+		}
+	}
+	if actions := filter.GetNetworkPolicyRuleActions(); len(actions) > 0 {
+		if !slices.ContainsFunc(actions, func(action flowpb.NetworkPolicyRuleAction) bool {
+			return matchRuleAction(k8s, action)
 		}) {
 			return false
 		}
@@ -826,6 +848,19 @@ func matchEndpoint(f *flowpb.Flow, pf *flowFilter, source bool) bool {
 		}
 	}
 	return true
+}
+
+// matchRuleAction reports whether the overall outcome of the network policy rules applied to the
+// flow described by k8s is action. A flow is denied (DROP or REJECT) if a rule with that action
+// denied it on either its ingress or its egress side. It is allowed (ALLOW) only if a rule allowed
+// it and no rule denied it: a connection allowed by its source's egress policy but dropped by its
+// destination's ingress policy was dropped. A record without Kubernetes metadata reads as NO_ACTION
+// on both sides, which parseFlowFilter never accepts as action, so it never matches.
+func matchRuleAction(k8s *flowpb.Kubernetes, action flowpb.NetworkPolicyRuleAction) bool {
+	if action == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW && !connectionAllowed(k8s) {
+		return false
+	}
+	return k8s.GetIngressNetworkPolicyRuleAction() == action || k8s.GetEgressNetworkPolicyRuleAction() == action
 }
 
 func labelsFromProto(l *flowpb.Labels) labels.Set {
