@@ -29,6 +29,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -485,6 +486,9 @@ func TestRunE_Stream(t *testing.T) {
 	})
 
 	t.Run("in the Flow Aggregator Pod, it connects to the socket of its own container with no credentials", func(t *testing.T) {
+		if goruntime.GOOS == "windows" {
+			t.Skip("gRPC cannot dial a Unix socket path of Windows")
+		}
 		received := make(chan receivedRequest, 1)
 		startLocalFlowStreamService(t, serveFlows(received, []*flowpb.Flow{testFlow()}))
 		withRuntimeMode(t, runtime.ModeFlowAggregator, true)
@@ -507,6 +511,9 @@ func TestRunE_Stream(t *testing.T) {
 	})
 
 	t.Run("in the Flow Aggregator Pod, a missing socket is explained", func(t *testing.T) {
+		if goruntime.GOOS == "windows" {
+			t.Skip("gRPC cannot dial a Unix socket path of Windows")
+		}
 		withRuntimeMode(t, runtime.ModeFlowAggregator, true)
 		// A short path: Unix socket paths are limited to about 100 characters.
 		dir, err := os.MkdirTemp("", "fs")

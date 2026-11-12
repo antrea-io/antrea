@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,9 @@ func TestListenLocal(t *testing.T) {
 	svc := NewLocalFlowStreamService(ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4))
 
 	t.Run("only the current user can reach the socket", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows does not enforce Unix permission bits")
+		}
 		// The directory of a volume is created with a mode that lets everyone in.
 		dir := filepath.Join(newSocketDir(t), "volume")
 		require.NoError(t, os.Mkdir(dir, 0o777))
@@ -84,6 +88,9 @@ func TestListenLocal(t *testing.T) {
 
 func TestRunLocal(t *testing.T) {
 	t.Run("serves every record unredacted to a client without credentials", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("gRPC cannot dial a Unix socket path of Windows")
+		}
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](16)
 		t.Cleanup(buf.Shutdown)
 		buf.Produce(newFlow("flow-1", newPodK8S("kube-system", "coredns-abc", "other-ns", "backend-xyz")))
