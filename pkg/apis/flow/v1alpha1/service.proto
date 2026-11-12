@@ -111,6 +111,41 @@ message FlowFilter {
   // Cannot combine FROM with service_names (services are always a
   // destination-side concept).
   FlowFilterDirection direction = 7;
+  // Match flows by the outcome of the network policy rules recorded for them
+  // taking both ingress and egress network policy rule action into account
+  // (see NetworkPolicyOutcome). Every flow has exactly one outcome, so a flow
+  // allowed by an egress rule but dropped by an ingress rule is DENIED, and
+  // [NETWORK_POLICY_OUTCOME_UNPROTECTED,  NETWORK_POLICY_OUTCOME_ALLOWED]
+  // selects every flow that was not denied. This filter always matches the
+  // flow as a whole, whatever the direction. Rule actions are disclosed to
+  // every client that receives a record, so redaction never affects this
+  // filter; like every filter, it only ever narrows the records a stream is
+  // authorized to receive. NETWORK_POLICY_OUTCOME_UNSPECIFIED is rejected with
+  // INVALID_ARGUMENT, as is any value NetworkPolicyOutcome does not define.
+  repeated NetworkPolicyOutcome network_policy_outcomes = 8;
+}
+
+// NetworkPolicyOutcome is the outcome of the network policy rules recorded for
+// a flow, its ingress and egress sides taken together.
+//
+// UNPROTECTED means that no rule was recorded for the flow, not that no policy
+// applies to it. The two differ for a connection established before a policy
+// selecting its endpoints was applied (an established connection is not
+// evaluated against new rules), a connection established before the exporting
+// agent had its policies ready after a restart, a connection passed by a Pass
+// rule and matched by no rule afterwards, and a connection whose rule could not
+// be looked up when it was exported, which can make even a denied connection
+// read as UNPROTECTED.
+enum NetworkPolicyOutcome {
+  NETWORK_POLICY_OUTCOME_UNSPECIFIED = 0;
+  // No rule was recorded on either side.
+  NETWORK_POLICY_OUTCOME_UNPROTECTED = 1;
+  // A rule allowed the flow on at least one side, and no rule denied it.
+  NETWORK_POLICY_OUTCOME_ALLOWED = 2;
+  // A rule dropped or rejected the flow, on either side. In rare cases, a
+  // record carries a drop on one side and a reject on the other; a client that
+  // needs to tell drops from rejects can read the per-side rule actions.
+  NETWORK_POLICY_OUTCOME_DENIED = 3;
 }
 
 // GetFlowsRequest is sent once by the client when opening a GetFlows stream.

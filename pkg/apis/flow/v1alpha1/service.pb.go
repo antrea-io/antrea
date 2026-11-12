@@ -89,6 +89,74 @@ func (FlowFilterDirection) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{0}
 }
 
+// NetworkPolicyOutcome is the outcome of the network policy rules recorded for
+// a flow, its ingress and egress sides taken together.
+//
+// UNPROTECTED means that no rule was recorded for the flow, not that no policy
+// applies to it. The two differ for a connection established before a policy
+// selecting its endpoints was applied (an established connection is not
+// evaluated against new rules), a connection established before the exporting
+// agent had its policies ready after a restart, a connection passed by a Pass
+// rule and matched by no rule afterwards, and a connection whose rule could not
+// be looked up when it was exported, which can make even a denied connection
+// read as UNPROTECTED.
+type NetworkPolicyOutcome int32
+
+const (
+	NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_UNSPECIFIED NetworkPolicyOutcome = 0
+	// No rule was recorded on either side.
+	NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_UNPROTECTED NetworkPolicyOutcome = 1
+	// A rule allowed the flow on at least one side, and no rule denied it.
+	NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_ALLOWED NetworkPolicyOutcome = 2
+	// A rule dropped or rejected the flow, on either side. In rare cases, a
+	// record carries a drop on one side and a reject on the other; a client that
+	// needs to tell drops from rejects can read the per-side rule actions.
+	NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_DENIED NetworkPolicyOutcome = 3
+)
+
+// Enum value maps for NetworkPolicyOutcome.
+var (
+	NetworkPolicyOutcome_name = map[int32]string{
+		0: "NETWORK_POLICY_OUTCOME_UNSPECIFIED",
+		1: "NETWORK_POLICY_OUTCOME_UNPROTECTED",
+		2: "NETWORK_POLICY_OUTCOME_ALLOWED",
+		3: "NETWORK_POLICY_OUTCOME_DENIED",
+	}
+	NetworkPolicyOutcome_value = map[string]int32{
+		"NETWORK_POLICY_OUTCOME_UNSPECIFIED": 0,
+		"NETWORK_POLICY_OUTCOME_UNPROTECTED": 1,
+		"NETWORK_POLICY_OUTCOME_ALLOWED":     2,
+		"NETWORK_POLICY_OUTCOME_DENIED":      3,
+	}
+)
+
+func (x NetworkPolicyOutcome) Enum() *NetworkPolicyOutcome {
+	p := new(NetworkPolicyOutcome)
+	*p = x
+	return p
+}
+
+func (x NetworkPolicyOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NetworkPolicyOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_apis_flow_v1alpha1_service_proto_enumTypes[1].Descriptor()
+}
+
+func (NetworkPolicyOutcome) Type() protoreflect.EnumType {
+	return &file_pkg_apis_flow_v1alpha1_service_proto_enumTypes[1]
+}
+
+func (x NetworkPolicyOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NetworkPolicyOutcome.Descriptor instead.
+func (NetworkPolicyOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{1}
+}
+
 type ExportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Flows         []*Flow                `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
@@ -222,9 +290,21 @@ type FlowFilter struct {
 	//   TO             - match destination only
 	// Cannot combine FROM with service_names (services are always a
 	// destination-side concept).
-	Direction     FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Direction FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`
+	// Match flows by the outcome of the network policy rules recorded for them
+	// taking both ingress and egress network policy rule action into account
+	// (see NetworkPolicyOutcome). Every flow has exactly one outcome, so a flow
+	// allowed by an egress rule but dropped by an ingress rule is DENIED, and
+	// [NETWORK_POLICY_OUTCOME_UNPROTECTED,  NETWORK_POLICY_OUTCOME_ALLOWED]
+	// selects every flow that was not denied. This filter always matches the
+	// flow as a whole, whatever the direction. Rule actions are disclosed to
+	// every client that receives a record, so redaction never affects this
+	// filter; like every filter, it only ever narrows the records a stream is
+	// authorized to receive. NETWORK_POLICY_OUTCOME_UNSPECIFIED is rejected with
+	// INVALID_ARGUMENT, as is any value NetworkPolicyOutcome does not define.
+	NetworkPolicyOutcomes []NetworkPolicyOutcome `protobuf:"varint,8,rep,packed,name=network_policy_outcomes,json=networkPolicyOutcomes,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyOutcome" json:"network_policy_outcomes,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *FlowFilter) Reset() {
@@ -304,6 +384,13 @@ func (x *FlowFilter) GetDirection() FlowFilterDirection {
 		return x.Direction
 	}
 	return FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH
+}
+
+func (x *FlowFilter) GetNetworkPolicyOutcomes() []NetworkPolicyOutcome {
+	if x != nil {
+		return x.NetworkPolicyOutcomes
+	}
+	return nil
 }
 
 // GetFlowsRequest is sent once by the client when opening a GetFlows stream.
@@ -628,7 +715,7 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"$pkg/apis/flow/v1alpha1/service.proto\x12'antrea_io.antrea.pkg.apis.flow.v1alpha1\x1a!pkg/apis/flow/v1alpha1/flow.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"T\n" +
 	"\rExportRequest\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\"\x10\n" +
-	"\x0eExportResponse\"\xdc\x02\n" +
+	"\x0eExportResponse\"\xd3\x03\n" +
 	"\n" +
 	"FlowFilter\x12\x1e\n" +
 	"\n" +
@@ -640,7 +727,8 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\n" +
 	"flow_types\x18\x05 \x03(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\tflowTypes\x12\x10\n" +
 	"\x03ips\x18\x06 \x03(\tR\x03ips\x12Z\n" +
-	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\xd8\x02\n" +
+	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\x12u\n" +
+	"\x17network_policy_outcomes\x18\b \x03(\x0e2=.antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyOutcomeR\x15networkPolicyOutcomes\"\xd8\x02\n" +
 	"\x0fGetFlowsRequest\x12M\n" +
 	"\afilters\x18\x01 \x03(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterR\afilters\x120\n" +
 	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x1b\n" +
@@ -661,7 +749,12 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\x13FlowFilterDirection\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +
-	"\x18FLOW_FILTER_DIRECTION_TO\x10\x022\x90\x01\n" +
+	"\x18FLOW_FILTER_DIRECTION_TO\x10\x02*\xad\x01\n" +
+	"\x14NetworkPolicyOutcome\x12&\n" +
+	"\"NETWORK_POLICY_OUTCOME_UNSPECIFIED\x10\x00\x12&\n" +
+	"\"NETWORK_POLICY_OUTCOME_UNPROTECTED\x10\x01\x12\"\n" +
+	"\x1eNETWORK_POLICY_OUTCOME_ALLOWED\x10\x02\x12!\n" +
+	"\x1dNETWORK_POLICY_OUTCOME_DENIED\x10\x032\x90\x01\n" +
 	"\x11FlowExportService\x12{\n" +
 	"\x06Export\x126.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest\x1a7.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse(\x012\x97\x01\n" +
 	"\x11FlowStreamService\x12\x81\x01\n" +
@@ -679,38 +772,40 @@ func file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescData
 }
 
-var file_pkg_apis_flow_v1alpha1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pkg_apis_flow_v1alpha1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_pkg_apis_flow_v1alpha1_service_proto_goTypes = []any{
 	(FlowFilterDirection)(0),      // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
-	(*ExportRequest)(nil),         // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	(*ExportResponse)(nil),        // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	(*FlowFilter)(nil),            // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
-	(*GetFlowsRequest)(nil),       // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
-	(*ResumeToken)(nil),           // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
-	(*GetFlowsResponse)(nil),      // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	(*Flow)(nil),                  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	(FlowType)(0),                 // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(NetworkPolicyOutcome)(0),     // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyOutcome
+	(*ExportRequest)(nil),         // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	(*ExportResponse)(nil),        // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	(*FlowFilter)(nil),            // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
+	(*GetFlowsRequest)(nil),       // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	(*ResumeToken)(nil),           // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	(*GetFlowsResponse)(nil),      // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	(*Flow)(nil),                  // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	(FlowType)(0),                 // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
 }
 var file_pkg_apis_flow_v1alpha1_service_proto_depIdxs = []int32{
-	7,  // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	8,  // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	8,  // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	9,  // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
 	0,  // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
-	3,  // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
-	9,  // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
-	5,  // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.resume:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
-	7,  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	5,  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.resume_token:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
-	1,  // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	4,  // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
-	2,  // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	6,  // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	10, // [10:12] is the sub-list for method output_type
-	8,  // [8:10] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	1,  // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.network_policy_outcomes:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyOutcome
+	4,  // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
+	10, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
+	6,  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.resume:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	8,  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	6,  // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.resume_token:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	2,  // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	5,  // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	3,  // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	7,  // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_service_proto_init() }
@@ -724,7 +819,7 @@ func file_pkg_apis_flow_v1alpha1_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc), len(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   2,
