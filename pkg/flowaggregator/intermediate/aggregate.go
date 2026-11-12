@@ -538,7 +538,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	// (see isSourceNodeFromExternalFlow). When that record is the incoming one, restore these
 	// fields on the correlated record so the exported flow reports the external client as the
 	// source. When the records arrive in the opposite order, the correlated record is already
-	// the ingress-Node record and these fields are unchanged.
+	// the ingress-Node record and these fields are unchanged. When the source is the host network
+	// of the source Node, the addresses are the same on both records, and only the FlowType (and
+	// the source Node name, merged above) is restored.
 	if isSourceNodeFromExternalFlow(incomingRecord) {
 		existingRecord.Ip.Source = incomingRecord.Ip.Source
 		existingRecord.Transport.SourcePort = incomingRecord.Transport.SourcePort
@@ -765,17 +767,30 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 	return existingVal, firstFromNode
 }
 
-// isSourceNodeFromExternalFlow returns true for the ingress-Node half of an inter-Node
-// "from external" flow. This record is exported by the Node that received the connection from an
-// external client and source-NAT'd it towards a Pod running on another (destination) Node: its
-// FlowType is FROM_EXTERNAL, it carries the ProxySnat address/port applied by the gateway, and
-// its destination Pod is empty because the Pod is local to the destination Node. A single-Node
-// "from external" flow (the Pod is local) has its destination Pod set and is not matched here.
+// isSourceNodeFromExternalFlow returns true for the source-Node half of an inter-Node
+// "from external" flow, i.e., of an inter-Node flow whose source is not a Pod. Its FlowType is
+// FROM_EXTERNAL, and its destination Pod is empty because the Pod is local to the destination
+// Node. A single-Node "from external" flow (the Pod is local) has its destination Pod set and is
+// not matched here. There are two kinds of such records:
+//   - The record exported by the Node that received the connection from an external client and
+//     source-NAT'd it towards the destination Node. It carries the ProxySnat address/port applied
+//     by the gateway.
+//   - The record exported by the Node whose host network initiated the connection (e.g., a
+//     hostNetwork Pod), using the IP of its gateway as the source address. No SNAT is applied, and
+//     the record has no source Pod, but carries the name of the source Node.
 func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
-	return record.K8S != nil &&
-		record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL &&
-		record.K8S.DestinationPodName == "" &&
-		len(record.ProxySnatIp) > 0
+	if record.K8S == nil ||
+		record.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL ||
+		record.K8S.DestinationPodName != "" {
+		return false
+	}
+	return len(record.ProxySnatIp) > 0 || isFromSourceNodeHostNetwork(record)
+}
+
+// isFromSourceNodeHostNetwork returns true if the source of the record is the host network of the
+// source Node, which the FlowExporter reports by setting the source Node name without a source Pod.
+func isFromSourceNodeHostNetwork(record *flowpb.Flow) bool {
+	return record.K8S.SourcePodName == "" && record.K8S.SourceNodeName != ""
 }
 
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
@@ -812,11 +827,13 @@ func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 // the gateway's ProxySnat address/port), so the two Nodes only agree on the post-SNAT 5-tuple. We
 // therefore key the ingress-Node record on its ProxySnat address/port rather than the external
 // client's address/port, so that both halves land under the same key. The external client's
-// address/port are restored on the merged record by correlateRecords.
+// address/port are restored on the merged record by correlateRecords. When the connection was
+// initiated by the host network of the source Node, no SNAT is applied and both Nodes observe the
+// same 5-tuple, so the record is keyed on its own source address/port.
 func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	source := net.IP(record.Ip.Source).String()
 	sourcePort := uint16(record.Transport.SourcePort)
-	if isSourceNodeFromExternalFlow(record) {
+	if isSourceNodeFromExternalFlow(record) && len(record.ProxySnatIp) > 0 {
 		source = net.IP(record.ProxySnatIp).String()
 		sourcePort = uint16(record.ProxySnatPort)
 	}

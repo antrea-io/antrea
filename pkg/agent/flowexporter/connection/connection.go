@@ -106,6 +106,10 @@ type Connection struct {
 	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
 	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
 	IsFromExternal bool
+	// IsFromHostNetwork is set to true by the connection store when this connection was initiated
+	// by the host network stack of this Node (e.g., by kubelet, or by a hostNetwork Pod) rather
+	// than by a Pod. The source address of such a connection is the IP of this Node's gateway.
+	IsFromHostNetwork bool
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
