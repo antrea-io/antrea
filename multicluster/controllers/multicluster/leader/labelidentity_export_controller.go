@@ -85,8 +85,12 @@ func NewLabelIdentityExportReconciler(
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
 func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	clusterID, labelHash, err := parseLabelIdentityExportNamespacedName(req.NamespacedName)
+	if err != nil {
+		klog.ErrorS(err, "Failed to parse ResourceExport name", "resourceexport", req.NamespacedName)
+		return ctrl.Result{}, nil
+	}
 	var resExport mcsv1alpha1.ResourceExport
-	clusterID, labelHash := parseLabelIdentityExportNamespacedName(req.NamespacedName)
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("ResourceExport is deleted", "resourceexport", req.NamespacedName, "cluster", clusterID)
@@ -304,11 +308,14 @@ func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alp
 
 // parseLabelIdentityExportNamespacedName gets the clusterID and label identity
 // hash from the API request.
-func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName) (string, string) {
+func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName) (string, string, error) {
 	lastIdx := strings.LastIndex(namespacedName.Name, "-")
+	if lastIdx <= 0 || lastIdx == len(namespacedName.Name)-1 {
+		return "", "", fmt.Errorf("invalid ResourceExport name %q: expected format '<clusterID>-<labelHash>'", namespacedName.Name)
+	}
 	clusterID := namespacedName.Name[:lastIdx]
 	labelHash := namespacedName.Name[lastIdx+1:]
-	return clusterID, labelHash
+	return clusterID, labelHash, nil
 }
 
 // idAllocator allocates an unique uint32 ID for each label identity.
