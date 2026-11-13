@@ -23,7 +23,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,8 +93,8 @@ type endpoint struct {
 	// breaks while in use. It is closed once the tunnel has ended, without delivering anything if
 	// the tunnel ended on purpose, that is, by release. It is nil when observe connects directly.
 	lost <-chan error
-	// release frees what was opened to reach addr, such as a tunnel. It is safe to call more than
-	// once.
+	// release frees what was opened to reach addr, such as a tunnel. Callers must call it exactly
+	// once; calling it again on a tunnel panics.
 	release func()
 }
 
@@ -232,8 +231,7 @@ func spdyTunnel(ctx context.Context, restConfig *rest.Config, namespace, podName
 		}
 	}()
 
-	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(func() { close(stopCh) }) }
+	release := func() { close(stopCh) }
 	return &endpoint{addr: localAddr, lost: lost, release: release}, nil
 }
 
