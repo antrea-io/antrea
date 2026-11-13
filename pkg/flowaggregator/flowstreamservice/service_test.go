@@ -356,6 +356,87 @@ func TestMatchFilter_FlowTypes(t *testing.T) {
 	assert.False(t, matchFlow(inter, filters, time.Time{}))
 }
 
+func TestMatchFilter_NetworkPolicyRuleActions(t *testing.T) {
+	const (
+		none   = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION
+		allow  = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW
+		drop   = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		reject = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	)
+	newActionFlow := func(ingress, egress flowpb.NetworkPolicyRuleAction) *flowpb.Flow {
+		k8s := newPodK8S("src-ns", "src", "dst-ns", "dst")
+		k8s.IngressNetworkPolicyRuleAction = ingress
+		k8s.EgressNetworkPolicyRuleAction = egress
+		return newFlow("f", k8s)
+	}
+	tests := []struct {
+		name      string
+		flow      *flowpb.Flow
+		actions   []flowpb.NetworkPolicyRuleAction
+		direction flowpb.FlowFilterDirection
+		want      bool
+	}{
+		{name: "no actions in filter matches any flow", flow: newActionFlow(none, none), want: true},
+		{name: "allow matches ingress allow", flow: newActionFlow(allow, none), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: true},
+		{name: "allow matches egress allow", flow: newActionFlow(none, allow), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: true},
+		{name: "allow does not match flow without rule", flow: newActionFlow(none, none), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: false},
+		{name: "allow does not match drop", flow: newActionFlow(drop, none), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: false},
+		{name: "drop matches ingress drop", flow: newActionFlow(drop, none), actions: []flowpb.NetworkPolicyRuleAction{drop}, want: true},
+		{name: "drop matches egress drop", flow: newActionFlow(none, drop), actions: []flowpb.NetworkPolicyRuleAction{drop}, want: true},
+		{name: "drop does not match reject", flow: newActionFlow(reject, none), actions: []flowpb.NetworkPolicyRuleAction{drop}, want: false},
+		{name: "reject matches egress reject", flow: newActionFlow(none, reject), actions: []flowpb.NetworkPolicyRuleAction{reject}, want: true},
+		{name: "drop or reject matches ingress reject", flow: newActionFlow(reject, none), actions: []flowpb.NetworkPolicyRuleAction{drop, reject}, want: true},
+		{name: "drop or reject does not match allow", flow: newActionFlow(allow, allow), actions: []flowpb.NetworkPolicyRuleAction{drop, reject}, want: false},
+		{name: "allow matches allowed on both sides", flow: newActionFlow(allow, allow), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: true},
+		{name: "allowed by egress, dropped by ingress does not match allow", flow: newActionFlow(drop, allow), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: false},
+		{name: "allowed by egress, rejected by ingress does not match allow", flow: newActionFlow(reject, allow), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: false},
+		{name: "allowed by ingress, dropped by egress does not match allow", flow: newActionFlow(allow, drop), actions: []flowpb.NetworkPolicyRuleAction{allow}, want: false},
+		{name: "allowed by egress, dropped by ingress matches drop", flow: newActionFlow(drop, allow), actions: []flowpb.NetworkPolicyRuleAction{drop}, want: true},
+		{name: "allowed by egress, dropped by ingress does not match reject", flow: newActionFlow(drop, allow), actions: []flowpb.NetworkPolicyRuleAction{reject}, want: false},
+		{name: "allow or drop matches allowed by egress, dropped by ingress", flow: newActionFlow(drop, allow), actions: []flowpb.NetworkPolicyRuleAction{allow, drop}, want: true},
+		{
+			name:      "FROM direction still matches ingress action",
+			flow:      newActionFlow(drop, none),
+			actions:   []flowpb.NetworkPolicyRuleAction{drop},
+			direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+			want:      true,
+		},
+		{
+			name:      "TO direction still matches egress action",
+			flow:      newActionFlow(none, reject),
+			actions:   []flowpb.NetworkPolicyRuleAction{reject},
+			direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO,
+			want:      true,
+		},
+		{name: "flow without Kubernetes metadata never matches", flow: newFlow("f", nil), actions: []flowpb.NetworkPolicyRuleAction{allow, drop, reject}, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := &flowpb.FlowFilter{NetworkPolicyRuleActions: tc.actions, Direction: tc.direction}
+			assert.Equal(t, tc.want, matchFlow(tc.flow, mustParseFilters(filter), time.Time{}))
+		})
+	}
+}
+
+func TestMatchFilter_NetworkPolicyRuleActionsAndEndpointCriteria(t *testing.T) {
+	// The rule action is matched against the flow as a whole, not against the endpoint that the
+	// directional criteria select: a flow from "frontend" dropped by the destination's ingress
+	// policy is a dropped flow from "frontend".
+	k8s := newPodK8S("frontend", "client", "backend", "server")
+	k8s.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	f := newFlow("f", k8s)
+
+	filter := &flowpb.FlowFilter{
+		Namespaces:               []string{"frontend"},
+		Direction:                flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+		NetworkPolicyRuleActions: []flowpb.NetworkPolicyRuleAction{flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP},
+	}
+	assert.True(t, matchFlow(f, mustParseFilters(filter), time.Time{}))
+
+	filter.Namespaces = []string{"other"}
+	assert.False(t, matchFlow(f, mustParseFilters(filter), time.Time{}), "namespaces must still apply alongside the rule action")
+}
+
 func TestMatchFilter_ServiceNames(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1070,6 +1151,65 @@ func TestGetFlows_FilterByServiceName(t *testing.T) {
 	})
 }
 
+func TestGetFlows_FilterByNetworkPolicyRuleAction(t *testing.T) {
+	const (
+		allow  = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW
+		drop   = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		reject = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	)
+	tests := []struct {
+		name    string
+		actions []flowpb.NetworkPolicyRuleAction
+		wantIDs []string
+	}{
+		{name: "denied", actions: []flowpb.NetworkPolicyRuleAction{drop, reject}, wantIDs: []string{"dropped-ingress", "rejected-egress", "allowed-egress-dropped-ingress"}},
+		{name: "allowed", actions: []flowpb.NetworkPolicyRuleAction{allow}, wantIDs: []string{"allowed"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+				t.Cleanup(func() { buf.Shutdown() })
+
+				for _, f := range []struct {
+					id              string
+					ingress, egress flowpb.NetworkPolicyRuleAction
+				}{
+					{id: "unprotected"},
+					{id: "allowed", ingress: allow},
+					{id: "dropped-ingress", ingress: drop},
+					{id: "rejected-egress", egress: reject},
+					{id: "allowed-egress-dropped-ingress", ingress: drop, egress: allow},
+				} {
+					k8s := newPodK8S("ns", "src", "ns", "dst")
+					k8s.IngressNetworkPolicyRuleAction = f.ingress
+					k8s.EgressNetworkPolicyRuleAction = f.egress
+					buf.Produce(newFlow(f.id, k8s))
+				}
+
+				svc := newTestService(buf)
+				stream := newFakeStream(t.Context())
+				req := &flowpb.GetFlowsRequest{
+					Follow:  false,
+					Filters: []*flowpb.FlowFilter{{NetworkPolicyRuleActions: tc.actions}},
+				}
+
+				errCh := make(chan error, 1)
+				go func() { errCh <- svc.GetFlows(req, stream) }()
+				time.Sleep(2 * exporter.ConsumeDeadline)
+				synctest.Wait()
+
+				require.NoError(t, <-errCh)
+				var gotIDs []string
+				for _, f := range collectFlows(stream.responses) {
+					gotIDs = append(gotIDs, f.GetId())
+				}
+				assert.Equal(t, tc.wantIDs, gotIDs)
+			})
+		})
+	}
+}
+
 func TestGetFlows_FilterByNamespace(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
@@ -1252,6 +1392,34 @@ func TestGetFlows_ServiceNamesWithFromDirection(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, st.Code())
 }
 
+func TestGetFlows_InvalidNetworkPolicyRuleAction(t *testing.T) {
+	for _, action := range []flowpb.NetworkPolicyRuleAction{
+		flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION,
+		flowpb.NetworkPolicyRuleAction(42),
+	} {
+		t.Run(action.String(), func(t *testing.T) {
+			buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+			t.Cleanup(func() { buf.Shutdown() })
+
+			svc := newTestService(buf)
+			stream := newFakeStream(context.Background())
+			req := &flowpb.GetFlowsRequest{
+				Filters: []*flowpb.FlowFilter{{NetworkPolicyRuleActions: []flowpb.NetworkPolicyRuleAction{
+					flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP,
+					action,
+				}}},
+			}
+
+			err := svc.GetFlows(req, stream)
+			require.Error(t, err)
+			st, ok := status.FromError(err)
+			require.True(t, ok)
+			assert.Equal(t, codes.InvalidArgument, st.Code())
+			assert.Empty(t, stream.responses)
+		})
+	}
+}
+
 func TestGetFlows_FollowContextCancelled(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
@@ -1341,6 +1509,59 @@ func TestGetFlows_ScopeIsAuthorized(t *testing.T) {
 		assert.Equal(t, "source-pod", got[0].GetK8S().GetSourcePodName())
 		assert.Empty(t, got[0].GetK8S().GetDestinationPodName())
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetDestinationDisclosure())
+	})
+}
+
+// The rule action filter only narrows what authorization lets through: a stream opened for the
+// destination's Namespace never receives a connection that was denied before it reached that
+// Namespace, so filtering for denied flows cannot surface it either.
+func TestGetFlows_RuleActionFilterOnlyMatchesAuthorizedRecords(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		denied := func(id string, set func(k *flowpb.Kubernetes)) *flowpb.Flow {
+			f := podFlow("ns-a", "ns-b")
+			f.Id = id
+			f.EndTs = timestamppb.New(time.Now())
+			set(f.K8S)
+			return f
+		}
+		buf.Produce(denied("dropped-by-source-egress", func(k *flowpb.Kubernetes) {
+			k.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+			k.EgressNetworkPolicyNamespace = "ns-a"
+			k.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		}))
+		buf.Produce(denied("dropped-by-cluster-policy", func(k *flowpb.Kubernetes) {
+			k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+			k.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		}))
+		buf.Produce(denied("dropped-by-destination-ingress", func(k *flowpb.Kubernetes) {
+			k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+			k.IngressNetworkPolicyNamespace = "ns-b"
+			k.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		}))
+
+		// The client may observe ns-b only, and holds nothing in ns-a.
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-b"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+		req := &flowpb.GetFlowsRequest{
+			Namespaces: []string{"ns-b"},
+			Filters: []*flowpb.FlowFilter{{NetworkPolicyRuleActions: []flowpb.NetworkPolicyRuleAction{
+				flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP,
+			}}},
+		}
+
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 1)
+		assert.Equal(t, "dropped-by-destination-ingress", got[0].GetId())
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetSourceDisclosure())
 	})
 }
 

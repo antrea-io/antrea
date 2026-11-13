@@ -111,6 +111,25 @@ message FlowFilter {
   // Cannot combine FROM with service_names (services are always a
   // destination-side concept).
   FlowFilterDirection direction = 7;
+  // Match flows by the overall outcome of the network policy rules applied to
+  // them, as recorded in ingress_network_policy_rule_action and
+  // egress_network_policy_rule_action.
+  //   DROP / REJECT - a rule with that action denied the flow, on either its
+  //                   ingress or its egress side.
+  //   ALLOW         - a rule allowed the flow, and no rule denied it.
+  // So [NETWORK_POLICY_RULE_ACTION_DROP, NETWORK_POLICY_RULE_ACTION_REJECT]
+  // selects every flow denied by a policy, whichever side denied it, and a
+  // flow allowed by an egress rule but dropped by an ingress rule matches
+  // NETWORK_POLICY_RULE_ACTION_DROP only. A flow that no rule applied to
+  // matches none of them. This filter always matches the flow as a whole,
+  // whatever the direction. Rule actions are disclosed to every client that
+  // receives a record, so redaction never affects this filter; like every
+  // filter, it only ever narrows the records a stream is authorized to
+  // receive.
+  //
+  // NETWORK_POLICY_RULE_ACTION_NO_ACTION is reserved, and is rejected with
+  // INVALID_ARGUMENT, as is any value NetworkPolicyRuleAction does not define.
+  repeated NetworkPolicyRuleAction network_policy_rule_actions = 8;
 }
 
 // GetFlowsRequest is sent once by the client when opening a GetFlows stream.
