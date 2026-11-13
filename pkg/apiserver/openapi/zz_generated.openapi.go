@@ -22,6 +22,7 @@ package openapi
 import (
 	v1beta2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	v1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	v1 "k8s.io/api/core/v1"
@@ -161,6 +162,19 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.TraceflowStatus{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref),
 		v1beta1.TransportHeader{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_TransportHeader(ref),
 		v1beta1.UDPHeader{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_UDPHeader(ref),
+		crdv1beta2.AppliedTo{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta2_AppliedTo(ref),
+		crdv1beta2.Bandwidth{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta2_Bandwidth(ref),
+		crdv1beta2.Egress{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta2_Egress(ref),
+		crdv1beta2.EgressList{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta2_EgressList(ref),
+		crdv1beta2.EgressSpec{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta2_EgressSpec(ref),
+		crdv1beta2.EgressStatus{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta2_EgressStatus(ref),
+		crdv1beta2.ExternalIPPool{}.OpenAPIModelName():                    schema_pkg_apis_crd_v1beta2_ExternalIPPool(ref),
+		crdv1beta2.ExternalIPPoolList{}.OpenAPIModelName():                schema_pkg_apis_crd_v1beta2_ExternalIPPoolList(ref),
+		crdv1beta2.ExternalIPPoolSpec{}.OpenAPIModelName():                schema_pkg_apis_crd_v1beta2_ExternalIPPoolSpec(ref),
+		crdv1beta2.ExternalIPPoolStatus{}.OpenAPIModelName():              schema_pkg_apis_crd_v1beta2_ExternalIPPoolStatus(ref),
+		crdv1beta2.IPPoolUsage{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta2_IPPoolUsage(ref),
+		crdv1beta2.IPRange{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta2_IPRange(ref),
+		crdv1beta2.SubnetInfo{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta2_SubnetInfo(ref),
 		v1alpha1.AntreaClusterNetworkPolicyStats{}.OpenAPIModelName():     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
 		v1alpha1.AntreaClusterNetworkPolicyStatsList{}.OpenAPIModelName(): schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
 		v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName():            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
@@ -3773,7 +3787,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 					},
 					"egressIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EgressIPs specifies multiple SNAT IP addresses for the selected workloads. Cannot be set with EgressIP.",
+							Description: "EgressIPs was added to support multiple SNAT IP addresses for the selected workloads. This field is currently not supported in v1beta1.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3795,7 +3809,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 					},
 					"externalIPPools": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the same index in EgressIPs and ExternalIPPools are correlated. Cannot be set with ExternalIPPool.",
+							Description: "ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the same index in EgressIPs and ExternalIPPools are correlated. Cannot be set with ExternalIPPool. This field is currently not supported in v1beta1.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6392,6 +6406,578 @@ func schema_pkg_apis_crd_v1beta1_UDPHeader(ref common.ReferenceCallback) common.
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_AppliedTo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AppliedTo describes the grouping selector of workloads in the AppliedTo field. When both selectors are specified, a Pod must match PodSelector and its Namespace must match NamespaceSelector.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"podSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodSelector selects Pods by their labels. If NamespaceSelector is omitted, matching Pods from all Namespaces are selected.",
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NamespaceSelector selects Namespaces by their labels. If PodSelector is omitted, all Pods from matching Namespaces are selected.",
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.LabelSelector{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_Bandwidth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Bandwidth defines the traffic rate and burst limits for an Egress.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"rate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rate specifies the maximum traffic rate, e.g. 300k, 10M.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"burst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Burst specifies the maximum burst size when traffic exceeds the rate, e.g. 300k, 10M.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"rate", "burst"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_Egress(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Egress defines which egress (SNAT) IPs traffic from the selected Pods to the external network should use.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(crdv1beta2.EgressSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(crdv1beta2.EgressStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.EgressSpec{}.OpenAPIModelName(), crdv1beta2.EgressStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_EgressList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(crdv1beta2.Egress{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.Egress{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_EgressSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EgressSpec defines the desired state for Egress.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"appliedTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AppliedTo selects Pods to which the Egress will be applied.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(crdv1beta2.AppliedTo{}.OpenAPIModelName()),
+						},
+					},
+					"egressIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressIPs specifies the SNAT IP addresses for the selected workloads. One address represents a single-stack Egress. Two addresses, one per IP family in either order, represent a dual-stack Egress. When IPFamilies is also specified, EgressIPs[i] must have the family IPFamilies[i]. When EgressIPs is not set, ExternalIPPool must be provided and the addresses will be allocated from the pool automatically.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"externalIPPool": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalIPPool specifies the IP Pool from which EgressIPs are allocated. If it is not set, EgressIPs must be specified and the addresses need to be manually assigned to a Node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ipFamilies": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "IPFamilies specifies the IP families when allocating EgressIPs, in either order. One family requests a single-stack Egress; two families request a dual-stack Egress. When both EgressIPs and IPFamilies are specified, they must have the same length and EgressIPs[i] must have the family IPFamilies[i]. When both fields are omitted, one IP is allocated from ExternalIPPool without a family preference.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+										Enum:    []interface{}{"", "IPv4", "IPv6"},
+									},
+								},
+							},
+						},
+					},
+					"bandwidth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Bandwidth specifies the rate limit of north-south egress traffic of this Egress.",
+							Ref:         ref(crdv1beta2.Bandwidth{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"appliedTo"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.AppliedTo{}.OpenAPIModelName(), crdv1beta2.Bandwidth{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_EgressStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EgressStatus represents the current status of an Egress.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"egressNode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressNode is the Node which hosts the effective Egress IPs. For a dual-stack Egress, the IPv4 and IPv6 addresses must be scheduled together on the same Node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egressIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressIPs are the effective Egress IPs for the selected workloads, in the same order as spec.egressIPs. It may be empty when no IP has been allocated or assigned yet.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions describe the current state of the Egress. Each condition type may appear at most once.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_ExternalIPPool(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be allocated to the Egress resources as the Egress IPs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(crdv1beta2.ExternalIPPoolSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(crdv1beta2.ExternalIPPoolStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.ExternalIPPoolSpec{}.OpenAPIModelName(), crdv1beta2.ExternalIPPoolStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_ExternalIPPoolList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(crdv1beta2.ExternalIPPool{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.ExternalIPPool{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_ExternalIPPoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExternalIPPoolSpec defines the desired state for ExternalIPPool.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipRanges": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "IPRanges specifies the IP address ranges in this pool, each represented by a CIDR or an inclusive start and end. The ranges may contain IPv4 addresses, IPv6 addresses, or both.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(crdv1beta2.IPRange{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"subnets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Subnets specifies the subnet attributes for each IP family. At most one entry per family is allowed. When omitted, the allocated IPs are assumed to be on the same subnet as the hosting Node, and no separate subnet gateway or VLAN is configured.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(crdv1beta2.SubnetInfo{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector selects the Nodes to which the external IPs can be assigned. An empty selector matches all Nodes.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"ipRanges", "nodeSelector"},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.IPRange{}.OpenAPIModelName(), crdv1beta2.SubnetInfo{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_ExternalIPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExternalIPPoolStatus represents the current status of an ExternalIPPool.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"usage": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(crdv1beta2.IPPoolUsage{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			crdv1beta2.IPPoolUsage{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_IPPoolUsage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPPoolUsage reports the capacity and allocation usage of an IP pool.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"total": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Total is the total number of IPs.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"used": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Used is the number of allocated IPs.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_IPRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CIDR specifies this range in CIDR notation, e.g. 10.10.10.0/24.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"start": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Start specifies the start IP of the range, e.g. 10.10.20.5, inclusive.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"end": {
+						SchemaProps: spec.SchemaProps{
+							Description: "End specifies the end IP of the range, e.g. 10.10.20.20, inclusive.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta2_SubnetInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SubnetInfo specifies the subnet attributes for one IP family of an ExternalIPPool's IP ranges. The IP family is determined by the Gateway address.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"gateway": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Gateway is the gateway IP address for this subnet, e.g. 10.10.1.1.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prefixLength": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrefixLength is the subnet prefix length, e.g. 24.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vlan": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VLAN is the VLAN ID for this subnet. It defaults to 0. Valid values are 0 through 4094.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"gateway", "prefixLength"},
 			},
 		},
 	}

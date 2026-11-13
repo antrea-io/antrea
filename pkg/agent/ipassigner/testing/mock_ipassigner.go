@@ -27,7 +27,7 @@ package testing
 import (
 	reflect "reflect"
 
-	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -56,7 +56,7 @@ func (m *MockIPAssigner) EXPECT() *MockIPAssignerMockRecorder {
 }
 
 // AssignIP mocks base method.
-func (m *MockIPAssigner) AssignIP(ip string, subnetInfo *v1beta1.SubnetInfo, forceAdvertise bool) (bool, error) {
+func (m *MockIPAssigner) AssignIP(ip string, subnetInfo *v1beta2.SubnetInfo, forceAdvertise bool) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignIP", ip, subnetInfo, forceAdvertise)
 	ret0, _ := ret[0].(bool)
@@ -71,10 +71,10 @@ func (mr *MockIPAssignerMockRecorder) AssignIP(ip, subnetInfo, forceAdvertise an
 }
 
 // AssignedIPs mocks base method.
-func (m *MockIPAssigner) AssignedIPs() map[string]*v1beta1.SubnetInfo {
+func (m *MockIPAssigner) AssignedIPs() map[string]*v1beta2.SubnetInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignedIPs")
-	ret0, _ := ret[0].(map[string]*v1beta1.SubnetInfo)
+	ret0, _ := ret[0].(map[string]*v1beta2.SubnetInfo)
 	return ret0
 }
 
@@ -85,7 +85,7 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 }
 
 // GetInterfaceID mocks base method.
-func (m *MockIPAssigner) GetInterfaceID(subnetInfo *v1beta1.SubnetInfo) (int, bool) {
+func (m *MockIPAssigner) GetInterfaceID(subnetInfo *v1beta2.SubnetInfo) (int, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetInterfaceID", subnetInfo)
 	ret0, _ := ret[0].(int)
@@ -100,7 +100,7 @@ func (mr *MockIPAssignerMockRecorder) GetInterfaceID(subnetInfo any) *gomock.Cal
 }
 
 // InitIPs mocks base method.
-func (m *MockIPAssigner) InitIPs(arg0 map[string]*v1beta1.SubnetInfo) error {
+func (m *MockIPAssigner) InitIPs(arg0 map[string]*v1beta2.SubnetInfo) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InitIPs", arg0)
 	ret0, _ := ret[0].(error)

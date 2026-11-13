@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -25,6 +26,54 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
+
+type warningHandlerFunc func(context.Context, int, string, string)
+
+func (h warningHandlerFunc) HandleWarningHeaderWithContext(ctx context.Context, code int, agent, message string) {
+	h(ctx, code, agent, message)
+}
+
+func TestEgressWarningHandler(t *testing.T) {
+	const egressWarning = "crd.antrea.io/v1beta1 Egress is deprecated; use crd.antrea.io/v1beta2 Egress"
+	const poolWarning = "crd.antrea.io/v1beta1 ExternalIPPool is deprecated; use crd.antrea.io/v1beta2 ExternalIPPool"
+	for _, tc := range []struct {
+		name       string
+		code       int
+		message    string
+		suppressed bool
+	}{
+		{name: "Egress", code: 299, message: egressWarning, suppressed: true},
+		{name: "ExternalIPPool", code: 299, message: poolWarning, suppressed: true},
+		{name: "other resource", code: 299, message: "crd.antrea.io/v1beta1 IPPool is deprecated"},
+		{name: "other version", code: 299, message: "crd.antrea.io/v1beta2 Egress is deprecated"},
+		{name: "other warning", code: 299, message: "unknown field spec.example"},
+		{name: "extra suffix", code: 299, message: egressWarning + "; additional warning"},
+		{name: "extra prefix", code: 299, message: "additional warning; " + poolWarning},
+		{name: "other code", code: 199, message: egressWarning},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			handler := egressWarningHandler{delegate: warningHandlerFunc(func(actualCtx context.Context, code int, agent, message string) {
+				calls++
+				assert.Same(t, ctx, actualCtx)
+				assert.Equal(t, tc.code, code)
+				assert.Equal(t, "kube-apiserver", agent)
+				assert.Equal(t, tc.message, message)
+			})}
+			// Re-established watches produce the same warnings repeatedly.
+			for range 2 {
+				handler.HandleWarningHeaderWithContext(ctx, tc.code, "kube-apiserver", tc.message)
+			}
+			if tc.suppressed {
+				assert.Zero(t, calls)
+			} else {
+				assert.Equal(t, 2, calls)
+			}
+		})
+	}
+}
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {
 	testCases := []struct {

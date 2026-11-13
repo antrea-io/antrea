@@ -4,12 +4,15 @@ metadata:
   name: egresses.crd.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: crd.antrea.io
   versions:
     - name: v1beta1
       served: true
       storage: true
+      deprecated: true
+      deprecationWarning: crd.antrea.io/v1beta1 Egress is deprecated; use crd.antrea.io/v1beta2 Egress
       schema:
         openAPIV3Schema:
           type: object
@@ -154,6 +157,254 @@ spec:
         type: string
       subresources:
         status: {}
+    - name: v1beta2
+      served: true
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+          - spec
+          properties:
+            spec:
+              type: object
+              required:
+              - appliedTo
+              anyOf:
+              - required:
+                - egressIPs
+              - required:
+                - externalIPPool
+              properties:
+                appliedTo:
+                  type: object
+                  properties:
+                    podSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                                pattern: '^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$'
+                                allOf:
+                                  - pattern: '^([^/]{1,253}/)?[^/]+$'
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                  maxLength: 63
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                type: array
+                            type: object
+                            required:
+                              - key
+                              - operator
+                            oneOf:
+                              - properties:
+                                  operator:
+                                    enum:
+                                      - In
+                                      - NotIn
+                                  values:
+                                    minItems: 1
+                                required:
+                                  - values
+                              - properties:
+                                  operator:
+                                    enum:
+                                      - Exists
+                                      - DoesNotExist
+                                  values:
+                                    maxItems: 0
+                          type: array
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                            maxLength: 63
+                            pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                          type: object
+                    namespaceSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                                pattern: '^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$'
+                                allOf:
+                                  - pattern: '^([^/]{1,253}/)?[^/]+$'
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                  maxLength: 63
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                type: array
+                            type: object
+                            required:
+                              - key
+                              - operator
+                            oneOf:
+                              - properties:
+                                  operator:
+                                    enum:
+                                      - In
+                                      - NotIn
+                                  values:
+                                    minItems: 1
+                                required:
+                                  - values
+                              - properties:
+                                  operator:
+                                    enum:
+                                      - Exists
+                                      - DoesNotExist
+                                  values:
+                                    maxItems: 0
+                          type: array
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                            maxLength: 63
+                            pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                          type: object
+                egressIPs:
+                  type: array
+                  minItems: 1
+                  maxItems: 2
+                  x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                  - message: egressIPs must not contain duplicate IP families
+                    rule: "self.size() < 2 || self[0].contains(':') != self[1].contains(':')"
+                  items:
+                    type: string
+                    oneOf:
+                    - format: ipv4
+                    - format: ipv6
+                externalIPPool:
+                  type: string
+                ipFamilies:
+                  description: >-
+                    IPFamilies specifies the IP families when allocating
+                    EgressIPs, in either order. When EgressIPs is also specified,
+                    the lists must have the same length and EgressIPs[i] must
+                    have the family IPFamilies[i].
+                  type: array
+                  minItems: 1
+                  maxItems: 2
+                  x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                  - message: ipFamilies must not contain duplicate entries
+                    rule: "self.size() < 2 || self[0] != self[1]"
+                  items:
+                    type: string
+                    enum:
+                    - IPv4
+                    - IPv6
+                bandwidth:
+                  type: object
+                  required:
+                    - rate
+                    - burst
+                  properties:
+                    rate:
+                      type: string
+                    burst:
+                      type: string
+            status:
+              type: object
+              properties:
+                egressNode:
+                  type: string
+                egressIPs:
+                  type: array
+                  maxItems: 2
+                  x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                  - message: egressIPs must not contain duplicate IP families
+                    rule: "self.size() < 2 || self[0].contains(':') != self[1].contains(':')"
+                  items:
+                    type: string
+                    oneOf:
+                    - format: ipv4
+                    - format: ipv6
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                  - type
+                  items:
+                    type: object
+                    required:
+                    - type
+                    - status
+                    - lastTransitionTime
+                    - reason
+                    - message
+                    properties:
+                      type:
+                        type: string
+                        maxLength: 316
+                        pattern: '^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$'
+                      status:
+                        type: string
+                        enum:
+                        - 'True'
+                        - 'False'
+                        - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                        minLength: 1
+                        maxLength: 1024
+                        pattern: '^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$'
+                      message:
+                        type: string
+                        maxLength: 32768
+      additionalPrinterColumns:
+      - description: The effective SNAT IP addresses for the selected workloads.
+        jsonPath: .status.egressIPs
+        name: EgressIPs
+        type: string
+      - jsonPath: .metadata.creationTimestamp
+        name: Age
+        type: date
+      - description: The Owner Node of egress IP
+        jsonPath: .status.egressNode
+        name: Node
+        type: string
+      subresources:
+        status: {}
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: ["v1", "v1beta1"]
+      clientConfig:
+        service:
+          name: "antrea"
+          namespace: "kube-system"
+          path: "/convert/egress"
   scope: Cluster
   names:
     plural: egresses

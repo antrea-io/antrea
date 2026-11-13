@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	crdv1alpha1.AddToScheme,
 	crdv1alpha2.AddToScheme,
 	crdv1beta1.AddToScheme,
+	crdv1beta2.AddToScheme,
 	statsv1alpha1.AddToScheme,
 	systemv1beta1.AddToScheme,
 }

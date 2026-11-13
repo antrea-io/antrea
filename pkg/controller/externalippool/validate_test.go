@@ -16,26 +16,78 @@ package externalippool
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	crdvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
+	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	schemacel "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	celconfig "k8s.io/apiserver/pkg/apis/cel"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/yaml"
 
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/v2/pkg/controller/crdconversion"
 )
 
-func marshal(object runtime.Object) []byte {
-	raw, _ := json.Marshal(object)
+// marshal encodes API objects with their registered apiVersion and kind.
+func marshal(t *testing.T, object runtime.Object) []byte {
+	t.Helper()
+	kinds, _, err := scheme.Scheme.ObjectKinds(object)
+	require.NoError(t, err)
+	require.Len(t, kinds, 1)
+	raw, err := runtime.Encode(scheme.Codecs.LegacyCodec(kinds[0].GroupVersion()), object)
+	require.NoError(t, err)
 	return raw
 }
 
-func mutateExternalIPPool(pool *crdv1b1.ExternalIPPool, mutate func(*crdv1b1.ExternalIPPool)) *crdv1b1.ExternalIPPool {
+func mutateExternalIPPool(pool *crdv1b2.ExternalIPPool, mutate func(*crdv1b2.ExternalIPPool)) *crdv1b2.ExternalIPPool {
 	mutate(pool)
 	return pool
+}
+
+func TestValidateExternalIPPoolUnsupportedAPIVersion(t *testing.T) {
+	for _, version := range []string{"", "v1alpha1"} {
+		for _, operation := range []admv1.Operation{admv1.Create, admv1.Update, admv1.Delete} {
+			t.Run(fmt.Sprintf("%q/%s", version, operation), func(t *testing.T) {
+				c := newController(nil)
+				pool := newExternalIPPool("pool", "192.0.2.0/24", "", "")
+				pool.APIVersion, pool.Kind = crdv1b2.SchemeGroupVersion.String(), "ExternalIPPool"
+				if version != "" {
+					pool.APIVersion = "crd.antrea.io/" + version
+				}
+				// Encode directly to preserve the deliberately unsupported version.
+				raw, err := json.Marshal(pool)
+				require.NoError(t, err)
+				request := &admv1.AdmissionRequest{
+					Operation: operation,
+					Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: version, Resource: "externalippools"},
+				}
+				if operation != admv1.Delete {
+					request.Object.Raw = raw
+				}
+				if operation != admv1.Create {
+					request.OldObject.Raw = raw
+				}
+				response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: request})
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Equal(t, fmt.Sprintf("unsupported ExternalIPPool API version %q", version), response.Result.Message)
+			})
+		}
+	}
 }
 
 func TestControllerValidateExternalIPPool(t *testing.T) {
@@ -47,50 +99,69 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 		{
 			name: "CREATE operation without SubnetInfo should be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object:    runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
 			name: "CREATE operation with valid SubnetInfo should be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-						Gateway:      "10.10.0.1",
+				Object: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.0.1",
 						PrefixLength: 16,
-						VLAN:         2,
+						VLAN:         2}}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "CREATE operation with valid dual-stack SubnetInfo should be allowed",
+			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.Subnets = []crdv1b2.SubnetInfo{
+						{Gateway: "10.10.10.1", PrefixLength: 24, VLAN: 100},
+						{Gateway: "2001:db8:10::1", PrefixLength: 64, VLAN: 100},
 					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name: "Adding matched SubnetInfo should be allowed",
+			name: "Adding matched SubnetInfo should not be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
-				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
-					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-						Gateway:      "10.10.0.1",
+				OldObject: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+				Object: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.0.1",
 						PrefixLength: 16,
-						VLAN:         2,
-					}
+						VLAN:         2}}
 				}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "subnets cannot be added or removed through v1beta2"},
+			},
 		},
 		{
 			name: "Deleting IPRange should not be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				OldObject: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+				Object:    runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
@@ -102,19 +173,105 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 		{
 			name: "Adding IPRange should be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+				OldObject: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object:    runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv4 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b2.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv6 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b2.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "2001:db8:10::/64", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first dual-stack ranges to an empty pool with subnets should be allowed",
+			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b2.IPRange{}
+					pool.Spec.Subnets = []crdv1b2.SubnetInfo{
+						{Gateway: "10.10.10.1", PrefixLength: 24},
+						{Gateway: "2001:db8:10::1", PrefixLength: 64},
+					}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.Subnets = []crdv1b2.SubnetInfo{
+						{Gateway: "10.10.10.1", PrefixLength: 24},
+						{Gateway: "2001:db8:10::1", PrefixLength: 64},
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding an IP family should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object: runtime.RawExtension{Raw: marshal(t, mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "2001:db8:10::/64"})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IP families are immutable (old: [IPv4], new: [IPv4 IPv6])",
+				},
+			},
+		},
+		{
+			name: "v1beta1 keeps allowing an additional IP family",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: admv1.Update,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "externalippools"},
+				OldObject: runtime.RawExtension{Raw: marshal(t, &crdv1b1.ExternalIPPool{
+					TypeMeta: metav1.TypeMeta{APIVersion: crdv1b1.SchemeGroupVersion.String(), Kind: "ExternalIPPool"},
+					Spec:     crdv1b1.ExternalIPPoolSpec{IPRanges: []crdv1b1.IPRange{{CIDR: "10.10.10.0/24"}}},
+				})},
+				Object: runtime.RawExtension{Raw: marshal(t, &crdv1b1.ExternalIPPool{
+					TypeMeta: metav1.TypeMeta{APIVersion: crdv1b1.SchemeGroupVersion.String(), Kind: "ExternalIPPool"},
+					Spec:     crdv1b1.ExternalIPPoolSpec{IPRanges: []crdv1b1.IPRange{{CIDR: "10.10.10.0/24"}, {CIDR: "2001:db8:10::/64"}}},
+				})},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
 			name: "DELETE operation should be allowed",
 			request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Name:      "foo",
 				Operation: "DELETE",
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object:    runtime.RawExtension{Raw: marshal(t, newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
@@ -137,43 +294,380 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 	}
 }
 
+func TestValidateExternalIPPoolSubnetUpdate(t *testing.T) {
+	raw, err := os.ReadFile("../../../build/charts/antrea/crds/externalippool.yaml")
+	require.NoError(t, err)
+	var crd apiextensionsv1.CustomResourceDefinition
+	require.NoError(t, yaml.Unmarshal(raw, &crd))
+	apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(&crd)
+	var internalCRD apiextensions.CustomResourceDefinition
+	require.NoError(t, apiextensionsv1.Convert_v1_CustomResourceDefinition_To_apiextensions_CustomResourceDefinition(&crd, &internalCRD, nil))
+	require.Empty(t, crdvalidation.ValidateCustomResourceDefinition(t.Context(), &internalCRD))
+	var structuralSchema *schema.Structural
+	for _, version := range internalCRD.Spec.Versions {
+		if version.Name == crdv1b2.SchemeGroupVersion.Version {
+			structuralSchema, err = schema.NewStructural(version.Schema.OpenAPIV3Schema)
+			require.NoError(t, err)
+			break
+		}
+	}
+	require.NotNil(t, structuralSchema)
+	celValidator := schemacel.NewValidator(structuralSchema, true, celconfig.PerCallLimit)
+	require.NotNil(t, celValidator)
+
+	c := newController(nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	tests := []struct {
+		name      string
+		operation admv1.Operation
+		mutate    func(oldPool, newPool *crdv1b2.ExternalIPPool)
+		errMsg    string
+	}{
+		{
+			name:      "creating pool",
+			operation: admv1.Create,
+		},
+		{
+			name:      "creating pool without subnets",
+			operation: admv1.Create,
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets = nil
+			},
+		},
+		{
+			name: "updating pool without subnets",
+			mutate: func(oldPool, newPool *crdv1b2.ExternalIPPool) {
+				oldPool.Spec.Subnets = nil
+				newPool.Spec.Subnets = nil
+			},
+		},
+		{
+			name: "changing IPv4 gateway",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[0].Gateway = "192.0.2.2"
+			},
+			errMsg: "gateway 192.0.2.1 cannot be changed or removed through v1beta2",
+		},
+		{
+			name: "changing IPv6 gateway",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[1].Gateway = "2001:db8::2"
+			},
+			errMsg: "gateway 2001:db8::1 cannot be changed or removed through v1beta2",
+		},
+		{
+			name: "removing subnet configuration",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets = nil
+			},
+			errMsg: "subnets cannot be added or removed through v1beta2",
+		},
+		{
+			name: "removing one subnet from an empty pool",
+			mutate: func(oldPool, newPool *crdv1b2.ExternalIPPool) {
+				oldPool.Spec.IPRanges = nil
+				newPool.Spec.IPRanges = nil
+				newPool.Spec.Subnets = newPool.Spec.Subnets[:1]
+			},
+			errMsg: "subnets cannot be added or removed through v1beta2",
+		},
+		{
+			name: "reordering subnets",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[0], newPool.Spec.Subnets[1] = newPool.Spec.Subnets[1], newPool.Spec.Subnets[0]
+			},
+		},
+		{
+			name: "changing IPv6 gateway representation",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[1].Gateway = "2001:0db8::1"
+			},
+			errMsg: "gateway 2001:db8::1 cannot be changed or removed through v1beta2",
+		},
+		{
+			name: "adding initial subnet configuration",
+			mutate: func(oldPool, _ *crdv1b2.ExternalIPPool) {
+				oldPool.Spec.Subnets = nil
+			},
+			errMsg: "subnets cannot be added or removed through v1beta2",
+		},
+		{
+			name: "adding one subnet to an empty pool",
+			mutate: func(oldPool, newPool *crdv1b2.ExternalIPPool) {
+				oldPool.Spec.IPRanges = nil
+				newPool.Spec.IPRanges = nil
+				oldPool.Spec.Subnets = oldPool.Spec.Subnets[:1]
+			},
+			errMsg: "subnets cannot be added or removed through v1beta2",
+		},
+		{
+			name: "changing VLAN",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[0].VLAN = 20
+			},
+		},
+		{
+			name: "changing IPv4 prefix length",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[0].PrefixLength = 23
+			},
+			errMsg: "prefixLength for gateway 192.0.2.1 cannot be changed through v1beta2",
+		},
+		{
+			name: "narrowing IPv4 subnet while keeping all ranges within it",
+			mutate: func(oldPool, newPool *crdv1b2.ExternalIPPool) {
+				ipRange := crdv1b2.IPRange{Start: "192.0.2.2", End: "192.0.2.10"}
+				oldPool.Spec.IPRanges[0] = ipRange
+				newPool.Spec.IPRanges[0] = ipRange
+				newPool.Spec.Subnets[0].PrefixLength = 28
+			},
+			errMsg: "prefixLength for gateway 192.0.2.1 cannot be changed through v1beta2",
+		},
+		{
+			name: "changing IPv6 prefix length",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Spec.Subnets[1].PrefixLength = 63
+			},
+			errMsg: "prefixLength for gateway 2001:db8::1 cannot be changed through v1beta2",
+		},
+		{
+			name: "changing labels",
+			mutate: func(_, newPool *crdv1b2.ExternalIPPool) {
+				newPool.Labels = map[string]string{"updated": "true"}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldPool := newExternalIPPool("dual", "192.0.2.0/24", "", "")
+			oldPool.TypeMeta = metav1.TypeMeta{APIVersion: crdv1b2.SchemeGroupVersion.String(), Kind: "ExternalIPPool"}
+			oldPool.Spec.IPRanges = append(oldPool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "2001:db8::/64"})
+			oldPool.Spec.Subnets = []crdv1b2.SubnetInfo{
+				{Gateway: "192.0.2.1", PrefixLength: 24, VLAN: 10},
+				{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 10},
+			}
+			newPool := oldPool.DeepCopy()
+			if tt.mutate != nil {
+				tt.mutate(oldPool, newPool)
+			}
+			operation := tt.operation
+			if operation == "" {
+				operation = admv1.Update
+			}
+			newObject, err := runtime.DefaultUnstructuredConverter.ToUnstructured(newPool)
+			require.NoError(t, err)
+			var oldObject interface{}
+			var oldRaw []byte
+			if operation == admv1.Update {
+				oldObject, err = runtime.DefaultUnstructuredConverter.ToUnstructured(oldPool)
+				require.NoError(t, err)
+				oldRaw = marshal(t, oldPool)
+			}
+			errs, _ := celValidator.Validate(t.Context(), field.NewPath("object"), structuralSchema,
+				newObject, oldObject, celconfig.RuntimeCELCostBudget)
+			if tt.errMsg == "" {
+				assert.Empty(t, errs, "unexpected schema rejection")
+			} else {
+				require.NotEmpty(t, errs, "schema should reject subnet membership, gateway, or prefix length changes")
+				assert.Contains(t, errs.ToAggregate().Error(),
+					"subnets cannot be added or removed, and gateway and prefixLength are immutable")
+			}
+			review := &admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: operation,
+				Resource: metav1.GroupVersionResource{
+					Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools",
+				},
+				OldObject: runtime.RawExtension{Raw: oldRaw},
+				Object:    runtime.RawExtension{Raw: marshal(t, newPool)},
+			}}
+			response := c.ValidateExternalIPPool(review)
+			if tt.errMsg == "" {
+				assert.True(t, response.Allowed, "unexpected rejection: %+v", response.Result)
+			} else {
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Equal(t, tt.errMsg, response.Result.Message)
+			}
+		})
+	}
+}
+
+func TestValidateV1beta1ProjectionOfDualStackPool(t *testing.T) {
+	v2Pool := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": crdv1b2.SchemeGroupVersion.String(),
+		"kind":       "ExternalIPPool",
+		"metadata":   map[string]interface{}{"name": "dual"},
+		"spec": map[string]interface{}{
+			"ipRanges": []interface{}{
+				map[string]interface{}{"cidr": "192.0.2.0/24"},
+				map[string]interface{}{"cidr": "2001:db8::/64"},
+			},
+			"nodeSelector": map[string]interface{}{},
+			"subnets": []interface{}{
+				map[string]interface{}{"gateway": "192.0.2.1", "prefixLength": int64(24), "vlan": int64(10)},
+				map[string]interface{}{"gateway": "2001:db8::1", "prefixLength": int64(64), "vlan": int64(20)},
+			},
+		},
+	}}
+	v1Pool, status := crdconversion.ConvertExternalIPPool(v2Pool, crdv1b1.SchemeGroupVersion.String())
+	require.Equal(t, metav1.StatusSuccess, status.Status, status.Message)
+	updatedV1Pool := v1Pool.DeepCopy()
+	updatedV1Pool.SetLabels(map[string]string{"unrelated": "change"})
+
+	c := newController(nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	review := &admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+		Name:      "dual",
+		Operation: admv1.Update,
+		Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "externalippools"},
+		OldObject: runtime.RawExtension{Raw: marshal(t, v1Pool)},
+		Object:    runtime.RawExtension{Raw: marshal(t, updatedV1Pool)},
+	}}
+	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, c.ValidateExternalIPPool(review))
+
+	// The old client may edit the projected gateway without touching the conversion annotation.
+	require.NoError(t, unstructured.SetNestedField(updatedV1Pool.Object, "192.0.2.2", "spec", "subnetInfo", "gateway"))
+	review.Request.Object.Raw = marshal(t, updatedV1Pool)
+	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, c.ValidateExternalIPPool(review))
+
+	// Updating or removing the visible VLAN must preserve the hidden subnet, including its VLAN.
+	for _, vlan := range []int64{30, 0} {
+		if vlan == 0 {
+			unstructured.RemoveNestedField(updatedV1Pool.Object, "spec", "subnetInfo", "vlan")
+		} else {
+			require.NoError(t, unstructured.SetNestedField(updatedV1Pool.Object, vlan, "spec", "subnetInfo", "vlan"))
+		}
+		review.Request.Object.Raw = marshal(t, updatedV1Pool)
+		assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, c.ValidateExternalIPPool(review))
+		var restored crdv1b2.ExternalIPPool
+		require.NoError(t, convertV1beta1ExternalIPPoolForValidation(review.Request.Object.Raw, &restored))
+		assert.Equal(t, []crdv1b2.SubnetInfo{
+			{Gateway: "192.0.2.2", PrefixLength: 24, VLAN: int32(vlan)},
+			{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 20},
+		}, restored.Spec.Subnets)
+	}
+
+	// Editing the hidden gateway through metadata must not bypass validation or alter conversion state.
+	annotations := updatedV1Pool.GetAnnotations()
+	var envelope map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(annotations["crd.antrea.io/conversion-data"]), &envelope))
+	gateways := envelope["data"].(map[string]interface{})["subnets"].([]interface{})
+	gateways[1].(map[string]interface{})["gateway"] = "2001:db8::2"
+	raw, err := json.Marshal(envelope)
+	require.NoError(t, err)
+	annotations["crd.antrea.io/conversion-data"] = string(raw)
+	updatedV1Pool.SetAnnotations(annotations)
+	review.Request.Object.Raw = marshal(t, updatedV1Pool)
+	response := c.ValidateExternalIPPool(review)
+	require.False(t, response.Allowed)
+	assert.Contains(t, response.Result.Message, "reserved for API conversion")
+}
+
+func TestValidateV1beta1ExternalIPPoolSubnetRemoval(t *testing.T) {
+	v4 := crdv1b2.SubnetInfo{Gateway: "192.0.2.1", PrefixLength: 24, VLAN: 10}
+	v6 := crdv1b2.SubnetInfo{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 20}
+	for _, tt := range []struct {
+		name      string
+		subnets   []crdv1b2.SubnetInfo
+		emptyPool bool
+		setNull   bool
+		allowed   bool
+	}{
+		{name: "dual-stack pool", subnets: []crdv1b2.SubnetInfo{v4, v6}},
+		{name: "dual-stack pool with reversed subnet order", subnets: []crdv1b2.SubnetInfo{v6, v4}},
+		{name: "dual-stack pool with null subnetInfo", subnets: []crdv1b2.SubnetInfo{v4, v6}, setNull: true},
+		{name: "empty dual-stack pool", subnets: []crdv1b2.SubnetInfo{v4, v6}, emptyPool: true},
+		{name: "native IPv4 pool", subnets: []crdv1b2.SubnetInfo{v4}, allowed: true},
+		{name: "native IPv6 pool", subnets: []crdv1b2.SubnetInfo{v6}, allowed: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := &crdv1b2.ExternalIPPool{
+				TypeMeta:   metav1.TypeMeta{APIVersion: crdv1b2.SchemeGroupVersion.String(), Kind: "ExternalIPPool"},
+				ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+				Spec:       crdv1b2.ExternalIPPoolSpec{Subnets: tt.subnets},
+			}
+			if !tt.emptyPool {
+				for _, subnet := range tt.subnets {
+					cidr := "192.0.2.0/24"
+					if subnet.Gateway == v6.Gateway {
+						cidr = "2001:db8::/64"
+					}
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: cidr})
+				}
+			}
+			object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(pool)
+			require.NoError(t, err)
+			oldPool, status := crdconversion.ConvertExternalIPPool(
+				&unstructured.Unstructured{Object: object}, crdv1b1.SchemeGroupVersion.String())
+			require.Equal(t, metav1.StatusSuccess, status.Status, status.Message)
+			newPool := oldPool.DeepCopy()
+			if tt.setNull {
+				require.NoError(t, unstructured.SetNestedField(newPool.Object, nil, "spec", "subnetInfo"))
+			} else {
+				unstructured.RemoveNestedField(newPool.Object, "spec", "subnetInfo")
+			}
+			// An old client can leave the conversion annotation unchanged while removing subnetInfo.
+			require.Equal(t, oldPool.GetAnnotations(), newPool.GetAnnotations())
+			review := &admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Name:      pool.Name,
+				Operation: admv1.Update,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "externalippools"},
+				OldObject: runtime.RawExtension{Raw: marshal(t, oldPool)},
+				Object:    runtime.RawExtension{Raw: marshal(t, newPool)},
+			}}
+			c := newController(nil)
+			response := c.ValidateExternalIPPool(review)
+			require.Equal(t, tt.allowed, response.Allowed, "unexpected admission response: %+v", response.Result)
+			if tt.allowed {
+				var restored crdv1b2.ExternalIPPool
+				require.NoError(t, convertV1beta1ExternalIPPoolForValidation(review.Request.Object.Raw, &restored))
+				assert.Empty(t, restored.Spec.Subnets)
+			} else {
+				require.NotNil(t, response.Result)
+				assert.Equal(t, "v1beta1 clients cannot remove subnets from a dual-stack ExternalIPPool", response.Result.Message)
+			}
+		})
+	}
+}
+
 func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	testCases := []struct {
 		name                    string
-		externalIPPool          *crdv1b1.ExternalIPPool
-		existingExternalIPPools []*crdv1b1.ExternalIPPool
+		externalIPPool          *crdv1b2.ExternalIPPool
+		existingExternalIPPools []*crdv1b2.ExternalIPPool
 		errMsg                  string
 	}{
 		{
 			name: "invalid gateway address",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "10.10.0",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.0",
 					PrefixLength: 16,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 			errMsg: "invalid gateway address 10.10.0",
 		},
 		{
 			name: "invalid ipv4 prefix",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "10.10.0.1",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.0.1",
 					PrefixLength: 42,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 			errMsg: "invalid prefixLength 42",
 		},
 		{
 			name: "invalid ipv6 prefix",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "2001:d00::",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "2001:d00::",
 					PrefixLength: 130,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 			errMsg: "invalid prefixLength 130",
 		},
@@ -189,44 +683,36 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		},
 		{
 			name: "start-end range must be within subnet info",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.40"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "10.10.10.0",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.40"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.10.0",
 					PrefixLength: 24,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 			errMsg: "range [10.10.20.10-10.10.20.40] must be a strict subset of the subnet 10.10.10.0/24",
 		},
 		{
 			name: "cidr must be within subnet info",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.20.0.0/16", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "10.20.0.0",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.20.0.0/16", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.20.0.0",
 					PrefixLength: 24,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 			errMsg: "range [10.20.0.0/16] must be a strict subset of the subnet 10.20.0.0/24",
 		},
 		{
 			name: "valid subnet info 1",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.20"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "10.10.20.0",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.20"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "10.10.20.0",
 					PrefixLength: 24,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 		},
 		{
 			name: "valid subnet info 2",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "fd00:10:96::/112", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
-					Gateway:      "fd00:10:96::",
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "fd00:10:96::/112", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.Subnets = []crdv1b2.SubnetInfo{{Gateway: "fd00:10:96::",
 					PrefixLength: 96,
-					VLAN:         2,
-				}
+					VLAN:         2}}
 			}),
 		},
 
@@ -234,7 +720,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name:           "cidr must not overlap with any existing cidr",
 			externalIPPool: newExternalIPPool("foo", "10.20.30.0/24", "", ""),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "10.10.10.0/24", "", ""),
 				newExternalIPPool("baz", "10.10.20.0/24", "", ""),
 				newExternalIPPool("qux", "10.20.0.0/16", "", ""),
@@ -244,32 +730,32 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name:           "cidr must not overlap with any existing start-end range",
 			externalIPPool: newExternalIPPool("foo", "10.20.30.0/24", "", ""),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.20.30.10", "10.20.30.50"),
 			},
 			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.30.10-10.20.30.50] of ExternalIPPool bar",
 		},
 		{
 			name: "cidr must not overlap with any cidr",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.30.20.0/24"})
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.10.0.0/16"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.30.20.0/24"})
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.10.0.0/16"})
 			}),
 			errMsg: "range [10.10.0.0/16] overlaps with range [10.10.10.0/24]",
 		},
 		{
 			name: "cidr must not overlap with any start-end range",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.20", "10.10.20.50"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.10.20.0/24"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.20", "10.10.20.50"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.10.20.0/24"})
 			}),
 			errMsg: "range [10.10.20.0/24] overlaps with range [10.10.20.20-10.10.20.50]",
 		},
 		{
 			name: "valid non overlapping cidr",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.20.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.10.30.0/24"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.20.0/24", "", ""), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.10.30.0/24"})
 			}),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.10.40.10", "10.10.40.80"),
 				newExternalIPPool("baz", "10.10.40.0/24", "", ""),
 				newExternalIPPool("qux", "10.20.0.0/16", "", ""),
@@ -280,7 +766,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name:           "start-end range must not overlap with any existing cidr",
 			externalIPPool: newExternalIPPool("foo", "", "10.30.10.0", "10.30.20.0"),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.10.10.0", "10.10.20.0"),
 				newExternalIPPool("baz", "10.20.0.0/16", "", ""),
 				newExternalIPPool("qux", "10.30.0.0/20", "", ""),
@@ -290,7 +776,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name:           "start-end range must not overlap with any existing start-end range",
 			externalIPPool: newExternalIPPool("foo", "", "10.30.10.0", "10.30.20.0"),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "10.10.0.0/16", "", ""),
 				newExternalIPPool("baz", "", "10.30.20.0", "10.30.40.0"),
 			},
@@ -298,28 +784,28 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		},
 		{
 			name: "start-end range must not overlap with any cidr",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.30.0.0/16", "10.30.40.50", "10.30.40.80"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.30.0.0/16"})
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{Start: "10.30.40.50", End: "10.30.40.80"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.30.0.0/16", "10.30.40.50", "10.30.40.80"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.30.0.0/16"})
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{Start: "10.30.40.50", End: "10.30.40.80"})
 			}),
 			errMsg: "range [10.30.40.50-10.30.40.80] overlaps with range [10.30.0.0/16]",
 		},
 		{
 			name: "start-end range must not overlap with any start-end range",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.30.40.50", "10.30.40.80"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.30.50.0/24"})
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{Start: "10.30.40.10", End: "10.30.40.90"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.30.40.50", "10.30.40.80"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.30.50.0/24"})
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{Start: "10.30.40.10", End: "10.30.40.90"})
 			}),
 			errMsg: "range [10.30.40.10-10.30.40.90] overlaps with range [10.30.40.50-10.30.40.80]",
 		},
 		{
 			name: "valid non overlapping start-end range",
-			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.30.10.0", "10.30.20.0"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.30.50.0/24"})
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "10.50.0.0/16"})
-				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{Start: "10.30.20.1", End: "10.30.40.10"})
+			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.30.10.0", "10.30.20.0"), func(pool *crdv1b2.ExternalIPPool) {
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.30.50.0/24"})
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{CIDR: "10.50.0.0/16"})
+				pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b2.IPRange{Start: "10.30.20.1", End: "10.30.40.10"})
 			}),
-			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
+			existingExternalIPPools: []*crdv1b2.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.10.10.0", "10.10.20.0"),
 				newExternalIPPool("baz", "10.20.0.0/16", "", ""),
 				newExternalIPPool("baz", "10.40.0.0/16", "", ""),
@@ -354,9 +840,10 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				require.True(t, cache.WaitForCacheSync(stopCh, c.HasSynced))
 				review := &admv1.AdmissionReview{
 					Request: &admv1.AdmissionRequest{
+						Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 						Name:      testCase.externalIPPool.Name,
 						Operation: "CREATE",
-						Object:    runtime.RawExtension{Raw: marshal(testCase.externalIPPool)},
+						Object:    runtime.RawExtension{Raw: marshal(t, testCase.externalIPPool)},
 					},
 				}
 				response := c.ValidateExternalIPPool(review)
@@ -473,11 +960,12 @@ func TestValidateExternalIPPoolNodeSelector(t *testing.T) {
 				oldPool := pool.DeepCopy()
 				pool.Spec.NodeSelector = tt.selector
 				request := &admv1.AdmissionRequest{
+					Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 					Operation: operation,
-					Object:    runtime.RawExtension{Raw: marshal(pool)},
+					Object:    runtime.RawExtension{Raw: marshal(t, pool)},
 				}
 				if operation == admv1.Update {
-					request.OldObject.Raw = marshal(oldPool)
+					request.OldObject.Raw = marshal(t, oldPool)
 				}
 				response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: request})
 				if tt.expectedPath == "" {
@@ -511,13 +999,14 @@ func TestValidateExternalIPPoolRepairNodeSelector(t *testing.T) {
 			oldPool.Spec.NodeSelector.MatchExpressions = []metav1.LabelSelectorRequirement{
 				{Key: "role", Operator: metav1.LabelSelectorOpIn},
 			}
-			require.NoError(t, c.crdInformerFactory.Crd().V1beta1().ExternalIPPools().Informer().GetIndexer().Add(oldPool))
+			require.NoError(t, c.crdInformerFactory.Crd().V1beta2().ExternalIPPools().Informer().GetIndexer().Add(oldPool))
 			pool := oldPool.DeepCopy()
 			pool.Spec.NodeSelector = tt.selector
 			response := c.ValidateExternalIPPool(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "externalippools"},
 				Operation: admv1.Update,
-				OldObject: runtime.RawExtension{Raw: marshal(oldPool)},
-				Object:    runtime.RawExtension{Raw: marshal(pool)},
+				OldObject: runtime.RawExtension{Raw: marshal(t, oldPool)},
+				Object:    runtime.RawExtension{Raw: marshal(t, pool)},
 			}})
 			assert.True(t, response.Allowed, "repairing a historical invalid selector must be allowed")
 			assert.Nil(t, response.Result)
