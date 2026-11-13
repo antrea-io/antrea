@@ -53,7 +53,7 @@ type SingleIPAllocator struct {
 	allocated *big.Int
 	// count is the number of currently allocated elements in the range.
 	count int
-	// IPs inside the cidr not available for allocation
+	// IPs inside the range not available for allocation.
 	reservedIPs []net.IP
 }
 
@@ -72,19 +72,20 @@ func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator
 	}
 
 	allocator := &SingleIPAllocator{
-		ipRangeStr:  cidr.String(),
-		base:        base,
-		max:         int(max),
-		allocated:   big.NewInt(0),
-		count:       0,
-		reservedIPs: reservedIPs,
+		ipRangeStr: cidr.String(),
+		base:       base,
+		max:        int(max),
+		allocated:  big.NewInt(0),
+		count:      0,
 	}
+	allocator.setReservedIPs(reservedIPs)
 	return allocator, nil
 }
 
 // NewIPRangeAllocator creates an IPAllocator based on the provided start IP and end IP.
 // The start IP and end IP are inclusive.
-func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
+// IPs in reservedIPs are excluded from allocation.
+func NewIPRangeAllocator(startIP, endIP net.IP, reservedIPs ...net.IP) (*SingleIPAllocator, error) {
 	ipRangeStr := fmt.Sprintf("%s-%s", startIP.String(), endIP.String())
 	base := utilnet.BigForIP(startIP)
 	offset := big.NewInt(0).Sub(utilnet.BigForIP(endIP), base).Int64()
@@ -104,18 +105,48 @@ func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
 		allocated:  big.NewInt(0),
 		count:      0,
 	}
+	allocator.setReservedIPs(reservedIPs)
 	return allocator, nil
+}
+
+// setReservedIPs replaces the reservations with distinct IPs inside the supported allocation range.
+func (a *SingleIPAllocator) setReservedIPs(ips []net.IP) {
+	limit := big.NewInt(int64(a.max))
+	a.reservedIPs = make([]net.IP, 0, len(ips))
+	seen := make(map[int64]struct{}, len(ips))
+	for _, ip := range ips {
+		if ip.To16() == nil {
+			continue
+		}
+		offset := new(big.Int).Sub(utilnet.BigForIP(ip), a.base)
+		if offset.Sign() < 0 || offset.Cmp(limit) >= 0 {
+			continue
+		}
+		if _, exists := seen[offset.Int64()]; exists {
+			continue
+		}
+		seen[offset.Int64()] = struct{}{}
+		a.reservedIPs = append(a.reservedIPs, ip)
+	}
 }
 
 func (a *SingleIPAllocator) Name() string {
 	return a.ipRangeStr
 }
 
-func (a *SingleIPAllocator) checkReserved(ip net.IP) error {
+// IsReserved reports whether the IP is reserved and unavailable for allocation.
+func (a *SingleIPAllocator) IsReserved(ip net.IP) bool {
 	for _, reservedIP := range a.reservedIPs {
 		if reservedIP.Equal(ip) {
-			return fmt.Errorf("IP %v is reserved and not available for allocation", ip)
+			return true
 		}
+	}
+	return false
+}
+
+func (a *SingleIPAllocator) checkReserved(ip net.IP) error {
+	if a.IsReserved(ip) {
+		return fmt.Errorf("IP %v is reserved and not available for allocation", ip)
 	}
 	return nil
 }
@@ -163,13 +194,12 @@ func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	if a.count >= a.max-len(a.reservedIPs) {
 		return nil, fmt.Errorf("no available IP")
 	}
-	for i := 0; i <= a.max; i++ {
+	for i := 0; i < a.max; i++ {
 		if ip, ok := a.allocateOffset(i); ok {
 			return ip, nil
 		}
 	}
 
-	// we should never reach here
 	return nil, fmt.Errorf("no available IP")
 }
 
@@ -213,7 +243,14 @@ func (a *SingleIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 }
 
 func (a *SingleIPAllocator) getOffset(ip net.IP) int {
-	return int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	if ip.To16() == nil {
+		return -1
+	}
+	offset := big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base)
+	if offset.Sign() < 0 || offset.Cmp(big.NewInt(int64(a.max))) >= 0 {
+		return -1
+	}
+	return int(offset.Int64())
 }
 
 // Release releases the provided IP. It returns error if the IP is not in the range or not allocated.
@@ -335,6 +372,16 @@ func (ma MultiIPAllocator) Total() int {
 func (ma MultiIPAllocator) Has(ip net.IP) bool {
 	for _, a := range ma {
 		if a.Has(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsReserved reports whether the IP is reserved in any of the allocator's ranges.
+func (ma MultiIPAllocator) IsReserved(ip net.IP) bool {
+	for _, a := range ma {
+		if a.IsReserved(ip) {
 			return true
 		}
 	}

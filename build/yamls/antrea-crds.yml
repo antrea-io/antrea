@@ -1791,6 +1791,9 @@ spec:
           properties:
             spec:
               type: object
+              x-kubernetes-validations:
+                - message: subnetInfo cannot be added or removed
+                  rule: has(self.subnetInfo) == has(oldSelf.subnetInfo)
               required:
                 - ipRanges
                 - nodeSelector
@@ -1830,8 +1833,14 @@ spec:
                       oneOf:
                         - format: ipv4
                         - format: ipv6
+                      x-kubernetes-validations:
+                        - message: gateway is immutable
+                          rule: self == oldSelf
                     prefixLength:
                       type: integer
+                      x-kubernetes-validations:
+                        - message: prefixLength is immutable
+                          rule: self == oldSelf
                       minimum: 1
                       maximum: 127
                     vlan:

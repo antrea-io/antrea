@@ -600,6 +600,41 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
 
+func TestSyncEgressIPReservedGateway(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		cidr    string
+		gateway string
+	}{
+		{name: "IPv4", cidr: "192.0.2.0/29", gateway: "192.0.2.1"},
+		{name: "IPv6", cidr: "2001:db8::/125", gateway: "2001:db8::1"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			pool := newExternalIPPool("pool", tt.cidr, "", "")
+			pool.Spec.SubnetInfo = &v1beta1.SubnetInfo{Gateway: tt.gateway}
+			egress := newEgress("egress", tt.gateway, pool.Name, nil, nil, nil)
+			controller := newController(nil, []runtime.Object{pool, egress})
+			controller.crdInformerFactory.Start(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+			controller.restoreIPAllocations(nil)
+
+			ip, updated, err := controller.syncEgressIP(egress)
+			require.Error(t, err)
+			assert.Nil(t, ip)
+			assert.Equal(t, tt.gateway, updated.Spec.EgressIP)
+			actual, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, tt.gateway, actual.Spec.EgressIP, "a reserved static IP must not be replaced")
+			_, _, exists := controller.getIPAllocation(egress.Name)
+			assert.False(t, exists)
+		})
+	}
+}
+
 func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string

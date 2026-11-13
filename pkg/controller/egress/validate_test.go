@@ -135,6 +135,18 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
+			name: "Updating selector with unchanged IP and missing Pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: admv1.Update,
+				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
+				Object: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", &metav1.LabelSelector{
+					MatchLabels: map[string]string{"foo": "bar"},
+				}, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
 			name: "DELETE operation should be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -212,6 +224,144 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			}
 			gotResponse := controller.ValidateEgress(review)
 			assert.Equal(t, tt.expectedResponse, gotResponse)
+		})
+	}
+}
+
+func TestEgressControllerValidateEgressGateway(t *testing.T) {
+	poolWithGateway := func(cidr, start, end, gateway string, prefixLength int32) *crdv1beta1.ExternalIPPool {
+		pool := newExternalIPPool("bar", cidr, start, end)
+		pool.Spec.SubnetInfo = &crdv1beta1.SubnetInfo{Gateway: gateway, PrefixLength: prefixLength}
+		return pool
+	}
+	ipv4CIDRPool := poolWithGateway("192.168.1.144/28", "", "", "192.168.1.145", 28)
+	ipv4RangePool := poolWithGateway("", "192.168.1.145", "192.168.1.158", "192.168.1.145", 28)
+	ipv6CIDRPool := poolWithGateway("2001:db8::/124", "", "", "2001:db8::1", 124)
+	ipv6RangePool := poolWithGateway("", "2001:db8::1", "2001:db8::e", "2001:db8::1", 124)
+	tests := []struct {
+		name     string
+		pool     *crdv1beta1.ExternalIPPool
+		ip       string
+		old      *crdv1beta1.Egress
+		detached bool
+		allowed  bool
+	}{
+		{
+			name: "create with IPv4 CIDR gateway",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+		},
+		{
+			name: "create with IPv4 range gateway",
+			pool: ipv4RangePool,
+			ip:   "192.168.1.145",
+		},
+		{
+			name: "create with equivalent IPv6 CIDR gateway",
+			pool: ipv6CIDRPool,
+			ip:   "2001:0db8:0000:0000:0000:0000:0000:0001",
+		},
+		{
+			name: "create with IPv6 range gateway",
+			pool: ipv6RangePool,
+			ip:   "2001:db8::1",
+		},
+		{
+			name: "update IP to IPv4 CIDR gateway",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+			old:  newEgress("foo", "192.168.1.146", "bar", nil, nil, nil),
+		},
+		{
+			name: "update IP to IPv4 range gateway",
+			pool: ipv4RangePool,
+			ip:   "192.168.1.145",
+			old:  newEgress("foo", "192.168.1.146", "bar", nil, nil, nil),
+		},
+		{
+			name: "update IP to IPv6 CIDR gateway",
+			pool: ipv6CIDRPool,
+			ip:   "2001:db8::1",
+			old:  newEgress("foo", "2001:db8::2", "bar", nil, nil, nil),
+		},
+		{
+			name: "update IP to IPv6 range gateway",
+			pool: ipv6RangePool,
+			ip:   "2001:db8::1",
+			old:  newEgress("foo", "2001:db8::2", "bar", nil, nil, nil),
+		},
+		{
+			name: "update Pool to one whose gateway matches the IP",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+			old:  newEgress("foo", "192.168.1.145", "other", nil, nil, nil),
+		},
+		{
+			name:    "update selector while retaining gateway IP",
+			pool:    ipv4CIDRPool,
+			ip:      "192.168.1.145",
+			old:     newEgress("foo", "192.168.1.145", "bar", nil, nil, nil),
+			allowed: true,
+		},
+		{
+			name:    "create with normal IP and subnet",
+			pool:    ipv4CIDRPool,
+			ip:      "192.168.1.146",
+			allowed: true,
+		},
+		{
+			name:    "create with automatic IP allocation",
+			pool:    ipv4CIDRPool,
+			allowed: true,
+		},
+		{
+			name:    "create without subnet",
+			pool:    newExternalIPPool("bar", "192.168.1.144/28", "", ""),
+			ip:      "192.168.1.145",
+			allowed: true,
+		},
+		{
+			name:     "detach gateway IP from Pool",
+			pool:     ipv4CIDRPool,
+			ip:       "192.168.1.145",
+			old:      newEgress("foo", "192.168.1.145", "bar", nil, nil, nil),
+			detached: true,
+			allowed:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			controller := newController(nil, []runtime.Object{tt.pool.DeepCopy()})
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+			controller.externalIPAllocator.RestoreIPAllocations(nil)
+			poolName := tt.pool.Name
+			if tt.detached {
+				poolName = ""
+			}
+			request := &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: admv1.Create,
+				Object: runtime.RawExtension{Raw: marshal(newEgress("foo", tt.ip, poolName,
+					&metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, nil, nil))},
+			}
+			if tt.old != nil {
+				request.Operation = admv1.Update
+				request.OldObject = runtime.RawExtension{Raw: marshal(tt.old)}
+			}
+			expectedResponse := &admv1.AdmissionResponse{Allowed: tt.allowed}
+			if !tt.allowed {
+				expectedResponse.Result = &metav1.Status{
+					Message: "IP " + tt.ip + " is not within the IP range",
+				}
+			}
+			assert.Equal(t, expectedResponse, controller.ValidateEgress(&admv1.AdmissionReview{Request: request}))
 		})
 	}
 }
