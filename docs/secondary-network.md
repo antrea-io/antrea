@@ -228,11 +228,11 @@ report must match the current Node UID, ANC UID, and generation. Nodes without a
 still count toward `desiredNodes`; they do not count toward `realizedNodes`.
 
 Static configuration overriding an ANC produces `Ready=False` with reason
-`OverriddenByStaticConfig`. Aggregate readiness covers the Nodes for which this ANC takes
-precedence. `ConflictFree=False` exposes matching Nodes which select an older ANC instead.
-Consumers checking an entire nodepool must require both `Ready=True` and `ConflictFree=True`
-for the current generation. An ANC with no selected Nodes reports `Ready=False` with reason
-`NoMatchingNodes`, or `ConfigurationNotSelected` if all matching Nodes select an older ANC.
+`OverriddenByStaticConfig`. `Ready` covers the Nodes for which this ANC takes precedence.
+Overlapping node selectors are valid and resolved by precedence. Matching Nodes which
+select an older ANC are excluded from `desiredNodes` and do not affect `Ready`. An ANC
+with no selected Nodes reports `Ready=False` with reason `NoMatchingNodes`, or
+`ConfigurationNotSelected` if all matching Nodes select an older ANC.
 
 To observe secondary network removal, retain the ANC and remove only `spec.secondaryNetwork`.
 The same ANC UID and its new generation remain observable while bridge cleanup runs.
@@ -282,12 +282,6 @@ status:
     lastTransitionTime: "2026-10-29T09:00:00Z"
     reason: Reconciled
     message: Configuration has been realized on all selected Nodes
-  - type: ConflictFree
-    status: "True"
-    observedGeneration: 1
-    lastTransitionTime: "2026-10-29T09:00:00Z"
-    reason: NoConflicts
-    message: No matching Nodes select another AntreaNodeConfig
 ```
 
 The corresponding Agent report on `node-a` could be:
@@ -362,12 +356,6 @@ status:
     message: >-
       Node node-a: Waiting for Pod secondary interfaces to be removed before
       deleting the bridge
-  - type: ConflictFree
-    status: "True"
-    observedGeneration: 2
-    lastTransitionTime: "2026-10-29T09:00:00Z"
-    reason: NoConflicts
-    message: No matching Nodes select another AntreaNodeConfig
 ```
 
 The AgentInfo for `node-a` identifies the same configuration UID. Its `secondaryNetwork`

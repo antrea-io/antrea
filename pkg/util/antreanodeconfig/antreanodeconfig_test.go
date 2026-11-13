@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package antreanodeconfig
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
-func TestSelectAntreaNodeConfigs(t *testing.T) {
+func TestSelectConfigs(t *testing.T) {
 	now := time.Now()
 	old := &crdv1alpha1.AntreaNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: "z-old", CreationTimestamp: metav1.NewTime(now)},
@@ -80,7 +80,7 @@ func TestSelectAntreaNodeConfigs(t *testing.T) {
 			for _, cfg := range tt.configs {
 				original = append(original, cfg.DeepCopy())
 			}
-			selected := SelectAntreaNodeConfigs(nodes, tt.configs)
+			selected := SelectConfigs(nodes, tt.configs)
 			require.Len(t, selected, len(nodes))
 			for i, node := range nodes {
 				cfg := selected[node.UID]
@@ -90,7 +90,7 @@ func TestSelectAntreaNodeConfigs(t *testing.T) {
 					require.NotNil(t, cfg)
 					assert.Equal(t, tt.want[i], cfg.Name)
 				}
-				matching := MatchingAntreaNodeConfigs(node, tt.configs)
+				matching := MatchingConfigs(node, tt.configs)
 				if len(matching) > 0 {
 					assert.Same(t, matching[0], cfg, "Batch selection must agree with the Agent")
 				} else {
@@ -98,12 +98,12 @@ func TestSelectAntreaNodeConfigs(t *testing.T) {
 				}
 			}
 			assert.Equal(t, original, tt.configs, "Selection must not mutate informer objects or input order")
-			assert.Empty(t, SelectAntreaNodeConfigs(nil, tt.configs))
+			assert.Empty(t, SelectConfigs(nil, tt.configs))
 		})
 	}
 }
 
-func BenchmarkSelectAntreaNodeConfigs(b *testing.B) {
+func BenchmarkSelectConfigs(b *testing.B) {
 	var configs []*crdv1alpha1.AntreaNodeConfig
 	for i := 9; i >= 0; i-- {
 		configs = append(configs, &crdv1alpha1.AntreaNodeConfig{
@@ -127,7 +127,7 @@ func BenchmarkSelectAntreaNodeConfigs(b *testing.B) {
 		for b.Loop() {
 			selected := make(map[types.UID]*crdv1alpha1.AntreaNodeConfig, len(nodes))
 			for _, node := range nodes {
-				matching := MatchingAntreaNodeConfigs(node, configs)
+				matching := MatchingConfigs(node, configs)
 				selected[node.UID] = matching[0]
 			}
 		}
@@ -135,7 +135,107 @@ func BenchmarkSelectAntreaNodeConfigs(b *testing.B) {
 	b.Run("batch", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			SelectAntreaNodeConfigs(nodes, configs)
+			SelectConfigs(nodes, configs)
 		}
 	})
+}
+
+func testANCWithSelector(name string, ts time.Time, nodeSelector map[string]string) *crdv1alpha1.AntreaNodeConfig {
+	return &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(ts),
+		},
+		Spec: crdv1alpha1.AntreaNodeConfigSpec{
+			NodeSelector: metav1.LabelSelector{
+				MatchLabels: nodeSelector,
+			},
+		},
+	}
+}
+
+func TestMatchingConfigs(t *testing.T) {
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+		Name:   "node1",
+		Labels: map[string]string{"role": "worker", "zone": "us-east"},
+	}}
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Minute)
+	t2 := t0.Add(2 * time.Minute)
+
+	anc1 := testANCWithSelector("anc1", t0, map[string]string{"role": "worker"})
+	anc2 := testANCWithSelector("anc2", t1, map[string]string{"role": "control-plane"})
+	anc3 := testANCWithSelector("anc3", t2, map[string]string{"zone": "us-east"})
+	ancTieZ := testANCWithSelector("zzz", t0, map[string]string{"role": "worker"})
+	ancTieA := testANCWithSelector("aaa", t0, map[string]string{"role": "worker"})
+	ancInvalidSel := &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "invalid"},
+		Spec: crdv1alpha1.AntreaNodeConfigSpec{
+			NodeSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{Key: "x", Operator: "BadOp", Values: []string{"v"}},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		node      *corev1.Node
+		configs   []*crdv1alpha1.AntreaNodeConfig
+		wantNames []string
+	}{
+		{
+			name:    "nil node",
+			configs: []*crdv1alpha1.AntreaNodeConfig{anc1},
+		},
+		{
+			name: "no configs",
+			node: node,
+		},
+		{
+			name:      "one matching",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{anc1},
+			wantNames: []string{"anc1"},
+		},
+		{
+			name:    "one non-matching",
+			node:    node,
+			configs: []*crdv1alpha1.AntreaNodeConfig{anc2},
+		},
+		{
+			name:      "matching configs sorted oldest first",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{anc3, anc1},
+			wantNames: []string{"anc1", "anc3"},
+		},
+		{
+			name:      "name breaks timestamp ties",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{ancTieZ, ancTieA},
+			wantNames: []string{"aaa", "zzz"},
+		},
+		{
+			name:      "invalid selector is skipped",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{ancInvalidSel, anc1},
+			wantNames: []string{"anc1"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MatchingConfigs(tc.node, tc.configs)
+			assert.Equal(t, tc.wantNames, ancNames(got))
+		})
+	}
+}
+
+func ancNames(configs []*crdv1alpha1.AntreaNodeConfig) []string {
+	var names []string
+	for _, cfg := range configs {
+		names = append(names, cfg.Name)
+	}
+	return names
 }

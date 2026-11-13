@@ -34,7 +34,6 @@ import (
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1a1inf "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
@@ -371,104 +370,4 @@ func TestControllerRunPublishesInitialSnapshot(t *testing.T) {
 
 	close(runStop)
 	wg.Wait()
-}
-
-func testANCWithSelector(name string, ts time.Time, nodeSelector map[string]string) *crdv1alpha1.AntreaNodeConfig {
-	return &crdv1alpha1.AntreaNodeConfig{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			CreationTimestamp: metav1.NewTime(ts),
-		},
-		Spec: crdv1alpha1.AntreaNodeConfigSpec{
-			NodeSelector: metav1.LabelSelector{
-				MatchLabels: nodeSelector,
-			},
-		},
-	}
-}
-
-func TestSelectAntreaNodeConfigsForNode(t *testing.T) {
-	node := testNode("node1", map[string]string{"role": "worker", "zone": "us-east"})
-	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	t1 := t0.Add(time.Minute)
-	t2 := t0.Add(2 * time.Minute)
-
-	anc1 := testANCWithSelector("anc1", t0, map[string]string{"role": "worker"})
-	anc2 := testANCWithSelector("anc2", t1, map[string]string{"role": "control-plane"})
-	anc3 := testANCWithSelector("anc3", t2, map[string]string{"zone": "us-east"})
-	ancTieZ := testANCWithSelector("zzz", t0, map[string]string{"role": "worker"})
-	ancTieA := testANCWithSelector("aaa", t0, map[string]string{"role": "worker"})
-	ancInvalidSel := &crdv1alpha1.AntreaNodeConfig{
-		ObjectMeta: metav1.ObjectMeta{Name: "invalid"},
-		Spec: crdv1alpha1.AntreaNodeConfigSpec{
-			NodeSelector: metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{Key: "x", Operator: "BadOp", Values: []string{"v"}},
-				},
-			},
-		},
-	}
-
-	tests := []struct {
-		name      string
-		node      *corev1.Node
-		configs   []*crdv1alpha1.AntreaNodeConfig
-		wantNames []string
-	}{
-		{
-			name:    "nil node",
-			configs: []*crdv1alpha1.AntreaNodeConfig{anc1},
-		},
-		{
-			name: "no configs",
-			node: node,
-		},
-		{
-			name:      "one matching",
-			node:      node,
-			configs:   []*crdv1alpha1.AntreaNodeConfig{anc1},
-			wantNames: []string{"anc1"},
-		},
-		{
-			name:    "one non-matching",
-			node:    node,
-			configs: []*crdv1alpha1.AntreaNodeConfig{anc2},
-		},
-		{
-			name:      "matching configs sorted oldest first",
-			node:      node,
-			configs:   []*crdv1alpha1.AntreaNodeConfig{anc3, anc1},
-			wantNames: []string{"anc1", "anc3"},
-		},
-		{
-			name:      "name breaks timestamp ties",
-			node:      node,
-			configs:   []*crdv1alpha1.AntreaNodeConfig{ancTieZ, ancTieA},
-			wantNames: []string{"aaa", "zzz"},
-		},
-		{
-			name:      "invalid selector is skipped",
-			node:      node,
-			configs:   []*crdv1alpha1.AntreaNodeConfig{ancInvalidSel, anc1},
-			wantNames: []string{"anc1"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := k8s.MatchingAntreaNodeConfigs(tc.node, tc.configs)
-			assert.Equal(t, tc.wantNames, ancNames(got))
-		})
-	}
-}
-
-func ancNames(configs []*crdv1alpha1.AntreaNodeConfig) []string {
-	if len(configs) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(configs))
-	for _, cfg := range configs {
-		names = append(names, cfg.Name)
-	}
-	return names
 }

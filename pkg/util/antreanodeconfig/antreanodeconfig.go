@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+// Package antreanodeconfig provides shared AntreaNodeConfig selection logic.
+package antreanodeconfig
 
 import (
 	"cmp"
@@ -27,15 +28,15 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
-// MatchingAntreaNodeConfigs returns non-terminating configurations selecting node,
+// MatchingConfigs returns non-terminating configurations selecting node,
 // ordered by creation time and then name, with the effective configuration first.
-func MatchingAntreaNodeConfigs(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
+func MatchingConfigs(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
 	if node == nil {
 		return nil
 	}
 	nodeLabels := labels.Set(node.Labels)
 	var matching []*crdv1alpha1.AntreaNodeConfig
-	for _, parsed := range parseAntreaNodeConfigs(configs) {
+	for _, parsed := range parseConfigs(configs) {
 		if parsed.selector.Matches(nodeLabels) {
 			matching = append(matching, parsed.config)
 		}
@@ -43,11 +44,11 @@ func MatchingAntreaNodeConfigs(node *corev1.Node, configs []*crdv1alpha1.AntreaN
 	return matching
 }
 
-// SelectAntreaNodeConfigs returns the effective configuration for each Node UID.
+// SelectConfigs returns the effective configuration for each Node UID.
 // Selectors are parsed and configurations sorted once for the whole batch. Nodes
 // without a matching configuration have a nil entry in the returned map.
-func SelectAntreaNodeConfigs(nodes []*corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) map[types.UID]*crdv1alpha1.AntreaNodeConfig {
-	parsed := parseAntreaNodeConfigs(configs)
+func SelectConfigs(nodes []*corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) map[types.UID]*crdv1alpha1.AntreaNodeConfig {
+	parsed := parseConfigs(configs)
 	selected := make(map[types.UID]*crdv1alpha1.AntreaNodeConfig, len(nodes))
 	for _, node := range nodes {
 		nodeLabels := labels.Set(node.Labels)
@@ -62,13 +63,13 @@ func SelectAntreaNodeConfigs(nodes []*corev1.Node, configs []*crdv1alpha1.Antrea
 	return selected
 }
 
-type parsedAntreaNodeConfig struct {
+type parsedConfig struct {
 	config   *crdv1alpha1.AntreaNodeConfig
 	selector labels.Selector
 }
 
-func parseAntreaNodeConfigs(configs []*crdv1alpha1.AntreaNodeConfig) []parsedAntreaNodeConfig {
-	var parsed []parsedAntreaNodeConfig
+func parseConfigs(configs []*crdv1alpha1.AntreaNodeConfig) []parsedConfig {
+	var parsed []parsedConfig
 	for _, cfg := range configs {
 		if cfg == nil || cfg.DeletionTimestamp != nil {
 			continue
@@ -78,9 +79,9 @@ func parseAntreaNodeConfigs(configs []*crdv1alpha1.AntreaNodeConfig) []parsedAnt
 			klog.V(2).InfoS("Skipping AntreaNodeConfig with invalid nodeSelector", "config", cfg.Name, "err", err)
 			continue
 		}
-		parsed = append(parsed, parsedAntreaNodeConfig{config: cfg, selector: sel})
+		parsed = append(parsed, parsedConfig{config: cfg, selector: sel})
 	}
-	slices.SortFunc(parsed, func(first, second parsedAntreaNodeConfig) int {
+	slices.SortFunc(parsed, func(first, second parsedConfig) int {
 		a, b := first.config, second.config
 		if a.CreationTimestamp.Before(&b.CreationTimestamp) {
 			return -1

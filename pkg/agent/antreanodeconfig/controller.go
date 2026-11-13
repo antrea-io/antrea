@@ -37,8 +37,8 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1alpha1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	nodeconfigutil "antrea.io/antrea/v2/pkg/util/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/util/channel"
-	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
@@ -241,7 +241,7 @@ func antreaNodeConfigForSnapshot(node *corev1.Node, all []*crdv1alpha1.AntreaNod
 	if listErr != nil {
 		return nil
 	}
-	matched := k8s.MatchingAntreaNodeConfigs(node, all)
+	matched := nodeconfigutil.MatchingConfigs(node, all)
 	if len(matched) == 0 {
 		return nil
 	}

@@ -41,7 +41,7 @@ import (
 	infoinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
 	infolisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/v2/pkg/util/k8s"
+	nodeconfigutil "antrea.io/antrea/v2/pkg/util/antreanodeconfig"
 )
 
 const (
@@ -160,7 +160,7 @@ func (c *StatusController) enqueueNode(node *corev1.Node) {
 		klog.ErrorS(err, "Failed to list AntreaNodeConfigs for Node status update")
 		return
 	}
-	for _, cfg := range k8s.MatchingAntreaNodeConfigs(node, configs) {
+	for _, cfg := range nodeconfigutil.MatchingConfigs(node, configs) {
 		c.queue.Add(cfg.Name)
 	}
 }
@@ -248,7 +248,7 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 		agentInfos[info.Name] = info
 	}
 	if c.selected == nil || c.cachedVersion != version {
-		c.selected, c.cachedVersion = k8s.SelectAntreaNodeConfigs(nodes, configs), version
+		c.selected, c.cachedVersion = nodeconfigutil.SelectConfigs(nodes, configs), version
 	}
 	status := calculateStatus(cfg, c.selected, nodes, agentInfos, time.Now())
 	if reflect.DeepEqual(cfg.Status, status) {
@@ -280,13 +280,13 @@ func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[type
 		Message: "Configuration has been realized on all selected Nodes", LastTransitionTime: metav1.NewTime(now),
 	}
 	selector, selectorErr := metav1.LabelSelectorAsSelector(&cfg.Spec.NodeSelector)
-	shadowed := 0
+	hasOverriddenNodes := false
 	var representative string
 	for _, node := range nodes {
 		effective := selectedConfigs[node.UID]
 		if effective == nil || effective.UID != cfg.UID {
 			if cfg.DeletionTimestamp == nil && selectorErr == nil && selector.Matches(labels.Set(node.Labels)) {
-				shadowed++
+				hasOverriddenNodes = true
 			}
 			continue
 		}
@@ -310,33 +310,17 @@ func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[type
 		aggregate.Status, aggregate.Reason, aggregate.Message = metav1.ConditionFalse, "InvalidNodeSelector", selectorErr.Error()
 	} else if status.DesiredNodes == 0 {
 		aggregate.Status, aggregate.Reason, aggregate.Message = metav1.ConditionFalse, "NoMatchingNodes", "No Nodes currently select this configuration"
-		if shadowed > 0 {
+		if hasOverriddenNodes {
 			aggregate.Reason, aggregate.Message = "ConfigurationNotSelected", "All matching Nodes select an older AntreaNodeConfig"
 		}
 	}
 	if len(aggregate.Message) > maxNodeMessageLength {
 		aggregate.Message = aggregate.Message[:maxNodeMessageLength-3] + "..."
 	}
-	for _, conditionType := range []crdv1alpha1.AntreaNodeConfigConditionType{
-		crdv1alpha1.AntreaNodeConfigConditionReady,
-		crdv1alpha1.AntreaNodeConfigConditionConflictFree,
-	} {
-		if previous := meta.FindStatusCondition(cfg.Status.Conditions, string(conditionType)); previous != nil {
-			status.Conditions = append(status.Conditions, *previous)
-		}
+	if previous := meta.FindStatusCondition(cfg.Status.Conditions, aggregate.Type); previous != nil {
+		status.Conditions = append(status.Conditions, *previous)
 	}
 	meta.SetStatusCondition(&status.Conditions, aggregate)
-	conflict := metav1.Condition{
-		Type: string(crdv1alpha1.AntreaNodeConfigConditionConflictFree), Status: metav1.ConditionTrue,
-		ObservedGeneration: cfg.Generation, Reason: "NoConflicts",
-		Message: "No matching Nodes select another AntreaNodeConfig", LastTransitionTime: metav1.NewTime(now),
-	}
-	if selectorErr != nil {
-		conflict.Status, conflict.Reason, conflict.Message = metav1.ConditionUnknown, "InvalidNodeSelector", "Cannot evaluate conflicts with an invalid Node selector"
-	} else if shadowed > 0 {
-		conflict.Status, conflict.Reason, conflict.Message = metav1.ConditionFalse, "OverriddenNodes", fmt.Sprintf("%d matching Nodes select an older AntreaNodeConfig; Ready covers effective selected Nodes", shadowed)
-	}
-	meta.SetStatusCondition(&status.Conditions, conflict)
 	return status
 }
 

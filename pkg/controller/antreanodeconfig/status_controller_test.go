@@ -45,13 +45,10 @@ import (
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
-	"antrea.io/antrea/v2/pkg/util/k8s"
+	nodeconfigutil "antrea.io/antrea/v2/pkg/util/antreanodeconfig"
 )
 
-const (
-	readyConditionType        = string(crdv1alpha1.AntreaNodeConfigConditionReady)
-	conflictFreeConditionType = string(crdv1alpha1.AntreaNodeConfigConditionConflictFree)
-)
+const readyConditionType = string(crdv1alpha1.AntreaNodeConfigConditionReady)
 
 func statusFixture(now time.Time) (*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus) {
 	cfg := &crdv1alpha1.AntreaNodeConfig{
@@ -215,13 +212,14 @@ func TestCalculateStatus(t *testing.T) {
 				info.NodeRef.UID = "previous-node"
 			}
 			nodes := []*corev1.Node{node}
-			selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
+			selected := nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
 			infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: info}
 			if tt.missing {
 				delete(infos, node.Name)
 			}
 			status := calculateStatus(cfg, selected, nodes, infos, now)
-			ready := meta.FindStatusCondition(status.Conditions, string(crdv1alpha1.AntreaNodeConfigConditionReady))
+			require.Len(t, status.Conditions, 1)
+			ready := meta.FindStatusCondition(status.Conditions, readyConditionType)
 			require.NotNil(t, ready)
 			assert.Equal(t, tt.wantStatus, ready.Status)
 			assert.Equal(t, tt.wantReason, ready.Reason)
@@ -232,7 +230,6 @@ func TestCalculateStatus(t *testing.T) {
 			assert.Equal(t, cfg.Generation, status.ObservedGeneration)
 			assert.Equal(t, int32(1), status.DesiredNodes)
 			assert.Equal(t, tt.realized, status.RealizedNodes)
-			assert.True(t, meta.IsStatusConditionTrue(status.Conditions, string(crdv1alpha1.AntreaNodeConfigConditionConflictFree)))
 			cfg.Status = status
 			assert.Equal(t, status, calculateStatus(cfg, selected, nodes, infos, now.Add(time.Second)), "Unchanged observations must preserve condition transition times")
 		})
@@ -254,23 +251,20 @@ func TestCurrentMembershipAndPrecedence(t *testing.T) {
 	nodes := []*corev1.Node{node, shadowed, unrelated}
 	configs := []*crdv1alpha1.AntreaNodeConfig{cfg, older}
 	infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}
-	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
+	status := calculateStatus(cfg, nodeconfigutil.SelectConfigs(nodes, configs), nodes, infos, now)
+	require.Len(t, status.Conditions, 1)
 	assert.Equal(t, int32(1), status.DesiredNodes, "Only effective current members form the denominator")
 	assert.Equal(t, int32(1), status.RealizedNodes)
 	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, readyConditionType))
-	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, conflictFreeConditionType))
-	assert.Contains(t, meta.FindStatusCondition(status.Conditions, conflictFreeConditionType).Message, "1 matching Nodes")
 	cfg.Status = status
 	node.Labels = map[string]string{"pool": "other"}
-	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
+	status = calculateStatus(cfg, nodeconfigutil.SelectConfigs(nodes, configs), nodes, infos, now)
 	assert.Zero(t, status.DesiredNodes)
 	assert.Zero(t, status.RealizedNodes)
 	assert.Equal(t, "ConfigurationNotSelected", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
-	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, conflictFreeConditionType))
 	shadowed.Labels = map[string]string{"pool": "other"}
-	status = calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, configs), nodes, infos, now)
+	status = calculateStatus(cfg, nodeconfigutil.SelectConfigs(nodes, configs), nodes, infos, now)
 	assert.Equal(t, "NoMatchingNodes", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
-	assert.True(t, meta.IsStatusConditionTrue(status.Conditions, conflictFreeConditionType))
 	status = calculateStatus(cfg, nil, nil, infos, now)
 	assert.Zero(t, status.DesiredNodes, "Removed Nodes do not remain in the denominator")
 	assert.Zero(t, status.RealizedNodes)
@@ -281,11 +275,10 @@ func TestInvalidSelector(t *testing.T) {
 	cfg, node, report := statusFixture(now)
 	cfg.Spec.NodeSelector.MatchExpressions = []metav1.LabelSelectorRequirement{{Key: "key", Operator: metav1.LabelSelectorOpIn}}
 	nodes := []*corev1.Node{node}
-	status := calculateStatus(cfg, k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg}), nodes, map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}, now)
+	status := calculateStatus(cfg, nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg}), nodes, map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}, now)
 	assert.Zero(t, status.DesiredNodes)
 	assert.True(t, meta.IsStatusConditionFalse(status.Conditions, readyConditionType))
 	assert.Equal(t, "InvalidNodeSelector", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
-	assert.Equal(t, metav1.ConditionUnknown, meta.FindStatusCondition(status.Conditions, conflictFreeConditionType).Status)
 }
 
 func TestRetainedEmptyConfiguration(t *testing.T) {
@@ -294,7 +287,7 @@ func TestRetainedEmptyConfiguration(t *testing.T) {
 	cfg.Spec.SecondaryNetwork = &crdv1alpha1.SecondaryNetworkConfig{}
 	cfg.Generation++
 	nodes := []*corev1.Node{node}
-	selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
+	selected := nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
 	infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}
 	status := calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, "GenerationNotObserved", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
@@ -335,7 +328,7 @@ func TestDeterministicRepresentative(t *testing.T) {
 		}
 		infos[name] = statusInfo(node, r)
 	}
-	selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
+	selected := nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
 	expected := calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, int32(4), expected.DesiredNodes)
 	assert.Equal(t, int32(1), expected.RealizedNodes)
@@ -362,11 +355,11 @@ func TestStatusSizeWithFiveThousandNodes(t *testing.T) {
 		n.Name, n.UID = fmt.Sprintf("node-%04d", i), types.UID(fmt.Sprintf("uid-%04d", i))
 		nodes[i] = n
 	}
-	selected := k8s.SelectAntreaNodeConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
+	selected := nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg})
 	status := calculateStatus(cfg, selected, nodes, nil, now)
 	assert.Equal(t, int32(5000), status.DesiredNodes)
 	assert.Zero(t, status.RealizedNodes)
-	require.Len(t, status.Conditions, 2)
+	require.Len(t, status.Conditions, 1)
 	encoded, err := json.Marshal(status)
 	require.NoError(t, err)
 	var fields map[string]json.RawMessage

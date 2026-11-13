@@ -599,12 +599,11 @@ type AntreaNodeConfig struct {
 type AntreaNodeConfigConditionType string
 
 const (
-	// AntreaNodeConfigConditionReady indicates whether the configuration has been
-	// realized on all selected Nodes.
+	// AntreaNodeConfigConditionReady indicates whether the current configuration
+	// generation has been realized on all Nodes for which this configuration takes
+	// precedence. Nodes that select another AntreaNodeConfig are excluded.
+	// Ready is False when no Nodes select this configuration.
 	AntreaNodeConfigConditionReady AntreaNodeConfigConditionType = "Ready"
-	// AntreaNodeConfigConditionConflictFree indicates whether all matching Nodes select
-	// this configuration.
-	AntreaNodeConfigConditionConflictFree AntreaNodeConfigConditionType = "ConflictFree"
 )
 
 // AntreaNodeConfigStatus describes the realization of an AntreaNodeConfig.
@@ -615,7 +614,7 @@ type AntreaNodeConfigStatus struct {
 	DesiredNodes int32 `json:"desiredNodes"`
 	// RealizedNodes is the number of desired Nodes which have realized the current generation.
 	RealizedNodes int32 `json:"realizedNodes"`
-	// Conditions includes Ready and ConflictFree for the current generation.
+	// Conditions includes Ready for the current generation.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
