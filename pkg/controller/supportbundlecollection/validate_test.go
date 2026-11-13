@@ -290,12 +290,16 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 		}, {
 			name:             "create with host public key",
 			requestOperation: adminv1.Create,
+			requestUserInfo:  authorizedUserInfo,
 			collection: &bundleConfig{
-				name:          name,
-				authType:      crdv1alpha1.BasicAuthentication,
-				hostPublicKey: hostPublicKey.Marshal(),
+				name:            name,
+				authType:        crdv1alpha1.BasicAuthentication,
+				secretName:      authSecretName,
+				secretNamespace: "kube-system",
+				hostPublicKey:   hostPublicKey.Marshal(),
 			},
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+			expectedSARSpec:  expectedSARSpecForUser(authorizedUserInfo),
 		}, {
 			name:             "create with invalid host public key",
 			requestOperation: adminv1.Create,
@@ -528,6 +532,49 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			collection: &bundleConfig{
 				name:     name,
 				authType: "",
+			},
+			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:             "create without authSecret",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.BasicAuthentication,
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: "spec.authentication.authSecret must be specified",
+				},
+			},
+		}, {
+			name:             "update removing authSecret",
+			requestOperation: adminv1.Update,
+			existingCollection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.BasicAuthentication,
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: "spec.authentication.authSecret must be specified",
+				},
+			},
+		}, {
+			name:             "update leaving missing authSecret unchanged",
+			requestOperation: adminv1.Update,
+			existingCollection: &bundleConfig{
+				name: name,
+				nodes: &bundleNodes{
+					labels: map[string]string{"test": "selected"},
+				},
+				authType: crdv1alpha1.BasicAuthentication,
+			},
+			collection: &bundleConfig{
+				name: name,
+				nodes: &bundleNodes{
+					labels: map[string]string{"test": "updated"},
+				},
+				authType: crdv1alpha1.BasicAuthentication,
 			},
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
 		},
