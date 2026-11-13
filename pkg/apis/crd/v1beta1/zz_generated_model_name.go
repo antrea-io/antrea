@@ -45,6 +45,11 @@ func (in AntreaControllerInfoList) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in AntreaNodeConfigAgentStatus) OpenAPIModelName() string {
+	return "io.antrea.crd.v1beta1.AntreaNodeConfigAgentStatus"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in AppliedTo) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.AppliedTo"
 }
@@ -332,6 +337,11 @@ func (in PodOwner) OpenAPIModelName() string {
 // OpenAPIModelName returns the OpenAPI model name for this type.
 func (in Rule) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.Rule"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in SecondaryNetworkStatus) OpenAPIModelName() string {
+	return "io.antrea.crd.v1beta1.SecondaryNetworkStatus"
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.

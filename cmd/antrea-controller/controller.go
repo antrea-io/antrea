@@ -49,6 +49,7 @@ import (
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/clusteridentity"
+	"antrea.io/antrea/v2/pkg/controller/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/controller/certificatesigningrequest"
 	"antrea.io/antrea/v2/pkg/controller/egress"
 	egressstore "antrea.io/antrea/v2/pkg/controller/egress/store"
@@ -215,7 +216,13 @@ func run(o *Options) error {
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	externalNodeEnabled := features.DefaultFeatureGate.Enabled(features.ExternalNode)
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, client.CoreV1().Nodes(), nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
+	var nodeConfigStatusController *antreanodeconfig.StatusController
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		nodeConfigStatusController = antreanodeconfig.NewStatusController(crdClient,
+			crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs(),
+			crdInformerFactory.Crd().V1beta1().AntreaAgentInfos(), nodeInformer)
+	}
 
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
@@ -349,6 +356,9 @@ func run(o *Options) error {
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+	if nodeConfigStatusController != nil {
+		go nodeConfigStatusController.Run(stopCh)
+	}
 
 	// It starts dispatching group updates to consumers, should start individually.
 	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
