@@ -41,6 +41,7 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
+	hostNetworkClassifier  *HostNetworkClassifier
 	connectionStore
 }
 
@@ -58,6 +59,7 @@ func NewConntrackConnectionStore(
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
+		hostNetworkClassifier:  cfg.HostNetworkClassifier,
 	}
 }
 
@@ -152,9 +154,10 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
+		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" && !cs.isFromHostNetworkToRemotePod(conn) {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod except for from external flows.
+			// information for both srcPod and dstPod except for from external flows, and for flows
+			// initiated by the host network of this Node towards Pods running on other Nodes.
 
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
@@ -178,6 +181,16 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
 	}
+}
+
+// isFromHostNetworkToRemotePod returns whether conn was initiated by the host network of this Node
+// (e.g., by a hostNetwork Pod) towards a Pod running on another Node. IsFromHostNetwork is set by
+// the FromExternalCorrelator. This Node exports the source-Node half of such a flow, which the
+// FlowAggregator correlates with the destination-Node half, so that the flow is reported even
+// though neither endpoint is a Pod running on this Node.
+func (cs *ConntrackConnectionStore) isFromHostNetworkToRemotePod(conn *connection.Connection) bool {
+	return conn.IsFromHostNetwork && cs.hostNetworkClassifier != nil &&
+		cs.hostNetworkClassifier.IsRemotePodIP(conn.FlowKey.DestinationAddress)
 }
 
 // resolveDestinationService fills conn.DestinationServicePortName for Service-marked and

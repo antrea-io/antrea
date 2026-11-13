@@ -92,3 +92,43 @@ func TestGRPCExporterCreateMessage(t *testing.T) {
 	msg.Ipfix.ExportTime = nil // need to reset this field as createMessage will use the current time from the system clock
 	assert.Empty(t, cmp.Diff(expectedMsg, msg, protocmp.Transform()))
 }
+
+func TestGRPCExporterCreateMessageSourceNode(t *testing.T) {
+	exp := &grpcExporter{
+		nodeName: "this-node",
+		nodeUID:  "this-node-uid",
+	}
+	for _, tc := range []struct {
+		name                  string
+		sourcePodName         string
+		isFromHostNetwork     bool
+		expectedSourceNode    string
+		expectedSourceNodeUID string
+	}{
+		{
+			name:                  "local source Pod",
+			sourcePodName:         "pod",
+			expectedSourceNode:    "this-node",
+			expectedSourceNodeUID: "this-node-uid",
+		},
+		{
+			name:                  "host network of this Node",
+			isFromHostNetwork:     true,
+			expectedSourceNode:    "this-node",
+			expectedSourceNodeUID: "this-node-uid",
+		},
+		{
+			name: "source is neither a local Pod nor this Node",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+			conn.SourcePodName = tc.sourcePodName
+			conn.IsFromHostNetwork = tc.isFromHostNetwork
+			msg := exp.createMessage(conn)
+			assert.Equal(t, tc.sourcePodName, msg.K8S.SourcePodName)
+			assert.Equal(t, tc.expectedSourceNode, msg.K8S.SourceNodeName)
+			assert.Equal(t, tc.expectedSourceNodeUID, msg.K8S.SourceNodeUid)
+		})
+	}
+}

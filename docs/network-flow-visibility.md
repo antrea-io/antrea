@@ -199,7 +199,7 @@ Flow Exporter are listed below:
 | sourcePodName                  | 101      | string      |                                                                                                                                                                             |
 | destinationPodNamespace        | 102      | string      |                                                                                                                                                                             |
 | destinationPodName             | 103      | string      |                                                                                                                                                                             |
-| sourceNodeName                 | 104      | string      |                                                                                                                                                                             |
+| sourceNodeName                 | 104      | string      | Name of the Node running the source Pod, or of the Node whose host network initiated a From External flow (e.g., a hostNetwork Pod).                                        |
 | destinationNodeName            | 105      | string      |                                                                                                                                                                             |
 | destinationClusterIPv4         | 106      | ipv4Address | DEPRECATED in favor of destinationServiceIPv4.                                                                                                                              |
 | destinationClusterIPv6         | 107      | ipv6Address | DEPRECATED in favor of destinationServiceIPv6.                                                                                                                              |
@@ -250,6 +250,19 @@ Agent. In other words, flow records are only complete for intra-Node flows, but
 incomplete for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-aggregator)
 to correlate flows from the source and destination Nodes and produce complete flow
 records.
+
+Connections initiated by the host network of a Node towards Pods, e.g., kubelet
+probes or connections from `hostNetwork` Pods, are reported as From External
+flows, as their source is not a Pod. `hostNetwork` Pods cannot be told apart
+from the Node itself, so the source Pod information is empty. On Linux Nodes,
+when the connection goes through the Antrea gateway of the source Node, the
+flow is reported by that Node, and `sourceNodeName` is set to its name. This is
+the case for connections to local Pods, and to Pods running on other Nodes in
+`encap` mode, including connections to Services whose Endpoint is such a Pod.
+When kube-proxy masquerades a connection to a Service, the reported source is
+the IP that the Node used before masquerading. Connections to Pods running on
+other Nodes are not supported with WireGuard encryption, as they do not go
+through OVS on the source Node, nor in `networkPolicyOnly` mode.
 
 Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
 
@@ -566,7 +579,12 @@ Node, where the destination Pod resides. Both the flow records contain incomplet
 information as mentioned [here](#types-of-flows-and-associated-information). Flow
 Aggregator provides support for the correlation of the flow records from the
 source Node and the destination Node, and it exports a single flow record with complete
-information for both inter-Node and intra-Node flows.
+information for both inter-Node and intra-Node flows. This includes inter-Node From
+External flows, i.e., connections from external clients received by one Node and
+forwarded to a Pod running on another Node, and connections initiated by the host
+network of one Node towards a Pod running on another Node. In both cases, the source
+Node reports a From External flow, while the destination Node reports an Inter-Node
+flow, and the correlated flow record is a From External flow.
 
 Inter-Node flows denied by an egress Drop / Reject or an ingress Reject rule are
 an exception, as the other Node may never report them. A record for such a flow

@@ -49,6 +49,7 @@ import (
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 
 	"antrea.io/antrea/v2/pkg/util/objectstore"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
 )
 
@@ -94,11 +95,12 @@ type FlowExporter struct {
 	isNetworkPolicyOnly    bool
 
 	// Destination dependencies
-	nodeRouteController *noderoute.Controller
-	podStore            objectstore.PodStore
-	proxier             proxy.ProxyQuerier
-	egressQuerier       querier.EgressQuerier
-	npQuerier           querier.AgentNetworkPolicyInfoQuerier
+	nodeRouteController   *noderoute.Controller
+	hostNetworkClassifier *connections.HostNetworkClassifier
+	podStore              objectstore.PodStore
+	proxier               proxy.ProxyQuerier
+	egressQuerier         querier.EgressQuerier
+	npQuerier             querier.AgentNetworkPolicyInfoQuerier
 
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
@@ -151,13 +153,25 @@ func NewFlowExporter(
 ) (*FlowExporter, error) {
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
-	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier)
-	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
-
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
+	var hostNetworkClassifier *connections.HostNetworkClassifier
+	// Connections initiated by the host network are identified by their default-zone (host)
+	// conntrack entry, whose source address is an IP of this Node. On Windows, the default zone is
+	// not the host's conntrack table, so these connections are never identified. In
+	// networkPolicyOnly mode, the Pod subnets are not managed by Antrea, so the Pods running on
+	// other Nodes cannot be identified, and only the connections to local Pods are reported.
+	if !runtime.IsWindowsPlatform() {
+		if trafficEncapMode.IsNetworkPolicyOnly() {
+			hostNetworkClassifier = connections.NewHostNetworkClassifier(nodeConfig, nil)
+		} else if nodeRouteController != nil {
+			hostNetworkClassifier = connections.NewHostNetworkClassifier(nodeConfig, nodeRouteController)
+		}
+	}
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, hostNetworkClassifier)
+	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
+	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -190,12 +204,13 @@ func NewFlowExporter(
 		v6Enabled:              v6Enabled,
 		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
 
-		nodeRouteController: nodeRouteController,
-		podStore:            podStore,
-		proxier:             proxier,
-		egressQuerier:       egressQuerier,
-		npQuerier:           npQuerier,
-		networkPolicyWait:   networkPolicyWait,
+		nodeRouteController:   nodeRouteController,
+		hostNetworkClassifier: hostNetworkClassifier,
+		podStore:              podStore,
+		proxier:               proxier,
+		egressQuerier:         egressQuerier,
+		npQuerier:             npQuerier,
+		networkPolicyWait:     networkPolicyWait,
 
 		poller:                poller,
 		ctConnUpdateChannel:   ctConnsUpdateChannel,
@@ -499,6 +514,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		exp,
 		fe.k8sClient,
 		fe.nodeRouteController,
+		fe.hostNetworkClassifier,
 		fe.podStore,
 		fe.npQuerier,
 		fe.proxier,

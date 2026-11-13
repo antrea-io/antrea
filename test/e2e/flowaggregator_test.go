@@ -982,6 +982,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	// ExternalToPod flows tests the case where connections are made to pods from outside the cluster and their flow information is exported
 	// while maintaining the original source IP.
 	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6) })
+
+	// HostNetworkToPodFlows tests the case where connections are made to Pods by the host network
+	// of a Node (e.g., by a hostNetwork Pod, or by kubelet).
+	t.Run("HostNetworkToPodFlows", func(t *testing.T) { testHostNetworkToPodFlows(t, data, isIPv6) })
 }
 
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
@@ -1694,32 +1698,13 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 func getCollectorOutputWithName(t require.TestingT, name, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
 	var allRecords, records []string
 	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
-		var rc int
 		var err error
-		var cmd string
-		ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, name, testData.testNamespace)
-		if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
-			require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
-		}
-		if !isIPv6 {
-			cmd = fmt.Sprintf("curl http://%s:8080/records", ipfixCollectorIP.IPv4.String())
-		} else {
-			cmd = fmt.Sprintf("curl http://[%s]:8080/records", ipfixCollectorIP.IPv6.String())
-		}
-		rc, collectorOutput, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
-		if err != nil || rc != 0 {
-			return false, fmt.Errorf("failed to run curl command to retrieve flow records, rc: %d - err: %v", rc, err)
+		allRecords, err = getAllCollectorRecords(data, name, isIPv6)
+		if err != nil {
+			return false, err
 		}
 		// Checking that all the data records which correspond to the iperf flow are received
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
-		var response IPFIXCollectorResponse
-		if err := json.Unmarshal([]byte(collectorOutput), &response); err != nil {
-			return false, fmt.Errorf("error when unmarshalling output from IPFIX collector Pod: %w", err)
-		}
-		allRecords = make([]string, len(response.FlowRecords))
-		for idx := range response.FlowRecords {
-			allRecords[idx] = response.FlowRecords[idx].Data
-		}
 		records = filterCollectorRecords(allRecords, labelFilter, src, dst, srcPort)
 		if lookForFlowEnd {
 			for _, record := range records {
@@ -1744,6 +1729,34 @@ func getCollectorOutputWithName(t require.TestingT, name, srcIP, dstIP, srcPort 
 
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d", srcIP, dstIP, srcPort, len(allRecords), len(records))
 	return records
+}
+
+// getAllCollectorRecords returns all the records received so far by the go-ipfix collector with
+// the given name.
+func getAllCollectorRecords(data *TestData, name string, isIPv6 bool) ([]string, error) {
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, name, data.testNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IP of IPFIX collector Pod: %w", err)
+	}
+	var cmd string
+	if !isIPv6 {
+		cmd = fmt.Sprintf("curl http://%s:8080/records", ipfixCollectorIP.IPv4.String())
+	} else {
+		cmd = fmt.Sprintf("curl http://[%s]:8080/records", ipfixCollectorIP.IPv6.String())
+	}
+	rc, collectorOutput, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return nil, fmt.Errorf("failed to run curl command to retrieve flow records, rc: %d - err: %v", rc, err)
+	}
+	var response IPFIXCollectorResponse
+	if err := json.Unmarshal([]byte(collectorOutput), &response); err != nil {
+		return nil, fmt.Errorf("error when unmarshalling output from IPFIX collector Pod: %w", err)
+	}
+	records := make([]string, len(response.FlowRecords))
+	for idx := range response.FlowRecords {
+		records[idx] = response.FlowRecords[idx].Data
+	}
+	return records, nil
 }
 
 // getClickHouseOutput queries clickhouse with built-in client and checks if we have
@@ -2466,6 +2479,166 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			assert.Contains(t, record, fmt.Sprintf("destinationServicePort: %d", nplNodePort), "Record should include destinationServicePort as the NPL node port")
 			assertIPFIXRecordProxySnatUnset(t, record, isIPv6)
 		}
+	})
+}
+
+// testHostNetworkToPodFlows validates the flows for connections initiated by the host network of a
+// Node towards Pods. A plain hostNetwork Pod is used as the client, so the source address is
+// selected by the host itself. As it depends on the routing configuration, it is discovered rather
+// than assumed: in encap mode, the host uses the IP of its Antrea gateway to connect to any Pod,
+// while in noEncap mode, it uses its transport IP to connect to a Pod running on another Node.
+// The source is not a Pod, so the flows are reported as FROM_EXTERNAL flows, and the source Node is
+// reported when the source address is its gateway IP.
+func testHostNetworkToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
+	const destinationNodeIndex = 1
+	dstNodeName := nodeName(destinationNodeIndex)
+	nginxPodName, nginxIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "host-net-to-pod-flows", dstNodeName, data.testNamespace, false)
+	defer cleanupFunc()
+	dstIP := nginxIPs.IPv4.String()
+	if isIPv6 {
+		dstIP = nginxIPs.IPv6.String()
+	}
+
+	// connectFromHostNetwork connects to url from a hostNetwork Pod running on the Node with the
+	// given index, and returns the source IP and source port selected by the host.
+	connectFromHostNetwork := func(t *testing.T, nodeIndex int, url string) (string, string) {
+		clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "host-net-client", nodeName(nodeIndex), data.testNamespace, true)
+		t.Cleanup(cleanupFunc)
+		cmd := fmt.Sprintf("curl -sS -o /dev/null -w '%%{local_ip} %%{local_port}' --connect-timeout 5 --retry 3 --retry-connrefused %s", url)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, []string{"sh", "-c", cmd})
+		require.NoErrorf(t, err, "curl from hostNetwork Pod %s failed; stdout: %s, stderr: %s", clientPodName, stdout, stderr)
+		fields := strings.Fields(stdout)
+		require.Len(t, fields, 2, "Unexpected curl output: %s", stdout)
+		return fields[0], fields[1]
+	}
+	gatewayIP := func(nodeIndex int) string {
+		gwIPv4, gwIPv6 := nodeGatewayIPs(nodeIndex)
+		if isIPv6 {
+			return gwIPv6
+		}
+		return gwIPv4
+	}
+	recordField := func(t *testing.T, record, field string) string {
+		value, ok := ipfixRecordFieldValue(record, field)
+		require.Truef(t, ok, "Record has no %s field, record: %s", field, record)
+		return value
+	}
+	// checkRecords checks the records for a connection from the host network of a Node to the
+	// nginx Pod. sourceNodeName is the expected source Node name, which is empty if the source
+	// cannot be identified as a Node.
+	checkRecords := func(t *testing.T, records []string, sourceNodeName string) {
+		for _, record := range records {
+			checkFlowType(t, record, ipfixregistry.FlowTypeFromExternal)
+			assert.Empty(t, recordField(t, record, "sourcePodName"), "Record should not have a source Pod")
+			assert.Equal(t, sourceNodeName, recordField(t, record, "sourceNodeName"), "Record does not have the expected source Node")
+			assert.Equal(t, nginxPodName, recordField(t, record, "destinationPodName"), "Record does not have the expected destination Pod")
+			assert.Equal(t, data.testNamespace, recordField(t, record, "destinationPodNamespace"), "Record does not have the expected destination Pod Namespace")
+			assert.Equal(t, dstNodeName, recordField(t, record, "destinationNodeName"), "Record does not have the expected destination Node")
+		}
+	}
+	url := "http://" + net.JoinHostPort(dstIP, "80")
+
+	t.Run("SameNode", func(t *testing.T) {
+		sourceIP, sourcePort := connectFromHostNetwork(t, destinationNodeIndex, url)
+		// The route to the local Pod subnet goes through the Antrea gateway, so its IP is
+		// used as the source address, regardless of the traffic mode.
+		require.Equal(t, gatewayIP(destinationNodeIndex), sourceIP, "The host should use its gateway IP to connect to a local Pod")
+		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		checkRecords(t, records, dstNodeName)
+	})
+
+	t.Run("DifferentNode", func(t *testing.T) {
+		const sourceNodeIndex = 0
+		srcNodeName := nodeName(sourceNodeIndex)
+		encapMode, err := data.GetEncapMode()
+		require.NoError(t, err)
+		encryptionMode, err := data.GetEncryptionnMode()
+		require.NoError(t, err)
+		if encryptionMode == config.TrafficEncryptionModeWireGuard {
+			// The connection goes through the WireGuard device rather than through OVS on
+			// the source Node, so the source Node cannot report it.
+			t.Skip("Skipping test as connections from the host network to Pods running on other Nodes are not supported with WireGuard encryption")
+		}
+		sourceIP, sourcePort := connectFromHostNetwork(t, sourceNodeIndex, url)
+		fromGateway := sourceIP == gatewayIP(sourceNodeIndex)
+		if encapMode == config.TrafficEncapModeEncap {
+			require.True(t, fromGateway, "In encap mode, the host should use its gateway IP to connect to a remote Pod, but used %s", sourceIP)
+		}
+		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		if !fromGateway {
+			// The source address is the transport IP of the source Node, and the connection
+			// does not go through OVS on the source Node: only the destination Node reports
+			// it, as a connection from an external client.
+			checkRecords(t, records, "")
+			return
+		}
+		// Both Nodes report the connection, and the FlowAggregator correlates the records.
+		checkRecords(t, records, srcNodeName)
+		for _, record := range records {
+			for _, field := range []string{"octetTotalCountFromSourceNode", "octetTotalCountFromDestinationNode"} {
+				value, err := strconv.ParseUint(recordField(t, record, field), 10, 64)
+				require.NoError(t, err)
+				assert.NotZerof(t, value, "Record should have stats from both Nodes, but %s is 0, record: %s", field, record)
+			}
+		}
+	})
+
+	t.Run("ClusterIP", func(t *testing.T) {
+		svcName := "host-net-to-pod-svc"
+		ipFamily := corev1.IPv4Protocol
+		if isIPv6 {
+			svcName += "v6"
+			ipFamily = corev1.IPv6Protocol
+		}
+		svc, err := data.CreateServiceWithAnnotations(svcName, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"antrea-e2e": nginxPodName}, false, false, corev1.ServiceTypeClusterIP, &ipFamily, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcName, metav1.DeleteOptions{})
+		})
+		svcURL := "http://" + net.JoinHostPort(svc.Spec.ClusterIP, "80")
+		// The source address selected by the host is the one used to reach the ClusterIP, which
+		// may be translated before reaching the Pod.
+		sourceIP, sourcePort := connectFromHostNetwork(t, destinationNodeIndex, svcURL)
+		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		// The source Node is identified when the source address is one of its IPs known to
+		// the agent: its gateway IP (e.g., when AntreaProxy handles the ClusterIP), or its
+		// Node IP (e.g., when kube-proxy handles the ClusterIP, in which case the connection
+		// may also be masqueraded).
+		knownNodeIP := nodeIPv4(destinationNodeIndex)
+		if isIPv6 {
+			knownNodeIP = nodeIPv6(destinationNodeIndex)
+		}
+		expectedSourceNodeName := ""
+		if sourceIP == gatewayIP(destinationNodeIndex) || sourceIP == knownNodeIP {
+			expectedSourceNodeName = dstNodeName
+		} else {
+			t.Logf("The source address %s is neither the gateway IP nor the Node IP, the source Node cannot be identified", sourceIP)
+		}
+		for _, record := range records {
+			checkFlowType(t, record, ipfixregistry.FlowTypeFromExternal)
+			assert.Equal(t, expectedSourceNodeName, recordField(t, record, "sourceNodeName"), "Record does not have the expected source Node")
+			assert.Equal(t, nginxPodName, recordField(t, record, "destinationPodName"), "Record does not have the expected destination Pod")
+			assert.Contains(t, recordField(t, record, "destinationServicePortName"), svcName, "Record does not have the expected Service")
+		}
+
+		// If the connection was masqueraded, the destination Node also sees it with the SNAT
+		// address (the gateway IP) as the source. It must be correlated with its default-zone
+		// counterpart, and not be reported again as a connection from the host network.
+		snatIPField, unspecified := proxySnatIPField(isIPv6)
+		snatIP := recordField(t, records[0], snatIPField)
+		snatPort := recordField(t, records[0], "proxySnatPort")
+		if snatIP == unspecified || snatPort == "0" {
+			return
+		}
+		src, dst := matchSrcAndDstAddress(snatIP, dstIP, false, isIPv6)
+		assert.Never(t, func() bool {
+			allRecords, err := getAllCollectorRecords(data, "ipfix-collector", isIPv6)
+			if err != nil {
+				return false
+			}
+			return len(filterCollectorRecords(allRecords, src, dst, "sourceTransportPort: "+snatPort)) > 0
+		}, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout, time.Second,
+			"The masqueraded connection from %s:%s should only be reported with its original source", snatIP, snatPort)
 	})
 }
 
