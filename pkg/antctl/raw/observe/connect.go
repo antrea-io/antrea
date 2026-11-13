@@ -37,6 +37,12 @@ import (
 // See pkg/flowaggregator/flowstreamservice/service.go.
 const flowStreamPort = 14740
 
+// flowStreamSocketPath is the Unix socket on which a Flow Aggregator serves FlowStreamService to
+// its own container, which is what in-Pod observe connects to. See LocalSocketPath in
+// pkg/flowaggregator/flowstreamservice/local.go. It is a variable so that tests can serve it
+// elsewhere.
+var flowStreamSocketPath = "/var/run/antrea/flow-aggregator/flowstream.sock"
+
 // connectionMode controls how observe reaches the Flow Aggregator's FlowStreamService.
 type connectionMode string
 

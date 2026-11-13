@@ -667,9 +667,9 @@ func testAntctlObserveMultiInstance(t *testing.T, data *TestData) {
 	assert.NoErrorf(t, err, "explicit --flow-aggregator should bypass discovery: %s", stderr)
 }
 
-// testAntctlObserveInPod: running "antctl observe" from inside the Flow Aggregator's own Pod uses the
-// Pod's ServiceAccount, which the chart binds to the antrea-flow-viewer ClusterRole. That binding is
-// what makes the stream cluster-wide, so nothing is redacted.
+// testAntctlObserveInPod: running "antctl observe" from inside the Flow Aggregator's own Pod connects
+// to the Unix socket on which the Flow Aggregator serves the FlowStreamService to its own container.
+// That service does not authorize its clients, so the stream is cluster-wide and nothing is redacted.
 func testAntctlObserveInPod(t *testing.T, data *TestData) {
 	faPods, err := data.getFlowAggregators(flowAggregatorNamespace)
 	require.NoError(t, err)

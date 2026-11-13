@@ -404,11 +404,11 @@ func TestTimeLimitError(t *testing.T) {
 }
 
 func TestRejectedRequestError(t *testing.T) {
-	t.Run("unauthenticated in the Pod names the ServiceAccount token", func(t *testing.T) {
-		err := rejectedRequestError(status.Error(codes.Unauthenticated, "invalid token"), &options{}, true)
-		assert.ErrorContains(t, err, "ServiceAccount token of this Pod")
-		assert.NotContains(t, err.Error(), "kubeconfig")
-		assert.Equal(t, codes.Unauthenticated, status.Code(errors.Unwrap(err)))
+	t.Run("unavailable in the Pod names the socket", func(t *testing.T) {
+		err := rejectedRequestError(status.Error(codes.Unavailable, "no such file"), &options{}, true)
+		assert.ErrorContains(t, err, flowStreamSocketPath)
+		assert.ErrorContains(t, err, "no such file", "the server's own message is kept")
+		assert.Equal(t, codes.Unavailable, status.Code(errors.Unwrap(err)))
 	})
 
 	t.Run("unauthenticated names what the server accepts", func(t *testing.T) {

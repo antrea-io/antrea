@@ -825,7 +825,8 @@ RECORDS-EXPORTED RECORDS-RECEIVED RECORDS-DROPPED FLOWS EXPORTERS-CONNECTED
 **remote** mode it runs outside the Flow Aggregator's Pod, for example on your
 workstation with a kubeconfig. In **in-Pod** mode, run from inside that Pod
 (e.g. with `kubectl exec`), it connects to the instance's own
-`FlowStreamService` as the Pod's ServiceAccount.
+`FlowStreamService` through a Unix socket inside the container, without a
+kubeconfig or any credential.
 
 ```bash
 # Stream all flows involving Namespace "default"
@@ -955,8 +956,10 @@ Reading flows needs `list` on the virtual resource `flows` of the group
 [Authorizing flow visibility](./network-flow-visibility.md#authorizing-flow-visibility).
 Cluster-wide observe commands need a ClusterRoleBinding.
 
-As the Flow Aggregator's own ServiceAccount is bound to the `antrea-flow-viewer`
-ClusterRole, in-Pod observe requests always get Cluster-wide visibility.
+In-Pod observe needs none of this. The socket can only be opened by the user
+the Flow Aggregator runs as, inside its container, who can already read all the
+flows the Flow Aggregator holds in memory. In-Pod observe requests are therefore
+not authorized, and always get cluster-wide visibility with nothing redacted.
 
 #### Redaction
 
