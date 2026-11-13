@@ -300,6 +300,18 @@ func (mr *MockBridgeMockRecorder) NewTable(table, next, missAction any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTable", reflect.TypeOf((*MockBridge)(nil).NewTable), table, next, missAction)
 }
 
+// ResetFlowTableStatus mocks base method.
+func (m *MockBridge) ResetFlowTableStatus() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ResetFlowTableStatus")
+}
+
+// ResetFlowTableStatus indicates an expected call of ResetFlowTableStatus.
+func (mr *MockBridgeMockRecorder) ResetFlowTableStatus() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetFlowTableStatus", reflect.TypeOf((*MockBridge)(nil).ResetFlowTableStatus))
+}
+
 // ResumePacket mocks base method.
 func (m *MockBridge) ResumePacket(packetIn *ofctrl.PacketIn) error {
 	m.ctrl.T.Helper()

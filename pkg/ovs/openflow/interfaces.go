@@ -117,6 +117,8 @@ type Bridge interface {
 	DeleteMeterAll() error
 	GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error
 	DumpTableStatus() []TableStatus
+	// ResetFlowTableStatus resets cached flow counts and their metrics before a full replay.
+	ResetFlowTableStatus()
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
 	DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error)
