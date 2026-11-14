@@ -58,6 +58,9 @@ const (
 	// supportBundleCollectionRetryPeriod is the duration after which to retry a SupportBundleCollection
 	// request if it conflicts with a processing request.
 	supportBundleCollectionRetryPeriod = time.Second * 10
+	// unreportedNodeReason is the failure reason recorded for each Node which has not reported its result by
+	// the time the SupportBundleCollection expires.
+	unreportedNodeReason = "the SupportBundleCollection expired before the Agent reported its status"
 )
 
 const (
@@ -329,43 +332,13 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 	// Calculate the expiration time with ExpirationMinutes and the created time of the resource.
 	// It is to ensure the expiration time of the internal support bundle collection resource is constant, and to
 	// ensure the processing is atomic even if SupportBundleCollectionController is restarted.
-	expiredDuration, err := time.ParseDuration(fmt.Sprintf("%dm", bundle.Spec.ExpirationMinutes))
-	if err != nil {
-		klog.ErrorS(err, "Failed to parse expiration minute", "expirationMinute", bundle.Spec.ExpirationMinutes)
-		return nil, err
-	}
-	expiredAt := bundle.ObjectMeta.CreationTimestamp.Add(expiredDuration)
+	expiredAt := getExpirationTime(bundle)
 	now := time.Now()
-	transitionTime := metav1.Now()
 
 	// Create a CollectionStarted failure condition on the CRD if time is expired. Return nil to avoid the event
 	// to be re-enqueued.
 	if !now.Before(expiredAt) {
-		conditions := []v1alpha1.SupportBundleCollectionCondition{
-			{
-				Type:               v1alpha1.CollectionStarted,
-				Status:             metav1.ConditionFalse,
-				Reason:             string(metav1.StatusReasonExpired),
-				LastTransitionTime: transitionTime,
-			},
-			{
-				Type:               v1alpha1.BundleCollected,
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: transitionTime,
-			},
-			{
-				Type:               v1alpha1.CollectionFailure,
-				Status:             metav1.ConditionTrue,
-				Reason:             string(metav1.StatusReasonExpired),
-				LastTransitionTime: transitionTime,
-			},
-			{
-				Type:               v1alpha1.CollectionCompleted,
-				Status:             metav1.ConditionTrue,
-				LastTransitionTime: transitionTime,
-			},
-		}
-		if err := c.addConditions(bundle.Name, conditions); err != nil {
+		if err := c.addConditions(bundle.Name, newExpiredConditions()); err != nil {
 			klog.ErrorS(err, "Failed to create a CollectionFailure condition")
 			return nil, err
 		}
@@ -562,6 +535,15 @@ func (c *Controller) addInternalSupportBundleCollection(
 // processConflictedCollection adds a Started failure condition on the conflicted the SupportBundleCollection request,
 // and re-enqueue the request after 10s.
 func (c *Controller) processConflictedCollection(bundle *v1alpha1.SupportBundleCollection) error {
+	// Do not retry a collection which can no longer be started, otherwise it would stay pending forever.
+	if expiredAt := getExpirationTime(bundle); !time.Now().Before(expiredAt) {
+		if err := c.addConditions(bundle.Name, newExpiredConditions()); err != nil {
+			klog.ErrorS(err, "Failed to create a CollectionFailure condition")
+			return err
+		}
+		klog.InfoS("SupportBundleCollection is expired while waiting for a conflicting collection", "name", bundle.Name, "expiredAt", expiredAt)
+		return nil
+	}
 	message := "another SupportBundleCollection is processing on Nodes or on ExternalNodes in the same namespace, retry in 10s"
 	now := metav1.Now()
 	condition := []v1alpha1.SupportBundleCollectionCondition{
@@ -656,6 +638,7 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 	collectedNodes := 0
 	failedNodeReasons := make(map[string][]string)
 	failedNodes := 0
+	reportedNodes := sets.New[string]()
 	statuses := c.getNodeStatuses(internalBundleCollection.Name)
 	for _, status := range statuses {
 		nodeKey := getNodeKey(status)
@@ -664,6 +647,7 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 			c.deleteNodeStatus(internalBundleCollection.Name, nodeKey)
 			continue
 		}
+		reportedNodes.Insert(nodeKey)
 		if status.Completed {
 			collectedNodes += 1
 		} else {
@@ -677,6 +661,17 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 				failedNodeReasons[failedReason] = make([]string, 0)
 			}
 			failedNodeReasons[failedReason] = append(failedNodeReasons[failedReason], nodeKey)
+		}
+	}
+
+	failureReason := metav1.StatusReasonInternalError
+	// Once the collection has expired, the Nodes which have not reported a result are considered failed. Otherwise
+	// the collection would stay in progress forever, and block the collections which conflict with it.
+	if !now.Time.Before(internalBundleCollection.ExpiredAt.Time) {
+		if unreportedNodes := internalBundleCollection.NodeNames.Difference(reportedNodes); unreportedNodes.Len() > 0 {
+			failedNodeReasons[unreportedNodeReason] = sets.List(unreportedNodes)
+			failedNodes += unreportedNodes.Len()
+			failureReason = metav1.StatusReasonExpired
 		}
 	}
 
@@ -708,7 +703,7 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 			v1alpha1.SupportBundleCollectionCondition{
 				Type:               v1alpha1.CollectionFailure,
 				Status:             metav1.ConditionTrue,
-				Reason:             string(metav1.StatusReasonInternalError),
+				Reason:             string(failureReason),
 				Message:            failedConditionMessage,
 				LastTransitionTime: now,
 			},
@@ -801,6 +796,41 @@ func (c *Controller) updateSupportBundleCollectionStatus(name string, updatedSta
 	}
 	klog.V(2).InfoS("Updated SupportBundleCollection", "supportBundleCollection", name)
 	return nil
+}
+
+// getExpirationTime returns the time at which the SupportBundleCollection expires, which is derived from the creation
+// time of the resource so that it stays constant if the controller restarts.
+func getExpirationTime(bundle *v1alpha1.SupportBundleCollection) time.Time {
+	return bundle.CreationTimestamp.Add(time.Duration(bundle.Spec.ExpirationMinutes) * time.Minute)
+}
+
+// newExpiredConditions returns the conditions of a SupportBundleCollection which expired before it was started.
+func newExpiredConditions() []v1alpha1.SupportBundleCollectionCondition {
+	transitionTime := metav1.Now()
+	return []v1alpha1.SupportBundleCollectionCondition{
+		{
+			Type:               v1alpha1.CollectionStarted,
+			Status:             metav1.ConditionFalse,
+			Reason:             string(metav1.StatusReasonExpired),
+			LastTransitionTime: transitionTime,
+		},
+		{
+			Type:               v1alpha1.BundleCollected,
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: transitionTime,
+		},
+		{
+			Type:               v1alpha1.CollectionFailure,
+			Status:             metav1.ConditionTrue,
+			Reason:             string(metav1.StatusReasonExpired),
+			LastTransitionTime: transitionTime,
+		},
+		{
+			Type:               v1alpha1.CollectionCompleted,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: transitionTime,
+		},
+	}
 }
 
 // isCollectionCompleted check if CollectionCompleted condition with status ConditionTrue is added in the bundleCollection or not.
