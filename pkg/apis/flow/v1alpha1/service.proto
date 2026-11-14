@@ -136,8 +136,10 @@ message GetFlowsRequest {
   // can grant, and is the only scope in which nothing is redacted.
   bool cluster_wide = 5;
   // The Namespaces the client is asking for flows in: a record is streamed if
-  // its source or its destination Pod Namespace is one of them. This is the
-  // scope of the request, not a filter; use filters to narrow it further.
+  // its source Pod Namespace is one of them, or if its destination Pod
+  // Namespace is one of them and the connection reached that Namespace (it was
+  // allowed, or denied by a policy of that Namespace). This is the scope of the
+  // request, not a filter; use filters to narrow it further.
   //
   // The client must be authorized to observe the Namespace it names, or the
   // request is rejected with PERMISSION_DENIED. A subset is never silently
