@@ -16,59 +16,56 @@ spec:
         openAPIV3Schema:
           type: object
           properties:
-            nodeConfigStatus:
+            secondaryNetwork:
               type: object
               required:
-              - lastHeartbeatTime
+              - conditions
               properties:
+                source:
+                  type: string
+                  enum:
+                  - AgentConfig
+                  - AntreaNodeConfig
                 configName:
                   type: string
                 configUID:
                   type: string
-                lastHeartbeatTime:
+                currentBridge:
                   type: string
-                  format: date-time
-                secondaryNetwork:
-                  type: object
-                  required:
-                  - conditions
-                  properties:
-                    currentBridge:
-                      type: string
-                    desiredBridge:
-                      type: string
-                    conditions:
-                      type: array
-                      x-kubernetes-list-type: map
-                      x-kubernetes-list-map-keys:
-                      - type
-                      items:
-                        type: object
-                        required:
-                        - type
-                        - status
-                        - reason
-                        - message
-                        - lastTransitionTime
-                        properties:
-                          type:
-                            type: string
-                          status:
-                            type: string
-                            enum:
-                            - 'True'
-                            - 'False'
-                            - Unknown
-                          observedGeneration:
-                            type: integer
-                            format: int64
-                          reason:
-                            type: string
-                          message:
-                            type: string
-                          lastTransitionTime:
-                            type: string
-                            format: date-time
+                desiredBridge:
+                  type: string
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                  - type
+                  items:
+                    type: object
+                    required:
+                    - type
+                    - status
+                    - reason
+                    - message
+                    - lastTransitionTime
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                        - 'True'
+                        - 'False'
+                        - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
             version:
               type: string
             agentConditions:

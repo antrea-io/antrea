@@ -399,7 +399,7 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) error {
 	if err != nil {
 		return err
 	}
-	if agentCRD.NodeConfigStatus != nil {
+	if agentCRD.SecondaryNetwork != nil {
 		// A stale informer cache must not erase ownership status for a live Node.
 		_, err := monitor.nodeClient.Get(context.TODO(), name, metav1.GetOptions{})
 		if err == nil {

@@ -53,28 +53,21 @@ type AntreaAgentInfo struct {
 	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
 	// Network information
 	NetworkInfo NetworkInfo `json:"networkInfo,omitempty"`
-	// NodeConfigStatus reports the effective AntreaNodeConfig and secondary network realization.
-	// +optional
-	NodeConfigStatus *AntreaNodeConfigAgentStatus `json:"nodeConfigStatus,omitempty"`
-}
-
-// AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization.
-// The reporting Node incarnation is identified by the containing AntreaAgentInfo NodeRef UID.
-// An empty ConfigUID means that the report does not identify a selected configuration,
-// including when configuration support is disabled or the Agent is initializing.
-type AntreaNodeConfigAgentStatus struct {
-	// ConfigName is the name of the selected AntreaNodeConfig, if any.
-	ConfigName string `json:"configName,omitempty"`
-	// ConfigUID identifies the selected AntreaNodeConfig incarnation, if any. The name
-	// and generation are not sufficient: generation restarts at 1 when a configuration
-	// with the same name is recreated.
-	ConfigUID types.UID `json:"configUID,omitempty"`
-	// LastHeartbeatTime is updated whenever this report is published.
-	LastHeartbeatTime metav1.Time `json:"lastHeartbeatTime"`
-	// SecondaryNetwork reports realization of the selected secondary network configuration.
+	// SecondaryNetwork reports secondary network realization for either static Agent
+	// configuration or AntreaNodeConfig.
 	// +optional
 	SecondaryNetwork *SecondaryNetworkStatus `json:"secondaryNetwork,omitempty"`
 }
+
+// SecondaryNetworkConfigSource identifies the source of secondary network configuration.
+type SecondaryNetworkConfigSource string
+
+const (
+	// SecondaryNetworkConfigSourceAgentConfig identifies static Agent configuration.
+	SecondaryNetworkConfigSourceAgentConfig SecondaryNetworkConfigSource = "AgentConfig"
+	// SecondaryNetworkConfigSourceAntreaNodeConfig identifies an AntreaNodeConfig.
+	SecondaryNetworkConfigSourceAntreaNodeConfig SecondaryNetworkConfigSource = "AntreaNodeConfig"
+)
 
 // SecondaryNetworkConditionType is the type of a SecondaryNetworkStatus condition.
 type SecondaryNetworkConditionType string
@@ -87,12 +80,22 @@ const (
 
 // SecondaryNetworkStatus describes secondary network configuration realization on a Node.
 type SecondaryNetworkStatus struct {
+	// Source identifies the configuration used for this reconciliation, if any.
+	// +optional
+	Source SecondaryNetworkConfigSource `json:"source,omitempty"`
+	// ConfigName is the AntreaNodeConfig name when Source is AntreaNodeConfig.
+	// +optional
+	ConfigName string `json:"configName,omitempty"`
+	// ConfigUID identifies the AntreaNodeConfig incarnation when Source is
+	// AntreaNodeConfig. Name and generation cannot distinguish same-name recreation.
+	// +optional
+	ConfigUID types.UID `json:"configUID,omitempty"`
 	// CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.
 	CurrentBridge string `json:"currentBridge,omitempty"`
 	// DesiredBridge is the desired secondary OVS bridge, if any.
 	DesiredBridge string `json:"desiredBridge,omitempty"`
-	// Conditions includes SecondaryNetworkConditionReady with the configuration
-	// generation observed by this feature.
+	// Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is
+	// the AntreaNodeConfig generation when Source is AntreaNodeConfig, or zero otherwise.
 	Conditions []metav1.Condition `json:"conditions"`
 }
 

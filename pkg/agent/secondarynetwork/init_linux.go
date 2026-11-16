@@ -291,9 +291,7 @@ func (c *Controller) syncBridge() (syncErr error) {
 	// A newer snapshot may arrive while OVS or netlink operations are running.
 	snap := c.latestANCSnapshot.Load()
 	var desired *agenttypes.OVSBridgeConfig
-	if c.dynamicBridgeReconcile {
-		defer func() { c.updateNodeConfigStatus(snap, desired, syncErr) }()
-	}
+	defer func() { c.updateSecondaryNetworkStatus(snap, desired, syncErr) }()
 
 	// When the AntreaNodeConfig lister returns an error, skip reconciliation
 	// instead of deleting the current bridge. A transient error should not tear

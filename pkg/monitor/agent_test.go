@@ -169,23 +169,23 @@ func newAgentMonitor(crdClient *fakeclientset.Clientset, t *testing.T) *agentMon
 	return NewAgentMonitor(crdClient, querier, fakeCertData)
 }
 
-type testNodeConfigProvider struct {
-	report *v1beta1.AntreaNodeConfigAgentStatus
+type testSecondaryNetworkProvider struct {
+	report *v1beta1.SecondaryNetworkStatus
 }
 
-func (p *testNodeConfigProvider) GetAntreaNodeConfigStatus() *v1beta1.AntreaNodeConfigAgentStatus {
+func (p *testSecondaryNetworkProvider) GetSecondaryNetworkStatus() *v1beta1.SecondaryNetworkStatus {
 	return p.report
 }
-func (p *testNodeConfigProvider) AntreaNodeConfigStatusUpdates() <-chan struct{} { return nil }
+func (p *testSecondaryNetworkProvider) SecondaryNetworkStatusUpdates() <-chan struct{} { return nil }
 
-type testNodeConfigQuerier struct {
+type testSecondaryNetworkQuerier struct {
 	querier.AgentQuerier
 	nodeLister corelisters.NodeLister
 }
 
-func (q *testNodeConfigQuerier) GetNodeLister() corelisters.NodeLister { return q.nodeLister }
+func (q *testSecondaryNetworkQuerier) GetNodeLister() corelisters.NodeLister { return q.nodeLister }
 
-func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
+func TestSyncAgentSecondaryNetworkStatusSchema(t *testing.T) {
 	data, err := os.ReadFile("../../build/charts/antrea/crds/antreaagentinfo.yaml")
 	require.NoError(t, err)
 	var crd apiextensionsv1.CustomResourceDefinition
@@ -193,6 +193,10 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 	var openAPISchema apiextensions.JSONSchemaProps
 	require.NoError(t, apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(
 		crd.Spec.Versions[0].Schema.OpenAPIV3Schema, &openAPISchema, nil))
+	_, exists := openAPISchema.Properties["secondaryNetwork"]
+	require.True(t, exists)
+	_, exists = openAPISchema.Properties["nodeConfigStatus"]
+	require.False(t, exists)
 	validator, _, err := validation.NewSchemaValidator(&openAPISchema)
 	require.NoError(t, err)
 
@@ -201,23 +205,25 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 		enabled     bool
 		nilProvider bool
 		windows     bool
-		report      *v1beta1.AntreaNodeConfigAgentStatus
+		report      *v1beta1.SecondaryNetworkStatus
 	}{
 		{name: "feature disabled"},
-		{name: "disabled ignores provider", report: readyNodeConfigReport()},
+		{name: "disabled ignores provider", report: readySecondaryNetworkReport()},
 		{name: "enabled nil provider", enabled: true, nilProvider: true},
 		{name: "enabled nil report", enabled: true},
-		{name: "missing feature", enabled: true, report: &v1beta1.AntreaNodeConfigAgentStatus{ConfigUID: "current-config"}},
-		{name: "nil conditions", enabled: true, report: &v1beta1.AntreaNodeConfigAgentStatus{SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{}}},
-		{name: "empty conditions", enabled: true, report: &v1beta1.AntreaNodeConfigAgentStatus{SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{Conditions: []metav1.Condition{}}}},
-		{name: "other condition without Ready", enabled: true, report: &v1beta1.AntreaNodeConfigAgentStatus{
-			ConfigUID: "current-config", SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{CurrentBridge: "br-unconfirmed",
-				Conditions: []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, ObservedGeneration: 9}}}}},
+		{name: "missing feature", enabled: true, report: &v1beta1.SecondaryNetworkStatus{ConfigUID: "current-config", Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}},
+		{name: "nil conditions", enabled: true, report: &v1beta1.SecondaryNetworkStatus{}},
+		{name: "empty conditions", enabled: true, report: &v1beta1.SecondaryNetworkStatus{Conditions: []metav1.Condition{}}},
+		{name: "other condition without Ready", enabled: true, report: &v1beta1.SecondaryNetworkStatus{
+			Source:    v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
+			ConfigUID: "current-config", CurrentBridge: "br-unconfirmed",
+			Conditions: []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, ObservedGeneration: 9}},
+		}},
 		{name: "Windows with disabled features", nilProvider: true, windows: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			previous := readyNodeConfigReport()
-			old := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}, NodeConfigStatus: previous}
+			previous := readySecondaryNetworkReport()
+			old := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}, SecondaryNetwork: previous}
 			client := fakeclientset.NewSimpleClientset(old)
 			monitor := newAgentMonitor(client, t)
 			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
@@ -226,22 +232,21 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 				node.Labels = map[string]string{corev1.LabelOSStable: "windows"}
 			}
 			require.NoError(t, indexer.Add(node))
-			monitor.querier = &testNodeConfigQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
+			monitor.querier = &testSecondaryNetworkQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
 			if !tt.nilProvider {
-				monitor.nodeConfigStatusProvider = &testNodeConfigProvider{report: tt.report}
+				monitor.secondaryNetworkStatusProvider = &testSecondaryNetworkProvider{report: tt.report}
 			}
 			if tt.enabled {
-				monitor.SetNodeConfigStatusProvider(monitor.nodeConfigStatusProvider)
+				monitor.SetSecondaryNetworkStatusProvider(monitor.secondaryNetworkStatusProvider)
 			}
 			original := tt.report.DeepCopy()
 			monitor.syncAgentCRD(context.Background())
 			current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), old.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			report := current.NodeConfigStatus
+			report := current.SecondaryNetwork
 			require.NotNil(t, report)
-			require.NotNil(t, report.SecondaryNetwork)
-			require.Len(t, report.SecondaryNetwork.Conditions, 1)
-			ready := report.SecondaryNetwork.Conditions[0]
+			require.Len(t, report.Conditions, 1)
+			ready := report.Conditions[0]
 			wantStatus, wantReason := metav1.ConditionUnknown, "ConfigurationUnavailable"
 			if tt.windows {
 				wantStatus, wantReason = metav1.ConditionFalse, "UnsupportedNode"
@@ -255,10 +260,11 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 				assert.Equal(t, "Secondary network configuration is not supported on Windows Nodes", ready.Message)
 			}
 			assert.Zero(t, ready.ObservedGeneration)
-			assert.Empty(t, report.SecondaryNetwork.CurrentBridge)
-			assert.Empty(t, report.SecondaryNetwork.DesiredBridge)
+			assert.Empty(t, report.CurrentBridge)
+			assert.Empty(t, report.DesiredBridge)
 			assert.EqualValues(t, "node-uid", current.NodeRef.UID)
-			assert.False(t, report.LastHeartbeatTime.IsZero())
+			require.NotEmpty(t, current.AgentConditions)
+			assert.False(t, current.AgentConditions[0].LastHeartbeatTime.IsZero())
 			assert.False(t, ready.LastTransitionTime.IsZero())
 			if tt.report == nil || !tt.enabled || tt.windows {
 				assert.Empty(t, report.ConfigUID, "Fallback must not restore the previous selection")
@@ -275,35 +281,36 @@ func TestSyncAgentNodeConfigStatusSchema(t *testing.T) {
 			monitor.syncAgentCRD(context.Background())
 			current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), old.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, ready.LastTransitionTime, current.NodeConfigStatus.SecondaryNetwork.Conditions[0].LastTransitionTime,
+			assert.Equal(t, ready.LastTransitionTime, current.SecondaryNetwork.Conditions[0].LastTransitionTime,
 				"Heartbeat publication must preserve the Ready transition time")
 		})
 	}
 }
 
-func readyNodeConfigReport() *v1beta1.AntreaNodeConfigAgentStatus {
-	return &v1beta1.AntreaNodeConfigAgentStatus{
+func readySecondaryNetworkReport() *v1beta1.SecondaryNetworkStatus {
+	return &v1beta1.SecondaryNetworkStatus{
+		Source:     v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
 		ConfigName: "current-config", ConfigUID: "current-uid",
-		SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{CurrentBridge: "br-current",
-			Conditions: []metav1.Condition{{Type: string(v1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue,
-				ObservedGeneration: 2, Reason: "Reconciled", LastTransitionTime: metav1.Now()}}},
+		CurrentBridge: "br-current",
+		Conditions: []metav1.Condition{{Type: string(v1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue,
+			ObservedGeneration: 2, Reason: "Reconciled", LastTransitionTime: metav1.Now()}},
 	}
 }
 
-func TestSyncAgentNodeConfigStatusNodeIdentity(t *testing.T) {
+func TestSyncAgentSecondaryNetworkStatusNodeIdentity(t *testing.T) {
 	for _, previousUID := range []types.UID{"", "node-uid", "old-node-uid"} {
 		t.Run(string(previousUID), func(t *testing.T) {
-			previous := readyNodeConfigReport()
+			previous := readySecondaryNetworkReport()
 			old := &v1beta1.AntreaAgentInfo{
 				ObjectMeta:       metav1.ObjectMeta{Name: "testAgentCRD"},
 				NodeRef:          corev1.ObjectReference{Kind: "Node", Name: "testAgentCRD", UID: previousUID},
-				NodeConfigStatus: previous,
+				SecondaryNetwork: previous,
 			}
 			client := fakeclientset.NewSimpleClientset(old)
 			monitor := newAgentMonitor(client, t)
 			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-			monitor.querier = &testNodeConfigQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
-			monitor.SetNodeConfigStatusProvider(nil)
+			monitor.querier = &testSecondaryNetworkQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
+			monitor.SetSecondaryNetworkStatusProvider(nil)
 			monitor.syncAgentCRD(context.Background())
 			assert.Nil(t, monitor.agentCRD, "A failed Node lookup must not publish a new report")
 			for _, action := range client.Actions() {
@@ -313,41 +320,42 @@ func TestSyncAgentNodeConfigStatusNodeIdentity(t *testing.T) {
 			monitor.syncAgentCRD(context.Background())
 			current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), old.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			report := current.NodeConfigStatus
+			report := current.SecondaryNetwork
 			require.NotNil(t, report)
 			assert.EqualValues(t, "node-uid", current.NodeRef.UID)
 			assert.Empty(t, report.ConfigUID)
-			assert.Equal(t, metav1.ConditionUnknown, report.SecondaryNetwork.Conditions[0].Status)
+			assert.Equal(t, metav1.ConditionUnknown, report.Conditions[0].Status)
 		})
 	}
 }
 
-func TestPublishCurrentNodeConfigurationReport(t *testing.T) {
+func TestPublishCurrentSecondaryNetworkReport(t *testing.T) {
 	info := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}}
 	client := fakeclientset.NewSimpleClientset(info)
 	monitor := newAgentMonitor(client, t)
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	require.NoError(t, indexer.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: info.Name, UID: "node-uid"}}))
-	monitor.querier = &testNodeConfigQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
-	desired := readyNodeConfigReport()
-	desired.SecondaryNetwork.Conditions[0].Status = metav1.ConditionFalse
-	desired.SecondaryNetwork.Conditions[0].Reason = "BridgeInUse"
+	monitor.querier = &testSecondaryNetworkQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
+	desired := readySecondaryNetworkReport()
+	desired.Conditions[0].Status = metav1.ConditionFalse
+	desired.Conditions[0].Reason = "BridgeInUse"
 	original := desired.DeepCopy()
-	provider := &testNodeConfigProvider{report: desired}
-	monitor.SetNodeConfigStatusProvider(provider)
+	provider := &testSecondaryNetworkProvider{report: desired}
+	monitor.SetSecondaryNetworkStatusProvider(provider)
 	monitor.syncAgentCRD(context.Background())
 	current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 	require.NoError(t, err)
-	report := current.NodeConfigStatus
+	report := current.SecondaryNetwork
 	require.NotNil(t, report)
 	assert.Equal(t, original, desired, "Publication must not mutate the provider report")
-	assert.Equal(t, desired.SecondaryNetwork, report.SecondaryNetwork)
+	assert.Equal(t, desired, report)
 	assert.Equal(t, desired.ConfigUID, report.ConfigUID)
 	assert.EqualValues(t, "node-uid", current.NodeRef.UID)
-	assert.False(t, report.LastHeartbeatTime.IsZero())
-	report.SecondaryNetwork.Conditions[0].Message = "modified published report"
+	require.NotEmpty(t, current.AgentConditions)
+	assert.False(t, current.AgentConditions[0].LastHeartbeatTime.IsZero())
+	report.Conditions[0].Message = "modified published report"
 	assert.Equal(t, original, desired, "Published conditions must not alias the provider")
-	for _, unavailable := range []*v1beta1.AntreaNodeConfigAgentStatus{
+	for _, unavailable := range []*v1beta1.SecondaryNetworkStatus{
 		{ConfigUID: desired.ConfigUID},
 		nil,
 	} {
@@ -356,40 +364,52 @@ func TestPublishCurrentNodeConfigurationReport(t *testing.T) {
 		current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		if unavailable == nil {
-			assert.Empty(t, current.NodeConfigStatus.ConfigUID)
+			assert.Empty(t, current.SecondaryNetwork.ConfigUID)
 		} else {
-			assert.Equal(t, unavailable.ConfigUID, current.NodeConfigStatus.ConfigUID)
+			assert.Equal(t, unavailable.ConfigUID, current.SecondaryNetwork.ConfigUID)
 		}
-		assert.Empty(t, current.NodeConfigStatus.SecondaryNetwork.CurrentBridge)
-		ready := meta.FindStatusCondition(current.NodeConfigStatus.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
+		assert.Empty(t, current.SecondaryNetwork.CurrentBridge)
+		ready := meta.FindStatusCondition(current.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
 		require.NotNil(t, ready)
 		assert.Equal(t, metav1.ConditionUnknown, ready.Status)
 		assert.Equal(t, "ConfigurationUnavailable", ready.Reason)
 		assert.Zero(t, ready.ObservedGeneration)
 	}
+	static := &v1beta1.SecondaryNetworkStatus{
+		Source:        v1beta1.SecondaryNetworkConfigSourceAgentConfig,
+		CurrentBridge: "br-static", DesiredBridge: "br-static",
+		Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Reconciled"}},
+	}
+	provider.report = static
+	monitor.syncAgentCRD(context.Background())
+	current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, static, current.SecondaryNetwork, "Static feature status must be published without an ANC identity")
+	assert.Empty(t, current.SecondaryNetwork.ConfigUID)
+
 	for _, action := range client.Actions() {
 		assert.Equal(t, "antreaagentinfos", action.GetResource().Resource, "Publishing must only access AgentInfo")
 	}
 }
 
-func TestNodeConfigurationReportWithoutNodeIdentity(t *testing.T) {
+func TestSecondaryNetworkReportWithoutNodeIdentity(t *testing.T) {
 	for _, nodeType := range []config.NodeType{config.K8sNode, config.ExternalNode} {
 		t.Run(nodeType.String(), func(t *testing.T) {
 			info := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"},
-				NodeConfigStatus: &v1beta1.AntreaNodeConfigAgentStatus{ConfigUID: "previous-uid"}}
+				SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{ConfigUID: "previous-uid", Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}}
 			client := fakeclientset.NewSimpleClientset(info)
 			monitor := newAgentMonitor(client, t)
 			monitor.querier.GetNodeConfig().Type = nodeType
 			monitor.syncAgentCRD(context.Background())
 			current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			assert.Nil(t, current.NodeConfigStatus)
-			desired := &v1beta1.AntreaNodeConfigAgentStatus{ConfigUID: "current-uid"}
-			monitor.SetNodeConfigStatusProvider(&testNodeConfigProvider{report: desired})
+			assert.Nil(t, current.SecondaryNetwork)
+			desired := &v1beta1.SecondaryNetworkStatus{ConfigUID: "current-uid", Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}
+			monitor.SetSecondaryNetworkStatusProvider(&testSecondaryNetworkProvider{report: desired})
 			monitor.syncAgentCRD(context.Background())
 			current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, desired, current.NodeConfigStatus)
+			assert.Equal(t, desired, current.SecondaryNetwork)
 		})
 	}
 }

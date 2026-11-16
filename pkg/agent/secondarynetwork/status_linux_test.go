@@ -84,11 +84,11 @@ func TestReconcileDoesNotWaitForStatusPublication(t *testing.T) {
 	require.NoError(t, c.Initialize(nil))
 	assert.Equal(t, []ovsconfig.OVSBridgeClient{nil}, pods.initializeBridgeCalls)
 	assert.Equal(t, []ovsconfig.OVSBridgeClient{bridge}, pods.setBridgeCalls)
-	report := c.GetAntreaNodeConfigStatus()
+	report := c.GetSecondaryNetworkStatus()
 	require.NotNil(t, report)
 	assert.Equal(t, snap.AntreaNodeConfig.UID, report.ConfigUID)
-	assert.Equal(t, brNew, report.SecondaryNetwork.CurrentBridge)
-	assert.True(t, meta.IsStatusConditionTrue(report.SecondaryNetwork.Conditions, "Ready"))
+	assert.Equal(t, brNew, report.CurrentBridge)
+	assert.True(t, meta.IsStatusConditionTrue(report.Conditions, "Ready"))
 	assert.Zero(t, c.queue.Len())
 }
 
@@ -114,21 +114,21 @@ func TestRetainedEmptyConfigurationReportsDrainCompletion(t *testing.T) {
 	c.latestANCSnapshot.Store(empty)
 	pods.drainPending = true
 	require.ErrorIs(t, c.syncBridge(), errStaleBridgeInUse)
-	report := c.GetAntreaNodeConfigStatus()
+	report := c.GetSecondaryNetworkStatus()
 	assert.Equal(t, snap.AntreaNodeConfig.UID, report.ConfigUID)
-	assert.Equal(t, int64(2), meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready").ObservedGeneration)
-	assert.Empty(t, report.SecondaryNetwork.DesiredBridge)
-	assert.Equal(t, brNew, report.SecondaryNetwork.CurrentBridge)
-	assert.Equal(t, "BridgeInUse", meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready").Reason)
-	assert.True(t, meta.IsStatusConditionFalse(report.SecondaryNetwork.Conditions, "Ready"))
+	assert.Equal(t, int64(2), meta.FindStatusCondition(report.Conditions, "Ready").ObservedGeneration)
+	assert.Empty(t, report.DesiredBridge)
+	assert.Equal(t, brNew, report.CurrentBridge)
+	assert.Equal(t, "BridgeInUse", meta.FindStatusCondition(report.Conditions, "Ready").Reason)
+	assert.True(t, meta.IsStatusConditionFalse(report.Conditions, "Ready"))
 	pods.drainPending = false
 	require.NoError(t, c.syncBridge())
-	report = c.GetAntreaNodeConfigStatus()
+	report = c.GetSecondaryNetworkStatus()
 	assert.Equal(t, snap.AntreaNodeConfig.UID, report.ConfigUID)
-	assert.Equal(t, int64(2), meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready").ObservedGeneration)
-	assert.Empty(t, report.SecondaryNetwork.CurrentBridge)
-	assert.Empty(t, report.SecondaryNetwork.DesiredBridge)
-	assert.True(t, meta.IsStatusConditionTrue(report.SecondaryNetwork.Conditions, "Ready"))
+	assert.Equal(t, int64(2), meta.FindStatusCondition(report.Conditions, "Ready").ObservedGeneration)
+	assert.Empty(t, report.CurrentBridge)
+	assert.Empty(t, report.DesiredBridge)
+	assert.True(t, meta.IsStatusConditionTrue(report.Conditions, "Ready"))
 	assert.Nil(t, c.ovsBridgeClient)
 	assert.Nil(t, c.effectiveBridgeCfg)
 	assert.Equal(t, 2, pods.drainCalls)
@@ -174,16 +174,16 @@ func TestSameBridgeStatusRequiresExistingBridge(t *testing.T) {
 			db := &emptyBridgeDB{}
 			c.ovsBridgeClient = ovsconfig.NewOVSBridge(brNew, ovsconfig.OVSDatapathSystem, db)
 			require.NoError(t, c.syncBridge())
-			require.True(t, meta.IsStatusConditionTrue(c.GetAntreaNodeConfigStatus().SecondaryNetwork.Conditions, "Ready"))
+			require.True(t, meta.IsStatusConditionTrue(c.GetSecondaryNetworkStatus().Conditions, "Ready"))
 
 			next := snap.DeepCopy()
 			next.AntreaNodeConfig.Generation++
 			c.latestANCSnapshot.Store(next)
 			db.getErr = tt.err
 			err := c.syncBridge()
-			report := c.GetAntreaNodeConfigStatus()
-			require.Len(t, report.SecondaryNetwork.Conditions, 1)
-			ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			report := c.GetSecondaryNetworkStatus()
+			require.Len(t, report.Conditions, 1)
+			ready := meta.FindStatusCondition(report.Conditions, "Ready")
 			require.NotNil(t, ready)
 			assert.Equal(t, next.AntreaNodeConfig.Generation, ready.ObservedGeneration)
 			if tt.err == nil {
@@ -200,13 +200,13 @@ func TestSameBridgeStatusRequiresExistingBridge(t *testing.T) {
 
 			db.getErr = nil
 			require.NoError(t, c.syncBridge())
-			report = c.GetAntreaNodeConfigStatus()
-			ready = meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			report = c.GetSecondaryNetworkStatus()
+			ready = meta.FindStatusCondition(report.Conditions, "Ready")
 			require.NotNil(t, ready)
 			assert.Equal(t, next.AntreaNodeConfig.Generation, ready.ObservedGeneration)
 			assert.Equal(t, metav1.ConditionTrue, ready.Status)
 			assert.Equal(t, "Reconciled", ready.Reason)
-			assert.Equal(t, brNew, report.SecondaryNetwork.CurrentBridge)
+			assert.Equal(t, brNew, report.CurrentBridge)
 		})
 	}
 }

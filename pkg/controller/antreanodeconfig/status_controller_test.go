@@ -50,156 +50,174 @@ import (
 
 const readyConditionType = string(crdv1alpha1.AntreaNodeConfigConditionReady)
 
-func statusFixture(now time.Time) (*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus) {
+func statusFixture(now time.Time) (*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.SecondaryNetworkStatus) {
 	cfg := &crdv1alpha1.AntreaNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: "config", UID: "config-uid", Generation: 2, CreationTimestamp: metav1.NewTime(now)},
 		Spec:       crdv1alpha1.AntreaNodeConfigSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"pool": "one"}}},
 	}
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node", UID: "node-uid", Labels: map[string]string{"pool": "one"}}, Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
-	report := &crdv1beta1.AntreaNodeConfigAgentStatus{
+	report := &crdv1beta1.SecondaryNetworkStatus{
+		Source:     crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
 		ConfigName: cfg.Name, ConfigUID: cfg.UID,
-		LastHeartbeatTime: metav1.NewTime(now),
-		SecondaryNetwork: &crdv1beta1.SecondaryNetworkStatus{
-			Conditions: []metav1.Condition{{Type: string(crdv1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue, Reason: "Reconciled", ObservedGeneration: cfg.Generation, LastTransitionTime: metav1.NewTime(now)}},
-		},
+		Conditions: []metav1.Condition{{Type: string(crdv1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue, Reason: "Reconciled", ObservedGeneration: cfg.Generation, LastTransitionTime: metav1.NewTime(now)}},
 	}
 	return cfg, node, report
 }
 
-func statusInfo(node *corev1.Node, report *crdv1beta1.AntreaNodeConfigAgentStatus) *crdv1beta1.AntreaAgentInfo {
+func statusInfo(node *corev1.Node, report *crdv1beta1.SecondaryNetworkStatus) *crdv1beta1.AntreaAgentInfo {
 	return &crdv1beta1.AntreaAgentInfo{
 		ObjectMeta:       metav1.ObjectMeta{Name: node.Name},
 		NodeRef:          corev1.ObjectReference{Kind: "Node", Name: node.Name, UID: node.UID},
-		NodeConfigStatus: report,
+		AgentConditions:  []crdv1beta1.AgentCondition{{Type: crdv1beta1.AgentHealthy, Status: corev1.ConditionTrue, LastHeartbeatTime: report.Conditions[0].LastTransitionTime}},
+		SecondaryNetwork: report,
 	}
 }
 
 func TestCalculateStatus(t *testing.T) {
 	now := time.Now()
 	for _, tt := range []struct {
-		name          string
-		change        func(*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.AntreaNodeConfigAgentStatus)
-		missing       bool
-		staleIdentity bool
-		wantStatus    metav1.ConditionStatus
-		wantReason    string
-		wantMessage   string
-		realized      int32
+		name            string
+		change          func(*crdv1alpha1.AntreaNodeConfig, *corev1.Node, *crdv1beta1.SecondaryNetworkStatus)
+		missing         bool
+		heartbeatOffset time.Duration
+		noHeartbeat     bool
+		noAgentHealthy  bool
+		staleIdentity   bool
+		wantStatus      metav1.ConditionStatus
+		wantReason      string
+		wantMessage     string
+		realized        int32
 	}{
 		{name: "realized", wantStatus: metav1.ConditionTrue, wantReason: "Reconciled", realized: 1},
 		{name: "missing report", missing: true, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "old generation", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].ObservedGeneration--
+		{name: "missing configuration source", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Source = ""
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "recreated configuration", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "old generation", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions[0].ObservedGeneration--
+		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
+		{name: "recreated configuration", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigUID = "previous-uid"
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "recreated node", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "recreated node", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.SecondaryNetworkStatus) {
 			n.UID = "new-node"
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "expired heartbeat", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
-		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "future heartbeat", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.LastHeartbeatTime = metav1.NewTime(now.Add(2 * time.Minute))
-		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "no heartbeat", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.LastHeartbeatTime = metav1.Time{}
-		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "node offline", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "expired heartbeat", heartbeatOffset: -4 * time.Minute, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
+		{name: "future heartbeat", heartbeatOffset: 2 * time.Minute, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
+		{name: "missing AgentHealthy", noAgentHealthy: true, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
+		{name: "no heartbeat", noHeartbeat: true, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
+		{name: "node offline", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.SecondaryNetworkStatus) {
 			n.Status.Conditions[0].Status = corev1.ConditionFalse
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "node readiness unknown", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "node readiness unknown", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.SecondaryNetworkStatus) {
 			n.Status.Conditions = nil
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "draining", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
-			r.SecondaryNetwork.Conditions[0].Message = "bridge br-old still serves a Pod"
+		{name: "draining", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions[0].Status, r.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
+			r.Conditions[0].Message = "bridge br-old still serves a Pod"
 		}, wantStatus: metav1.ConditionFalse, wantReason: "BridgeInUse", wantMessage: "Node node: bridge br-old still serves a Pod"},
-		{name: "static override", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionFalse, "OverriddenByStaticConfig"
-			r.SecondaryNetwork.Conditions[0].Message = "static bridge br-local failed to initialize"
-		}, wantStatus: metav1.ConditionFalse, wantReason: "OverriddenByStaticConfig", wantMessage: "Node node: static bridge br-local failed to initialize"},
-		{name: "missing secondary network status", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork = nil
-		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
-		{name: "missing ready condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions = []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, Reason: "OtherReady"}}
-		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
-		{name: "future ready condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].ObservedGeneration++
-		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "zero generation", change: func(c *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			c.Generation, r.SecondaryNetwork.Conditions[0].ObservedGeneration = 0, 0
-		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "disabled", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "ready static configuration does not realize ANC", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
+			r.Source = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
+			r.Conditions[0].ObservedGeneration = 0
+		}, wantStatus: metav1.ConditionFalse, wantReason: "OverriddenByStaticConfig"},
+		{name: "failed static configuration does not realize ANC", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.ConfigName, r.ConfigUID = "", ""
+			r.Source = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
+			r.Conditions[0].ObservedGeneration = 0
+			r.Conditions[0].Status, r.Conditions[0].Reason = metav1.ConditionFalse, "ReconcileFailed"
+		}, wantStatus: metav1.ConditionFalse, wantReason: "OverriddenByStaticConfig"},
+		{name: "missing conditions", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions = nil
+		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
+		{name: "missing ready condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions = []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, Reason: "OtherReady"}}
+		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
+		{name: "future ready condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions[0].ObservedGeneration++
+		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
+		{name: "zero generation", change: func(c *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			c.Generation, r.Conditions[0].ObservedGeneration = 0, 0
+		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
+		{name: "disabled", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.ConfigName, r.ConfigUID = "", ""
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "FeatureDisabled"},
-		{name: "stale disabled", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "stale disabled", heartbeatOffset: -4 * time.Minute, change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
-			r.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
+
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "disabled wrong node", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "disabled wrong node", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "windows with unsupported report", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "windows with unsupported report", change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			n.Labels[corev1.LabelOSStable] = "windows"
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "UnsupportedNode"},
-		{name: "windows without report", missing: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "windows without report", missing: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, _ *crdv1beta1.SecondaryNetworkStatus) {
 			n.Labels[corev1.LabelOSStable] = "windows"
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "configuration unavailable", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "configuration unavailable", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
-		{name: "known configuration unavailable", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
+		{name: "known configuration unavailable", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "ConfigurationUnavailable"},
-		{name: "obsolete configuration placeholder", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "obsolete configuration placeholder", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigUID = "old-config"
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionUnknown, "ConfigurationUnavailable", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "identity-free unsupported", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "identity-free unsupported", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "UnsupportedNode"},
-		{name: "stale identity-free unsupported", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "stale identity-free unsupported", heartbeatOffset: -4 * time.Minute, change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
-			r.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
+
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "windows wrong node identity", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "windows wrong node identity", staleIdentity: true, change: func(_ *crdv1alpha1.AntreaNodeConfig, n *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			n.Labels[corev1.LabelOSStable] = "windows"
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "UnsupportedNode", 0
 		}, wantStatus: metav1.ConditionUnknown, wantReason: "AgentUnavailable"},
-		{name: "identity-free custom failure is not trusted", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "identity-free custom failure is not trusted", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "BridgeInUse", 0
+			r.Source = ""
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "BridgeInUse", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "disabled with obsolete configuration identity", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "disabled with obsolete configuration identity", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigUID = "previous-config"
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "partially identified disabled report", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "partially identified disabled report", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigUID = ""
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason, r.SecondaryNetwork.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
+			r.Conditions[0].Status, r.Conditions[0].Reason, r.Conditions[0].ObservedGeneration = metav1.ConditionFalse, "FeatureDisabled", 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "identity-free ready with current generation", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "identity-free ready with current generation", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
+			r.Source = ""
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "old failure condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
-			r.SecondaryNetwork.Conditions[0].ObservedGeneration--
-			r.SecondaryNetwork.Conditions[0].Status, r.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
+		{name: "old failure condition", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
+			r.Conditions[0].ObservedGeneration--
+			r.Conditions[0].Status, r.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
-		{name: "identity-free ready is not realized", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.AntreaNodeConfigAgentStatus) {
+		{name: "identity-free ready is not realized", change: func(_ *crdv1alpha1.AntreaNodeConfig, _ *corev1.Node, r *crdv1beta1.SecondaryNetworkStatus) {
 			r.ConfigName, r.ConfigUID = "", ""
-			r.SecondaryNetwork.Conditions[0].ObservedGeneration = 0
+			r.Source = ""
+			r.Conditions[0].ObservedGeneration = 0
 		}, wantStatus: metav1.ConditionFalse, wantReason: "GenerationNotObserved"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -207,6 +225,15 @@ func TestCalculateStatus(t *testing.T) {
 			info := statusInfo(node, report)
 			if tt.change != nil {
 				tt.change(cfg, node, report)
+			}
+			if tt.heartbeatOffset != 0 {
+				info.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(tt.heartbeatOffset))
+			}
+			if tt.noHeartbeat {
+				info.AgentConditions[0].LastHeartbeatTime = metav1.Time{}
+			}
+			if tt.noAgentHealthy {
+				info.AgentConditions[0].Type = crdv1beta1.OVSDBConnectionUp
 			}
 			if tt.staleIdentity {
 				info.NodeRef.UID = "previous-node"
@@ -291,14 +318,14 @@ func TestRetainedEmptyConfiguration(t *testing.T) {
 	infos := map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}
 	status := calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, "GenerationNotObserved", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
-	report.SecondaryNetwork.Conditions[0].ObservedGeneration = cfg.Generation
-	report.SecondaryNetwork.Conditions[0].Status, report.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
-	report.SecondaryNetwork.CurrentBridge = "br-old"
+	report.Conditions[0].ObservedGeneration = cfg.Generation
+	report.Conditions[0].Status, report.Conditions[0].Reason = metav1.ConditionFalse, "BridgeInUse"
+	report.CurrentBridge = "br-old"
 	status = calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, "BridgeInUse", meta.FindStatusCondition(status.Conditions, readyConditionType).Reason)
 	assert.Zero(t, status.RealizedNodes)
-	report.SecondaryNetwork.Conditions[0].Status, report.SecondaryNetwork.Conditions[0].Reason = metav1.ConditionTrue, "Reconciled"
-	report.SecondaryNetwork.CurrentBridge = ""
+	report.Conditions[0].Status, report.Conditions[0].Reason = metav1.ConditionTrue, "Reconciled"
+	report.CurrentBridge = ""
 	status = calculateStatus(cfg, selected, nodes, infos, now)
 	assert.Equal(t, int32(1), status.DesiredNodes)
 	assert.Equal(t, int32(1), status.RealizedNodes)
@@ -319,12 +346,12 @@ func TestDeterministicRepresentative(t *testing.T) {
 		}
 		r := report.DeepCopy()
 		if i < 3 {
-			r.SecondaryNetwork.Conditions[0].Status = metav1.ConditionFalse
-			r.SecondaryNetwork.Conditions[0].Reason = "BridgeInUse"
+			r.Conditions[0].Status = metav1.ConditionFalse
+			r.Conditions[0].Reason = "BridgeInUse"
 			if i == 2 {
-				r.SecondaryNetwork.Conditions[0].Reason = "ReconcileFailed"
+				r.Conditions[0].Reason = "ReconcileFailed"
 			}
-			r.SecondaryNetwork.Conditions[0].Message = strings.Repeat("bridge error ", 100)
+			r.Conditions[0].Message = strings.Repeat("bridge error ", 100)
 		}
 		infos[name] = statusInfo(node, r)
 	}
@@ -411,31 +438,32 @@ func TestStatusControllerUsesOnlyStatusWrites(t *testing.T) {
 
 func TestReportHeartbeatFiltering(t *testing.T) {
 	now := time.Now()
-	_, _, before := statusFixture(now)
+	_, node, report := statusFixture(now)
+	before := statusInfo(node, report)
 	after := before.DeepCopy()
-	after.LastHeartbeatTime = metav1.NewTime(now.Add(time.Minute))
+	after.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(time.Minute))
 	assert.False(t, reportNeedsSync(before, after, now.Add(time.Minute)))
-	after.SecondaryNetwork.Conditions[0].Reason = "BridgeInUse"
-	assert.True(t, reportNeedsSync(before, after, now.Add(time.Minute)))
 	for _, tt := range []struct {
 		name   string
-		change func(*crdv1beta1.AntreaNodeConfigAgentStatus)
+		change func(*crdv1beta1.AntreaAgentInfo)
 	}{
-		{name: "feature omitted", change: func(r *crdv1beta1.AntreaNodeConfigAgentStatus) { r.SecondaryNetwork = nil }},
-		{name: "ready omitted", change: func(r *crdv1beta1.AntreaNodeConfigAgentStatus) { r.SecondaryNetwork.Conditions = nil }},
-		{name: "feature generation", change: func(r *crdv1beta1.AntreaNodeConfigAgentStatus) { r.SecondaryNetwork.Conditions[0].ObservedGeneration++ }},
-		{name: "current bridge", change: func(r *crdv1beta1.AntreaNodeConfigAgentStatus) { r.SecondaryNetwork.CurrentBridge = "br-new" }},
-		{name: "desired bridge", change: func(r *crdv1beta1.AntreaNodeConfigAgentStatus) { r.SecondaryNetwork.DesiredBridge = "br-new" }},
+		{name: "feature omitted", change: func(info *crdv1beta1.AntreaAgentInfo) { info.SecondaryNetwork = nil }},
+		{name: "ready omitted", change: func(info *crdv1beta1.AntreaAgentInfo) { info.SecondaryNetwork.Conditions = nil }},
+		{name: "feature generation", change: func(info *crdv1beta1.AntreaAgentInfo) { info.SecondaryNetwork.Conditions[0].ObservedGeneration++ }},
+		{name: "current bridge", change: func(info *crdv1beta1.AntreaAgentInfo) { info.SecondaryNetwork.CurrentBridge = "br-new" }},
+		{name: "desired bridge", change: func(info *crdv1beta1.AntreaAgentInfo) { info.SecondaryNetwork.DesiredBridge = "br-new" }},
+		{name: "source", change: func(info *crdv1beta1.AntreaAgentInfo) {
+			info.SecondaryNetwork.Source = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
+		}},
+		{name: "node identity", change: func(info *crdv1beta1.AntreaAgentInfo) { info.NodeRef.UID = "new-node" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			changed := before.DeepCopy()
 			tt.change(changed)
-			assert.True(t, reportNeedsSync(before, changed, now), "Feature changes must promptly refresh the summary")
-			assert.Equal(t, "Reconciled", before.SecondaryNetwork.Conditions[0].Reason)
+			assert.True(t, reportNeedsSync(before, changed, now))
 		})
 	}
-	after = before.DeepCopy()
-	before.LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
+	before.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
 	assert.True(t, reportNeedsSync(before, after, now), "Recovery from a stale report must refresh readiness promptly")
 	assert.True(t, reportNeedsSync(before, nil, now))
 	assert.True(t, reportNeedsSync(nil, after, now))
@@ -531,11 +559,11 @@ func TestAgentInfoEventsRouteCurrentMembership(t *testing.T) {
 			t.Cleanup(func() { close(stop) })
 			go infoInformer.Informer().Run(stop)
 			require.True(t, cache.WaitForCacheSync(stop, infoInformer.Informer().HasSynced))
-			info := &crdv1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: node.Name}, NodeConfigStatus: report.DeepCopy()}
-			info.NodeConfigStatus.ConfigName, info.NodeConfigStatus.ConfigUID = "previous", "previous-config-uid"
+			info := &crdv1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: node.Name}, SecondaryNetwork: report.DeepCopy()}
+			info.SecondaryNetwork.ConfigName, info.SecondaryNetwork.ConfigUID = "previous", "previous-config-uid"
 			if tt.initial {
 				if tt.nilBefore {
-					info.NodeConfigStatus = nil
+					info.SecondaryNetwork = nil
 				}
 				_, err := client.CrdV1beta1().AntreaAgentInfos().Create(context.Background(), info, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -553,9 +581,9 @@ func TestAgentInfoEventsRouteCurrentMembership(t *testing.T) {
 				}
 			} else {
 				if tt.nilAfter {
-					info.NodeConfigStatus = nil
+					info.SecondaryNetwork = nil
 				} else {
-					info.NodeConfigStatus.ConfigName = tt.newName
+					info.SecondaryNetwork.ConfigName = tt.newName
 					want = append(want, tt.newName)
 				}
 				if tt.initial {

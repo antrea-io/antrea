@@ -43,13 +43,13 @@ type podControllerInterface interface {
 
 // Controller manages secondary network resources for a Node.
 type Controller struct {
-	statusMutex      sync.RWMutex
-	nodeConfigStatus *crdv1beta1.AntreaNodeConfigAgentStatus
-	statusUpdates    chan struct{}
-	ovsBridgeClient  ovsconfig.OVSBridgeClient           //nolint:unused // Used by Linux-only secondary bridge reconciliation.
-	secNetConfig     *agentconfig.SecondaryNetworkConfig //nolint:unused // Used by Linux-only secondary bridge reconciliation.
-	podController    podControllerInterface
-	nodeName         string //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	statusMutex            sync.RWMutex
+	secondaryNetworkStatus *crdv1beta1.SecondaryNetworkStatus
+	statusUpdates          chan struct{}
+	ovsBridgeClient        ovsconfig.OVSBridgeClient           //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	secNetConfig           *agentconfig.SecondaryNetworkConfig //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	podController          podControllerInterface
+	nodeName               string //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 	// primaryOVSBridgeName is the integration bridge used by the Antrea Agent. A
 	// secondary bridge must never use this name, as the secondary bridge controller
 	// owns the lifecycle of its bridge and may delete it during reconciliation.

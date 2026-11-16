@@ -211,28 +211,38 @@ effective bridge configuration changes, existing Pods are not automatically
 migrated to the new bridge. Recreate the affected Pods so their secondary
 network interfaces can connect to the new bridge.
 
-Antrea Controller summarizes current configuration realization in `AntreaNodeConfig.status`.
+Antrea Controller watches AgentInfo reports and writes their aggregate realization
+into the `AntreaNodeConfig.status` subresource.
 Use `kubectl get anc` to see readiness and Node counts. For each Node's actual result,
-inspect `AntreaAgentInfo.nodeConfigStatus`. The ANC status contains only aggregate counts
+inspect `AntreaAgentInfo.secondaryNetwork`. The ANC status contains only aggregate counts
 and Conditions, so its size does not grow with the number of selected Nodes.
 `status.observedGeneration` identifies the spec version processed by the Controller;
 check `Ready=True` for that same generation to determine whether it has been realized.
 
-The Agent report identifies the Node incarnation through `nodeRef.uid`, and contains the
-ANC name and UID and the publication heartbeat. `nodeConfigStatus.secondaryNetwork`
-contains the current and desired bridges and its `Ready` Condition. That Condition's
-`observedGeneration` identifies the reconciled configuration version; there is no separate
-report generation or reconciliation timestamp.
-Missing or expired reports and unavailable Nodes produce `Ready=Unknown`. A successful
-report must match the current Node UID, ANC UID, and generation. Nodes without a report
-still count toward `desiredNodes`; they do not count toward `realizedNodes`.
+The Agent reports secondary network realization directly in `AntreaAgentInfo.secondaryNetwork`,
+including when the bridge is configured statically without AntreaNodeConfig enabled.
+`source` identifies the configuration used for reconciliation: `AgentConfig` for a static
+Agent bridge, or `AntreaNodeConfig` for an ANC. It is omitted when no configuration source
+is available. For an ANC, the report includes its name and UID, and the `Ready` Condition's
+`observedGeneration` identifies the reconciled configuration version. For other sources,
+the ANC identity is omitted and `observedGeneration` is zero.
 
-Static configuration overriding an ANC produces `Ready=False` with reason
-`OverriddenByStaticConfig`. `Ready` covers the Nodes for which this ANC takes precedence.
-Overlapping node selectors are valid and resolved by precedence. Matching Nodes which
-select an older ANC are excluded from `desiredNodes` and do not affect `Ready`. An ANC
-with no selected Nodes reports `Ready=False` with reason `NoMatchingNodes`, or
-`ConfigurationNotSelected` if all matching Nodes select an older ANC.
+The reporting Node incarnation is identified by `nodeRef.uid`. The Controller checks the
+existing `AgentHealthy` Condition's `lastHeartbeatTime` to determine report freshness;
+there is no separate secondary network heartbeat. Missing or expired reports and
+unavailable Nodes produce ANC `Ready=Unknown`. A successful ANC report must match the
+current Node UID, ANC UID, and generation. Nodes without a report still count toward
+`desiredNodes`; they do not count toward `realizedNodes`.
+
+Static bridge readiness and ANC readiness are independent. A successfully reconciled
+static bridge reports secondary network `Ready=True` with `source: AgentConfig`. If a
+matching ANC is overridden by that static configuration, the Controller reports ANC
+`Ready=False` with reason `OverriddenByStaticConfig` instead of counting the Node as realized.
+ANC `Ready` covers the Nodes for which this ANC takes precedence. Overlapping node selectors
+are valid and resolved by precedence. Matching Nodes which select an older ANC are excluded
+from `desiredNodes` and do not affect `Ready`. An ANC with no selected Nodes reports
+`Ready=False` with reason `NoMatchingNodes`, or `ConfigurationNotSelected` if all matching
+Nodes select an older ANC.
 
 To observe secondary network removal, retain the ANC and remove only `spec.secondaryNetwork`.
 The same ANC UID and its new generation remain observable while bridge cleanup runs.
@@ -293,32 +303,36 @@ metadata:
   name: node-a
 nodeRef:
   uid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
-nodeConfigStatus:
+agentConditions:
+- type: AgentHealthy
+  status: "True"
+  lastHeartbeatTime: "2026-10-29T09:01:00Z"
+secondaryNetwork:
+  source: AntreaNodeConfig
   configName: secondary-network-all-linux
   configUID: 11111111-1111-4111-8111-111111111111
-  lastHeartbeatTime: "2026-10-29T09:01:00Z"
-  secondaryNetwork:
-    currentBridge: br1
-    desiredBridge: br1
-    conditions:
-    - type: Ready
-      status: "True"
-      observedGeneration: 1
-      lastTransitionTime: "2026-10-29T09:00:00Z"
-      reason: Reconciled
-      message: Secondary network configuration has been realized
+  currentBridge: br1
+  desiredBridge: br1
+  conditions:
+  - type: Ready
+    status: "True"
+    observedGeneration: 1
+    lastTransitionTime: "2026-10-29T09:00:00Z"
+    reason: Reconciled
+    message: Secondary network configuration has been realized
 ```
 
-`nodeConfigStatus` is a top-level field on AntreaAgentInfo, not a field under `status`.
-The Agent publishes reconciliation results on changes and refreshes its heartbeat every
-minute. Reports older than three minutes are unavailable even if the last reconciliation
-succeeded. Condition transition times are not heartbeat or reconciliation expiry clocks.
+`secondaryNetwork` is a top-level field on AntreaAgentInfo, not a field under `status`.
+The Agent publishes reconciliation results on changes and refreshes its `AgentHealthy`
+heartbeat every minute. A heartbeat older than three minutes makes the Agent's result
+unavailable even if the last reconciliation succeeded. Condition transition times are not
+heartbeat or reconciliation expiry clocks.
 After restart, the Agent publishes its new reconciliation result rather than refreshing
 the previous Agent's readiness.
 
 Feature readiness is explicit. Windows Agents report `Ready=False` with reason
 `UnsupportedNode`. AntreaNodeConfig and SecondaryNetwork are unsupported on Windows, and
-enabling either feature causes Agent startup to fail. On Linux, a disabled feature reports
+enabling either feature causes Agent startup to fail. On Linux, disabled SecondaryNetwork reports
 `Ready=False` with reason `FeatureDisabled`. An initializing feature reports `Ready=Unknown`
 with reason `ConfigurationUnavailable`. A missing `secondaryNetwork` object or missing
 `Ready` Condition is also unavailable, not disabled.

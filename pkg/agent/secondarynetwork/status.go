@@ -23,38 +23,41 @@ import (
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
 
-// GetAntreaNodeConfigStatus returns an independent copy of the latest reconciliation result.
-func (c *Controller) GetAntreaNodeConfigStatus() *crdv1beta1.AntreaNodeConfigAgentStatus {
+// GetSecondaryNetworkStatus returns an independent copy of the latest reconciliation result.
+func (c *Controller) GetSecondaryNetworkStatus() *crdv1beta1.SecondaryNetworkStatus {
 	c.statusMutex.RLock()
 	defer c.statusMutex.RUnlock()
-	return c.nodeConfigStatus.DeepCopy()
+	return c.secondaryNetworkStatus.DeepCopy()
 }
 
-// AntreaNodeConfigStatusUpdates signals that a new reconciliation result is available.
-func (c *Controller) AntreaNodeConfigStatusUpdates() <-chan struct{} {
+// SecondaryNetworkStatusUpdates signals that a new reconciliation result is available.
+func (c *Controller) SecondaryNetworkStatusUpdates() <-chan struct{} {
 	return c.statusUpdates
 }
 
-func (c *Controller) updateNodeConfigStatus(snap *antreanodeconfig.Snapshot, desired *agenttypes.OVSBridgeConfig, err error) {
-	feature := &crdv1beta1.SecondaryNetworkStatus{}
-	report := &crdv1beta1.AntreaNodeConfigAgentStatus{SecondaryNetwork: feature}
+func (c *Controller) updateSecondaryNetworkStatus(snap *antreanodeconfig.Snapshot, desired *agenttypes.OVSBridgeConfig, err error) {
+	report := &crdv1beta1.SecondaryNetworkStatus{}
 	var generation int64
-	if snap != nil && snap.AntreaNodeConfig != nil {
+	staticConfig := c.secNetConfig != nil && len(c.secNetConfig.OVSBridges) > 0
+	if staticConfig {
+		report.Source = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
+	} else if snap != nil && snap.AntreaNodeConfig != nil {
 		cfg := snap.AntreaNodeConfig
+		report.Source = crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig
 		report.ConfigName, report.ConfigUID = cfg.Name, cfg.UID
 		generation = cfg.Generation
 	}
 	if desired != nil {
-		feature.DesiredBridge = desired.BridgeName
+		report.DesiredBridge = desired.BridgeName
 	}
 	if c.ovsBridgeClient != nil {
-		feature.CurrentBridge = c.ovsBridgeClient.GetBridgeName()
+		report.CurrentBridge = c.ovsBridgeClient.GetBridgeName()
 	}
 	readyCondition := string(crdv1beta1.SecondaryNetworkConditionReady)
 	condition := metav1.Condition{Type: readyCondition, Status: metav1.ConditionTrue,
 		ObservedGeneration: generation, Reason: "Reconciled",
 		Message: "Secondary network configuration has been realized"}
-	available := snap != nil && snap.AntreaNodeConfigListError == ""
+	available := !c.dynamicBridgeReconcile || staticConfig || (snap != nil && snap.AntreaNodeConfigListError == "")
 	switch {
 	case !available:
 		condition.Status, condition.Reason = metav1.ConditionUnknown, "ConfigurationUnavailable"
@@ -65,27 +68,18 @@ func (c *Controller) updateNodeConfigStatus(snap *antreanodeconfig.Snapshot, des
 	case err != nil:
 		condition.Status, condition.Reason, condition.Message = metav1.ConditionFalse, "ReconcileFailed", err.Error()
 	}
-	if available {
-		switch {
-		case snap.AntreaNodeConfig != nil && c.secNetConfig != nil && len(c.secNetConfig.OVSBridges) > 0:
-			condition.Status, condition.Reason = metav1.ConditionFalse, "OverriddenByStaticConfig"
-			condition.Message = "Static Agent secondary network configuration takes precedence over AntreaNodeConfig"
-			if err != nil {
-				condition.Message += "; static bridge reconciliation failed: " + err.Error()
-			}
-		case err == errStaleBridgeInUse:
-			condition.Reason = "BridgeInUse"
-			condition.Message = "Waiting for Pod secondary interfaces to be removed before deleting the bridge"
-		}
+	if available && err == errStaleBridgeInUse {
+		condition.Reason = "BridgeInUse"
+		condition.Message = "Waiting for Pod secondary interfaces to be removed before deleting the bridge"
 	}
 	c.statusMutex.Lock()
-	if c.nodeConfigStatus != nil && c.nodeConfigStatus.SecondaryNetwork != nil {
-		if previous := meta.FindStatusCondition(c.nodeConfigStatus.SecondaryNetwork.Conditions, readyCondition); previous != nil {
-			feature.Conditions = append(feature.Conditions, *previous)
+	if c.secondaryNetworkStatus != nil {
+		if previous := meta.FindStatusCondition(c.secondaryNetworkStatus.Conditions, readyCondition); previous != nil {
+			report.Conditions = append(report.Conditions, *previous)
 		}
 	}
-	meta.SetStatusCondition(&feature.Conditions, condition)
-	c.nodeConfigStatus = report
+	meta.SetStatusCondition(&report.Conditions, condition)
+	c.secondaryNetworkStatus = report
 	c.statusMutex.Unlock()
 	select {
 	case c.statusUpdates <- struct{}{}:

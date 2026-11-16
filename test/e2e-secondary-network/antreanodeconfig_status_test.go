@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreae2e "antrea.io/antrea/v2/test/e2e"
 )
 
@@ -90,11 +91,10 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 		t.Helper()
 		info, err := e2eData.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, node, metav1.GetOptions{})
 		require.NoError(t, err)
-		require.NotNil(t, info.NodeConfigStatus)
-		require.NotNil(t, info.NodeConfigStatus.SecondaryNetwork)
-		ready := meta.FindStatusCondition(info.NodeConfigStatus.SecondaryNetwork.Conditions, "Ready")
+		require.NotNil(t, info.SecondaryNetwork)
+		ready := meta.FindStatusCondition(info.SecondaryNetwork.Conditions, "Ready")
 		require.NotNil(t, ready)
-		assert.Equal(t, current.UID, info.NodeConfigStatus.ConfigUID)
+		assert.Equal(t, current.UID, info.SecondaryNetwork.ConfigUID)
 		assert.Equal(t, current.Generation, ready.ObservedGeneration)
 		assert.Equal(t, metav1.ConditionTrue, ready.Status)
 		currentNode, err := k8sClient.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
@@ -132,11 +132,11 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 			if err != nil {
 				return false, err
 			}
-			if info.NodeConfigStatus == nil || info.NodeConfigStatus.SecondaryNetwork == nil {
+			if info.SecondaryNetwork == nil {
 				return false, nil
 			}
-			ready := meta.FindStatusCondition(info.NodeConfigStatus.SecondaryNetwork.Conditions, "Ready")
-			return info.PodRef.Name != before.PodRef.Name && info.NodeConfigStatus.ConfigUID == cfg.UID &&
+			ready := meta.FindStatusCondition(info.SecondaryNetwork.Conditions, "Ready")
+			return info.PodRef.Name != before.PodRef.Name && info.SecondaryNetwork.ConfigUID == cfg.UID &&
 				ready != nil && ready.ObservedGeneration == cfg.Generation && ready.Status == metav1.ConditionTrue, nil
 		}))
 		cfg = waitStatus(t, cfg.Generation, metav1.ConditionTrue, "Reconciled")
@@ -194,18 +194,18 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 		require.NoError(t, data.waitForOVSBridge(nodeName, bridge), "In-use bridge must remain while draining")
 		beforeRestart, err := e2eData.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, nodeName, metav1.GetOptions{})
 		require.NoError(t, err)
-		require.NotNil(t, beforeRestart.NodeConfigStatus)
+		require.NotNil(t, beforeRestart.SecondaryNetwork)
 		require.NoError(t, e2eData.RestartAntreaAgentPods(60*time.Second))
 		require.NoError(t, wait.PollUntilContextTimeout(ctx, time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 			info, err := e2eData.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, nodeName, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
-			if info.NodeConfigStatus == nil || info.NodeConfigStatus.SecondaryNetwork == nil {
+			if info.SecondaryNetwork == nil {
 				return false, nil
 			}
-			report := info.NodeConfigStatus
-			ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			report := info.SecondaryNetwork
+			ready := meta.FindStatusCondition(report.Conditions, "Ready")
 			return info.PodRef.Name != beforeRestart.PodRef.Name &&
 				report.ConfigUID == uid && ready != nil && ready.ObservedGeneration == cfg.Generation &&
 				ready.Status == metav1.ConditionFalse && ready.Reason == "BridgeInUse", nil
@@ -214,14 +214,13 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 		assert.Equal(t, uid, blocked.UID)
 		info, err := e2eData.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(ctx, nodeName, metav1.GetOptions{})
 		require.NoError(t, err)
-		require.NotNil(t, info.NodeConfigStatus)
-		require.NotNil(t, info.NodeConfigStatus.SecondaryNetwork)
-		assert.Equal(t, uid, info.NodeConfigStatus.ConfigUID)
-		ready := meta.FindStatusCondition(info.NodeConfigStatus.SecondaryNetwork.Conditions, "Ready")
+		require.NotNil(t, info.SecondaryNetwork)
+		assert.Equal(t, uid, info.SecondaryNetwork.ConfigUID)
+		ready := meta.FindStatusCondition(info.SecondaryNetwork.Conditions, "Ready")
 		require.NotNil(t, ready)
 		assert.Equal(t, cfg.Generation, ready.ObservedGeneration)
-		assert.Equal(t, bridge, info.NodeConfigStatus.SecondaryNetwork.CurrentBridge)
-		assert.Empty(t, info.NodeConfigStatus.SecondaryNetwork.DesiredBridge)
+		assert.Equal(t, bridge, info.SecondaryNetwork.CurrentBridge)
+		assert.Empty(t, info.SecondaryNetwork.DesiredBridge)
 		require.NoError(t, e2eData.DeletePod(e2eData.GetTestNamespace(), pod.podName))
 		cfg = waitStatus(t, cfg.Generation, metav1.ConditionTrue, "Reconciled")
 		waitBridgeAbsent(t, nodeName)
@@ -266,11 +265,11 @@ func TestAntreaNodeConfigStatus(t *testing.T) {
 			if err != nil {
 				return false, err
 			}
-			if info.NodeConfigStatus == nil || info.NodeConfigStatus.SecondaryNetwork == nil {
+			if info.SecondaryNetwork == nil {
 				return false, nil
 			}
-			report := info.NodeConfigStatus
-			ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, "Ready")
+			report := info.SecondaryNetwork
+			ready := meta.FindStatusCondition(report.Conditions, "Ready")
 			return report.ConfigUID == "" && ready != nil && ready.Status == metav1.ConditionFalse && ready.Reason == "BridgeInUse", nil
 		}))
 		require.NoError(t, data.waitForOVSBridge(otherNode, bridge))
@@ -295,7 +294,26 @@ func TestAntreaNodeConfigStaticOverride(t *testing.T) {
 			return false, err
 		}
 		ready := meta.FindStatusCondition(cfg.Status.Conditions, "Ready")
-		return ready != nil && ready.ObservedGeneration == cfg.Generation && ready.Status == metav1.ConditionFalse && ready.Reason == "OverriddenByStaticConfig" && cfg.Status.RealizedNodes == 0, nil
+		if ready == nil || ready.ObservedGeneration != cfg.Generation || ready.Status != metav1.ConditionFalse ||
+			ready.Reason != "OverriddenByStaticConfig" || cfg.Status.RealizedNodes != 0 {
+			return false, nil
+		}
+		infos, err := data.CRDClient.CrdV1beta1().AntreaAgentInfos().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, info := range infos.Items {
+			feature := info.SecondaryNetwork
+			if feature == nil || feature.Source != crdv1beta1.SecondaryNetworkConfigSourceAgentConfig {
+				continue
+			}
+			featureReady := meta.FindStatusCondition(feature.Conditions, "Ready")
+			if feature.ConfigUID == "" && featureReady != nil && featureReady.Status == metav1.ConditionTrue &&
+				featureReady.ObservedGeneration == 0 {
+				return true, nil
+			}
+		}
+		return false, nil
 	}))
 }
 

@@ -350,7 +350,7 @@ func TestAgentCRDWithNodeConfigStatusSurvivesStaleNodeCache(t *testing.T) {
 			ctx := context.Background()
 			report := &v1beta1.AntreaAgentInfo{
 				ObjectMeta:       metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
-				NodeConfigStatus: &v1beta1.AntreaNodeConfigAgentStatus{},
+				SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{},
 			}
 			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
 			_, err := controller.client.CoreV1().Nodes().Create(ctx, &v1.Node{
@@ -386,7 +386,7 @@ func TestDeleteAgentCRDNodeConfigStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
 			}
 			if tt.withStatus {
-				report.NodeConfigStatus = &v1beta1.AntreaNodeConfigAgentStatus{}
+				report.SecondaryNetwork = &v1beta1.SecondaryNetworkStatus{}
 			}
 			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
 			if tt.nodeError != nil {
@@ -426,7 +426,7 @@ func TestDeleteAgentCRDPreservesConcurrentStatusPublication(t *testing.T) {
 			ctx := context.Background()
 			report := &v1beta1.AntreaAgentInfo{
 				ObjectMeta:       metav1.ObjectMeta{Name: "node1", UID: "report1", ResourceVersion: "10"},
-				NodeConfigStatus: &v1beta1.AntreaNodeConfigAgentStatus{},
+				SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{},
 			}
 			controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
 			replacement := report.DeepCopy()

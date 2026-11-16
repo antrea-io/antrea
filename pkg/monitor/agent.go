@@ -31,10 +31,10 @@ import (
 )
 
 type agentMonitor struct {
-	nodeConfigStatusProvider   NodeConfigStatusProvider
-	nodeConfigReportingEnabled bool
-	client                     clientset.Interface
-	querier                    agentquerier.AgentQuerier
+	secondaryNetworkStatusProvider   SecondaryNetworkStatusProvider
+	secondaryNetworkReportingEnabled bool
+	client                           clientset.Interface
+	querier                          agentquerier.AgentQuerier
 	// apiCertData is not provided by the querier to avoid a circular dependency between
 	// apiServer and querier.
 	apiCertData []byte
@@ -42,17 +42,17 @@ type agentMonitor struct {
 	agentCRD *v1beta1.AntreaAgentInfo
 }
 
-// NodeConfigStatusProvider exposes the latest node configuration reconciliation result.
-type NodeConfigStatusProvider interface {
-	GetAntreaNodeConfigStatus() *v1beta1.AntreaNodeConfigAgentStatus
-	AntreaNodeConfigStatusUpdates() <-chan struct{}
+// SecondaryNetworkStatusProvider exposes the latest secondary network reconciliation result.
+type SecondaryNetworkStatusProvider interface {
+	GetSecondaryNetworkStatus() *v1beta1.SecondaryNetworkStatus
+	SecondaryNetworkStatusUpdates() <-chan struct{}
 }
 
-// SetNodeConfigStatusProvider enables configuration status reporting before Run starts.
-// Call it when AntreaNodeConfig and SecondaryNetwork are enabled, even if the provider is unavailable.
-func (monitor *agentMonitor) SetNodeConfigStatusProvider(provider NodeConfigStatusProvider) {
-	monitor.nodeConfigStatusProvider = provider
-	monitor.nodeConfigReportingEnabled = true
+// SetSecondaryNetworkStatusProvider enables secondary network status reporting before Run starts.
+// Call it when SecondaryNetwork is enabled, even if the provider is unavailable.
+func (monitor *agentMonitor) SetSecondaryNetworkStatusProvider(provider SecondaryNetworkStatusProvider) {
+	monitor.secondaryNetworkStatusProvider = provider
+	monitor.secondaryNetworkReportingEnabled = true
 }
 
 // NewAgentMonitor creates a new agent monitor.
@@ -70,7 +70,7 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Agent Monitor")
 	ctx := wait.ContextForChannel(stopCh)
 
-	if monitor.nodeConfigStatusProvider == nil {
+	if monitor.secondaryNetworkStatusProvider == nil {
 		wait.UntilWithContext(ctx, monitor.syncAgentCRD, time.Minute)
 		return
 	}
@@ -79,7 +79,7 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	monitor.syncAgentCRD(ctx)
 	for {
 		select {
-		case <-monitor.nodeConfigStatusProvider.AntreaNodeConfigStatusUpdates():
+		case <-monitor.secondaryNetworkStatusProvider.SecondaryNetworkStatusUpdates():
 		case <-ticker.C:
 		case <-stopCh:
 			return
@@ -132,26 +132,26 @@ func (monitor *agentMonitor) updateAgentCRD(ctx context.Context, partial bool) (
 	}
 	readyCondition := string(v1beta1.SecondaryNetworkConditionReady)
 	var previousReady *metav1.Condition
-	if previous := monitor.agentCRD.NodeConfigStatus; previous != nil && previous.SecondaryNetwork != nil {
-		previousReady = meta.FindStatusCondition(previous.SecondaryNetwork.Conditions, readyCondition).DeepCopy()
+	if previous := monitor.agentCRD.SecondaryNetwork; previous != nil {
+		previousReady = meta.FindStatusCondition(previous.Conditions, readyCondition).DeepCopy()
 	}
 	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
-	monitor.agentCRD.NodeConfigStatus = nil
-	if monitor.nodeConfigStatusProvider != nil {
-		monitor.agentCRD.NodeConfigStatus = monitor.nodeConfigStatusProvider.GetAntreaNodeConfigStatus().DeepCopy()
+	monitor.agentCRD.SecondaryNetwork = nil
+	if monitor.secondaryNetworkStatusProvider != nil {
+		monitor.agentCRD.SecondaryNetwork = monitor.secondaryNetworkStatusProvider.GetSecondaryNetworkStatus().DeepCopy()
 	}
 	if node != nil {
 		monitor.agentCRD.NodeRef.UID = node.UID
-		report := monitor.agentCRD.NodeConfigStatus
+		report := monitor.agentCRD.SecondaryNetwork
 		var fallback *metav1.Condition
 		switch {
 		case node.Labels[corev1.LabelOSStable] == "windows":
 			fallback = &metav1.Condition{Type: readyCondition, Status: metav1.ConditionFalse,
 				Reason: "UnsupportedNode", Message: "Secondary network configuration is not supported on Windows Nodes"}
-		case !monitor.nodeConfigReportingEnabled:
+		case !monitor.secondaryNetworkReportingEnabled:
 			fallback = &metav1.Condition{Type: readyCondition, Status: metav1.ConditionFalse,
-				Reason: "FeatureDisabled", Message: "AntreaNodeConfig or SecondaryNetwork is disabled on this Agent"}
-		case report == nil || report.SecondaryNetwork == nil || meta.FindStatusCondition(report.SecondaryNetwork.Conditions, readyCondition) == nil:
+				Reason: "FeatureDisabled", Message: "SecondaryNetwork is disabled on this Agent"}
+		case report == nil || meta.FindStatusCondition(report.Conditions, readyCondition) == nil:
 			fallback = &metav1.Condition{Type: readyCondition, Status: metav1.ConditionUnknown,
 				Reason: "ConfigurationUnavailable", Message: "Agent configuration reconciliation is not available"}
 		}
@@ -159,16 +159,16 @@ func (monitor *agentMonitor) updateAgentCRD(ctx context.Context, partial bool) (
 			// Unavailable feature data must not inherit a previous Ready or revision.
 			// Disabled and unsupported reports also carry no selected configuration.
 			if report == nil || fallback.Reason != "ConfigurationUnavailable" {
-				report = &v1beta1.AntreaNodeConfigAgentStatus{}
+				report = &v1beta1.SecondaryNetworkStatus{}
 			}
-			report.SecondaryNetwork = &v1beta1.SecondaryNetworkStatus{}
+			report.CurrentBridge, report.DesiredBridge = "", ""
+			report.Conditions = nil
 			if previousReady != nil {
-				report.SecondaryNetwork.Conditions = append(report.SecondaryNetwork.Conditions, *previousReady)
+				report.Conditions = append(report.Conditions, *previousReady)
 			}
-			meta.SetStatusCondition(&report.SecondaryNetwork.Conditions, *fallback)
+			meta.SetStatusCondition(&report.Conditions, *fallback)
 		}
-		report.LastHeartbeatTime = metav1.Now()
-		monitor.agentCRD.NodeConfigStatus = report
+		monitor.agentCRD.SecondaryNetwork = report
 	}
 	monitor.agentCRD.APICABundle = monitor.apiCertData
 	klog.V(2).InfoS("Updating agent monitoring CRD", "name", klog.KObj(monitor.agentCRD), "partial", partial)

@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -43,6 +44,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
@@ -453,10 +455,10 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 			mockNewOVSBridge(t, bridgeClient)
 			mockStartupSecondaryBridge(t, tt.startupBridgeName)
 
+			bridgeClient.EXPECT().GetBridgeName().Return(brNew).AnyTimes()
 			bridgeClient.EXPECT().Create().Return(nil)
 			if tt.startupBridgeName != "" {
 				bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
-				bridgeClient.EXPECT().GetBridgeName().Return(brNew)
 				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return(nil, nil)
 			} else {
@@ -483,6 +485,13 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 			assert.Equal(t, []ovsconfig.OVSBridgeClient{bridgeClient}, podController.setBridgeCalls)
 			assert.Equal(t, bridgeClient, c.ovsBridgeClient)
 			assert.Equal(t, desired, c.effectiveBridgeCfg)
+			report := c.GetSecondaryNetworkStatus()
+			require.NotNil(t, report)
+			assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.Source)
+			assert.Empty(t, report.ConfigUID)
+			assert.Equal(t, brNew, report.CurrentBridge)
+			assert.Equal(t, brNew, report.DesiredBridge)
+			assert.True(t, meta.IsStatusConditionTrue(report.Conditions, "Ready"))
 		})
 	}
 }
@@ -1177,7 +1186,7 @@ func TestSyncBridgeRetriesStartupBridgeInitialization(t *testing.T) {
 	mockNewOVSBridge(t, bridgeClient)
 	bridgeClient.EXPECT().Create().Return(nil).Times(2)
 	bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
-	bridgeClient.EXPECT().GetBridgeName().Return(brOld)
+	bridgeClient.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 	bridgeClient.EXPECT().GetPortList().Return(nil, nil)
 
@@ -1216,6 +1225,7 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
 	mockNewOVSBridge(t, bridgeClient)
+	bridgeClient.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	mock.InOrder(
 		bridgeClient.EXPECT().Create().Return(createErr),
 		bridgeClient.EXPECT().Create().Return(nil),
@@ -1276,7 +1286,7 @@ func TestSyncBridgeWaitsForDiscoveredBridgeToDrain(t *testing.T) {
 	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{brOld: oldMock})
 	mockStartupSecondaryBridge(t, brOld)
 	oldMock.EXPECT().Create().Return(nil)
-	oldMock.EXPECT().GetBridgeName().Return(brOld)
+	oldMock.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 
 	fakePc := &fakePodController{
 		drainPending: true,
@@ -1350,7 +1360,7 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 	desired := bridgeConfig(brOld, eth1, eth2)
 	oldMock.EXPECT().Create().Return(nil)
 	oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
-	oldMock.EXPECT().GetBridgeName().Return(brOld)
+	oldMock.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	oldMock.EXPECT().SetMcastSnooping(false).Return(nil)
 	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
 		{UUID: "uuid-eth1", IFName: eth1},
@@ -1392,10 +1402,10 @@ func TestSyncBridgeSkipsReconciliationOnANCListErrorWithoutStaticConfig(t *testi
 
 	require.NoError(t, c.syncBridge())
 	assert.Zero(t, findCalls)
-	report := c.GetAntreaNodeConfigStatus()
+	report := c.GetSecondaryNetworkStatus()
 	require.NotNil(t, report)
-	assert.Equal(t, "ConfigurationUnavailable", report.SecondaryNetwork.Conditions[0].Reason)
-	assert.Equal(t, metav1.ConditionUnknown, report.SecondaryNetwork.Conditions[0].Status)
+	assert.Equal(t, "ConfigurationUnavailable", report.Conditions[0].Reason)
+	assert.Equal(t, metav1.ConditionUnknown, report.Conditions[0].Status)
 	assert.False(t, c.bridgeStateInitDone)
 	assert.Nil(t, c.effectiveBridgeCfg)
 	assert.Nil(t, c.ovsBridgeClient)

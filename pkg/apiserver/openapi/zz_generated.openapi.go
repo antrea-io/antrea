@@ -89,7 +89,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.AntreaAgentInfoList{}.OpenAPIModelName():                  schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
 		v1beta1.AntreaControllerInfo{}.OpenAPIModelName():                 schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		v1beta1.AntreaControllerInfoList{}.OpenAPIModelName():             schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
-		v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName():          schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref),
 		v1beta1.AppliedTo{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
 		v1beta1.Bandwidth{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
 		v1beta1.ClusterGroup{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
@@ -2962,17 +2961,17 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Ref:         ref(v1beta1.NetworkInfo{}.OpenAPIModelName()),
 						},
 					},
-					"nodeConfigStatus": {
+					"secondaryNetwork": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NodeConfigStatus reports the effective AntreaNodeConfig and secondary network realization.",
-							Ref:         ref(v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName()),
+							Description: "SecondaryNetwork reports secondary network realization for either static Agent configuration or AntreaNodeConfig.",
+							Ref:         ref(v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.AntreaNodeConfigAgentStatus{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3166,48 +3165,6 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 		},
 		Dependencies: []string{
 			v1beta1.AntreaControllerInfo{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
-	}
-}
-
-func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "AntreaNodeConfigAgentStatus reports a Node's effective configuration and its realization. The reporting Node incarnation is identified by the containing AntreaAgentInfo NodeRef UID. An empty ConfigUID means that the report does not identify a selected configuration, including when configuration support is disabled or the Agent is initializing.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"configName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ConfigName is the name of the selected AntreaNodeConfig, if any.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"configUID": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ConfigUID identifies the selected AntreaNodeConfig incarnation, if any. The name and generation are not sufficient: generation restarts at 1 when a configuration with the same name is recreated.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"lastHeartbeatTime": {
-						SchemaProps: spec.SchemaProps{
-							Description: "LastHeartbeatTime is updated whenever this report is published.",
-							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
-						},
-					},
-					"secondaryNetwork": {
-						SchemaProps: spec.SchemaProps{
-							Description: "SecondaryNetwork reports realization of the selected secondary network configuration.",
-							Ref:         ref(v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"lastHeartbeatTime"},
-			},
-		},
-		Dependencies: []string{
-			v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -5907,6 +5864,27 @@ func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCall
 				Description: "SecondaryNetworkStatus describes secondary network configuration realization on a Node.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Source identifies the configuration used for this reconciliation, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigName is the AntreaNodeConfig name when Source is AntreaNodeConfig.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configUID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigUID identifies the AntreaNodeConfig incarnation when Source is AntreaNodeConfig. Name and generation cannot distinguish same-name recreation.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"currentBridge": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.",
@@ -5923,7 +5901,7 @@ func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCall
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditions includes SecondaryNetworkConditionReady with the configuration generation observed by this feature.",
+							Description: "Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is the AntreaNodeConfig generation when Source is AntreaNodeConfig, or zero otherwise.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

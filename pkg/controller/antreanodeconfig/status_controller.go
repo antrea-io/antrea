@@ -98,7 +98,7 @@ func NewStatusController(client clientset.Interface, ancInformer crdinformers.An
 		},
 		UpdateFunc: func(old, current interface{}) {
 			before, after := old.(*crdv1beta1.AntreaAgentInfo), current.(*crdv1beta1.AntreaAgentInfo)
-			if reportNeedsSync(before.NodeConfigStatus, after.NodeConfigStatus, time.Now()) {
+			if reportNeedsSync(before, after, time.Now()) {
 				c.enqueueReport(before)
 				c.enqueueReport(after)
 			}
@@ -120,18 +120,24 @@ func NewStatusController(client clientset.Interface, ancInformer crdinformers.An
 	return c
 }
 
-func reportNeedsSync(before, after *crdv1beta1.AntreaNodeConfigAgentStatus, now time.Time) bool {
+func reportNeedsSync(before, after *crdv1beta1.AntreaAgentInfo, now time.Time) bool {
 	if before == nil || after == nil {
 		return before != after
 	}
-	// Heartbeats only extend the expiry deadline. Periodic reconciliation reads
-	// that deadline; stable reports must not cause a cluster-wide scan per Agent.
-	if now.Sub(before.LastHeartbeatTime.Time) > agentReportTimeout {
-		return true
+	// Stable heartbeats do not change realization. Recovery from an expired
+	// heartbeat must refresh readiness without waiting for the periodic resync.
+	return before.NodeRef.UID != after.NodeRef.UID ||
+		!reflect.DeepEqual(before.SecondaryNetwork, after.SecondaryNetwork) ||
+		now.Sub(agentHeartbeat(before).Time) > agentReportTimeout
+}
+
+func agentHeartbeat(info *crdv1beta1.AntreaAgentInfo) metav1.Time {
+	for _, condition := range info.AgentConditions {
+		if condition.Type == crdv1beta1.AgentHealthy {
+			return condition.LastHeartbeatTime
+		}
 	}
-	oldReport, newReport := before.DeepCopy(), after.DeepCopy()
-	oldReport.LastHeartbeatTime, newReport.LastHeartbeatTime = metav1.Time{}, metav1.Time{}
-	return !reflect.DeepEqual(oldReport, newReport)
+	return metav1.Time{}
 }
 
 func nodeReadiness(node *corev1.Node) corev1.ConditionStatus {
@@ -166,7 +172,7 @@ func (c *StatusController) enqueueNode(node *corev1.Node) {
 }
 
 func (c *StatusController) enqueueReport(info *crdv1beta1.AntreaAgentInfo) {
-	if report := info.NodeConfigStatus; report != nil && report.ConfigName != "" {
+	if report := info.SecondaryNetwork; report != nil && report.ConfigName != "" {
 		c.queue.Add(report.ConfigName)
 	}
 	// AgentInfo is named after its Node. A missing or obsolete report still
@@ -261,10 +267,10 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 }
 
 func freshReport(node *corev1.Node, info *crdv1beta1.AntreaAgentInfo, now time.Time) bool {
-	if info == nil || info.NodeConfigStatus == nil || info.NodeRef.UID != node.UID {
+	if info == nil || info.SecondaryNetwork == nil || info.NodeRef.UID != node.UID {
 		return false
 	}
-	heartbeat := info.NodeConfigStatus.LastHeartbeatTime
+	heartbeat := agentHeartbeat(info)
 	if heartbeat.IsZero() || now.Sub(heartbeat.Time) > agentReportTimeout || heartbeat.After(now.Add(time.Minute)) {
 		return false
 	}
@@ -331,24 +337,25 @@ func selectedNodeCondition(cfg *crdv1alpha1.AntreaNodeConfig, node *corev1.Node,
 	if !freshReport(node, info, now) {
 		return condition
 	}
-	report := info.NodeConfigStatus
+	report := info.SecondaryNetwork
 	condition.Reason, condition.Message = "ConfigurationUnavailable", "Waiting for secondary network configuration status"
-	if report.SecondaryNetwork == nil {
-		return condition
-	}
-	ready := meta.FindStatusCondition(report.SecondaryNetwork.Conditions, string(crdv1beta1.SecondaryNetworkConditionReady))
+	ready := meta.FindStatusCondition(report.Conditions, string(crdv1beta1.SecondaryNetworkConditionReady))
 	if ready == nil {
 		return condition
 	}
 	identityFree := report.ConfigUID == "" && report.ConfigName == "" && ready.ObservedGeneration == 0
 	switch {
+	case report.Source == crdv1beta1.SecondaryNetworkConfigSourceAgentConfig:
+		condition.Status, condition.Reason = metav1.ConditionFalse, "OverriddenByStaticConfig"
+		condition.Message = "Static Agent secondary network configuration takes precedence over AntreaNodeConfig"
 	case identityFree && ready.Status == metav1.ConditionFalse &&
 		(ready.Reason == "FeatureDisabled" || ready.Reason == "UnsupportedNode"):
 		condition.Status, condition.Reason, condition.Message = ready.Status, ready.Reason, ready.Message
 	case (identityFree || report.ConfigUID == cfg.UID) && ready.ObservedGeneration == 0 &&
 		ready.Status == metav1.ConditionUnknown && ready.Reason == "ConfigurationUnavailable":
 		condition.Reason, condition.Message = ready.Reason, ready.Message
-	case report.ConfigUID != cfg.UID || ready.ObservedGeneration <= 0 || ready.ObservedGeneration != cfg.Generation:
+	case report.Source != crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig || report.ConfigUID != cfg.UID ||
+		ready.ObservedGeneration <= 0 || ready.ObservedGeneration != cfg.Generation:
 		condition.Status, condition.Reason, condition.Message = metav1.ConditionFalse, "GenerationNotObserved", "Agent has not reconciled the selected configuration generation"
 	default:
 		condition.Status, condition.Reason, condition.Message = ready.Status, ready.Reason, ready.Message
