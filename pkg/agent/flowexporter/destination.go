@@ -97,7 +97,7 @@ func NewDestination(
 	exporter exporter.Interface,
 	k8sClient kubernetes.Interface,
 	nodeRouteController podSubnetChecker,
-	hostNetworkClassifier *connections.HostNetworkClassifier,
+	nodeRouteQuerier connections.NodeRouteQuerier,
 	podStore objectstore.PodStore,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
@@ -111,7 +111,7 @@ func NewDestination(
 		StaleConnectionTimeout: destinationConfig.staleConnectionTimeout,
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
-		HostNetworkClassifier:  hostNetworkClassifier,
+		NodeRouteQuerier:       nodeRouteQuerier,
 	}
 	// External correlation is now done in the poller before connections are delivered to each
 	// destination's connection store, so no ExternalCorrelator is needed here.
@@ -317,13 +317,11 @@ func (d *Destination) exportConn(conn *connection.Connection) error {
 }
 
 func (d *Destination) findFlowType(conn connection.Connection) uint8 {
+	if conn.IsFromHostNetwork {
+		return d.findHostNetworkFlowType(conn)
+	}
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if d.isNetworkPolicyOnly {
-		if conn.IsFromHostNetwork && conn.DestinationPodName != "" {
-			// The connection was initiated by the host network of this Node towards a local
-			// Pod (see connections.HostNetworkClassifier): this is the only record for the flow.
-			return utils.FlowTypeFromExternal
-		}
 		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
 			return utils.FlowTypeInterNode
 		}
@@ -341,19 +339,6 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		return utils.FlowTypeUnsupported
 	}
 	if srcIsGw {
-		if conn.IsFromHostNetwork {
-			// The connection was initiated by the host network of this Node, e.g., by kubelet or
-			// by a hostNetwork Pod (see connections.HostNetworkClassifier). The source is not a
-			// Pod, so the connection is exported as FROM_EXTERNAL. If the destination Pod runs on
-			// this Node, this is the only record for the flow. Otherwise, this is the source-Node
-			// half of the flow, and the exporter sets the source Node name, which lets the
-			// FlowAggregator correlate it with the destination-Node half (see below).
-			// A local Pod is checked by name too, as its IP may not belong to a Pod subnet.
-			if dstIsPod || conn.DestinationPodName != "" {
-				return utils.FlowTypeFromExternal
-			}
-			return utils.FlowTypeUnsupported
-		}
 		if conn.DestinationPodNamespace == "" {
 			return utils.FlowTypeUnsupported
 		}
@@ -380,6 +365,27 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		return utils.FlowTypeInterNode
 	}
 	return utils.FlowTypeIntraNode
+}
+
+// findHostNetworkFlowType returns the flow type of a connection initiated by the host network of
+// this Node, e.g., by kubelet or by a hostNetwork Pod (see connections.FromExternalCorrelator). The
+// source is not a Pod, so the connection is exported as FROM_EXTERNAL. If the destination Pod runs
+// on this Node, this is the only record for the flow. Otherwise, this is the source-Node half of
+// the flow, and the exporter sets the source Node name: the FlowAggregator correlates it with the
+// INTER_NODE record exported by the destination Node (see findFlowType).
+func (d *Destination) findHostNetworkFlowType(conn connection.Connection) uint8 {
+	// A local Pod is identified by name, as its IP may not belong to a Pod subnet.
+	if conn.DestinationPodName != "" {
+		return utils.FlowTypeFromExternal
+	}
+	// In networkPolicyOnly mode, the Pod subnets of the other Nodes are unknown.
+	if d.isNetworkPolicyOnly || d.nodeRouteController == nil {
+		return utils.FlowTypeUnsupported
+	}
+	if dstIsPod, dstIsGw := d.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress); dstIsPod && !dstIsGw {
+		return utils.FlowTypeFromExternal
+	}
+	return utils.FlowTypeUnsupported
 }
 
 func (d *Destination) fillEgressInfo(conn *connection.Connection) {

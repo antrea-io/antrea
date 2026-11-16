@@ -19,12 +19,14 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"net/netip"
 	"reflect"
 	"sync"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -95,12 +97,15 @@ type FlowExporter struct {
 	isNetworkPolicyOnly    bool
 
 	// Destination dependencies
-	nodeRouteController   *noderoute.Controller
-	hostNetworkClassifier *connections.HostNetworkClassifier
-	podStore              objectstore.PodStore
-	proxier               proxy.ProxyQuerier
-	egressQuerier         querier.EgressQuerier
-	npQuerier             querier.AgentNetworkPolicyInfoQuerier
+	nodeRouteController *noderoute.Controller
+	// nodeRouteQuerier is used to identify the Pods running on other Nodes, when the connections
+	// initiated by the host network of this Node towards them can be reported. It is nil
+	// otherwise.
+	nodeRouteQuerier connections.NodeRouteQuerier
+	podStore         objectstore.PodStore
+	proxier          proxy.ProxyQuerier
+	egressQuerier    querier.EgressQuerier
+	npQuerier        querier.AgentNetworkPolicyInfoQuerier
 
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
@@ -156,20 +161,21 @@ func NewFlowExporter(
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
-	var hostNetworkClassifier *connections.HostNetworkClassifier
 	// Connections initiated by the host network are identified by their default-zone (host)
-	// conntrack entry, whose source address is an IP of this Node. On Windows, the default zone is
-	// not the host's conntrack table, so these connections are never identified. In
+	// conntrack entry, whose original source address is an IP of this Node. On Windows, the default
+	// zone is not the host's conntrack table, so these connections are never identified. In
 	// networkPolicyOnly mode, the Pod subnets are not managed by Antrea, so the Pods running on
 	// other Nodes cannot be identified, and only the connections to local Pods are reported.
+	var nodeIPs sets.Set[netip.Addr]
+	var nodeRouteQuerier connections.NodeRouteQuerier
 	if !runtime.IsWindowsPlatform() {
-		if trafficEncapMode.IsNetworkPolicyOnly() {
-			hostNetworkClassifier = connections.NewHostNetworkClassifier(nodeConfig, nil)
-		} else if nodeRouteController != nil {
-			hostNetworkClassifier = connections.NewHostNetworkClassifier(nodeConfig, nodeRouteController)
+		nodeIPs = getNodeIPs(nodeConfig)
+		// Check for a nil pointer explicitly, as it would make a non-nil interface value.
+		if !trafficEncapMode.IsNetworkPolicyOnly() && nodeRouteController != nil {
+			nodeRouteQuerier = nodeRouteController
 		}
 	}
-	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, hostNetworkClassifier)
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, nodeIPs)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
@@ -204,13 +210,13 @@ func NewFlowExporter(
 		v6Enabled:              v6Enabled,
 		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
 
-		nodeRouteController:   nodeRouteController,
-		hostNetworkClassifier: hostNetworkClassifier,
-		podStore:              podStore,
-		proxier:               proxier,
-		egressQuerier:         egressQuerier,
-		npQuerier:             npQuerier,
-		networkPolicyWait:     networkPolicyWait,
+		nodeRouteController: nodeRouteController,
+		nodeRouteQuerier:    nodeRouteQuerier,
+		podStore:            podStore,
+		proxier:             proxier,
+		egressQuerier:       egressQuerier,
+		npQuerier:           npQuerier,
+		networkPolicyWait:   networkPolicyWait,
 
 		poller:                poller,
 		ctConnUpdateChannel:   ctConnsUpdateChannel,
@@ -514,7 +520,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		exp,
 		fe.k8sClient,
 		fe.nodeRouteController,
-		fe.hostNetworkClassifier,
+		fe.nodeRouteQuerier,
 		fe.podStore,
 		fe.npQuerier,
 		fe.proxier,
@@ -592,6 +598,27 @@ func getExporterProtocol(proto api.FlowExporterProtocol) exporterProtocol {
 		// This case should never happen on real usage. API server requires at least one to be defined.
 		return &api.FlowExporterGRPCConfig{}
 	}
+}
+
+// getNodeIPs returns the IPs of this Node known to the agent: its Node IPs, its transport IPs and
+// its gateway IPs.
+func getNodeIPs(nodeConfig *config.NodeConfig) sets.Set[netip.Addr] {
+	nodeIPs := sets.New[netip.Addr]()
+	addIP := func(ip net.IP) {
+		if addr, ok := netip.AddrFromSlice(ip); ok {
+			nodeIPs.Insert(addr.Unmap())
+		}
+	}
+	for _, ipNet := range []*net.IPNet{nodeConfig.NodeIPv4Addr, nodeConfig.NodeIPv6Addr, nodeConfig.NodeTransportIPv4Addr, nodeConfig.NodeTransportIPv6Addr} {
+		if ipNet != nil {
+			addIP(ipNet.IP)
+		}
+	}
+	if nodeConfig.GatewayConfig != nil {
+		addIP(nodeConfig.GatewayConfig.IPv4)
+		addIP(nodeConfig.GatewayConfig.IPv6)
+	}
+	return nodeIPs
 }
 
 func genObservationID(nodeName string) uint32 {

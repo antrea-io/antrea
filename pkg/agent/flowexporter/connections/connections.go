@@ -17,6 +17,8 @@ package connections
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -44,12 +46,19 @@ type ConnectionStoreConfig struct {
 	NetworkPolicyReadyTime time.Time
 	AllowedProtocols       []string
 
-	// HostNetworkClassifier is used by the conntrack connection store to identify the Pods running
-	// on other Nodes, so that it keeps the connections initiated by the host network stack of this
-	// Node towards them (these connections are identified by the FromExternalCorrelator, which
-	// must be given the same classifier). It may be nil, in which case these connections are
-	// ignored.
-	HostNetworkClassifier *HostNetworkClassifier
+	// NodeRouteQuerier is used by the conntrack connection store to identify the Pods running on
+	// other Nodes, so that it keeps the connections initiated by the host network stack of this
+	// Node towards them (these connections are identified by the FromExternalCorrelator). It may
+	// be nil, in which case these connections are ignored.
+	NodeRouteQuerier NodeRouteQuerier
+}
+
+// NodeRouteQuerier provides information about the Pod subnets of the other Nodes.
+// *noderoute.Controller implements this interface.
+type NodeRouteQuerier interface {
+	// GetNodeIPForPodIP returns the transport IP of the remote Node whose Pod subnet contains the
+	// IP. It returns false for the IPs of the Pod subnets of this Node.
+	GetNodeIPForPodIP(ip netip.Addr) (net.IP, bool)
 }
 
 type connectionStore struct {

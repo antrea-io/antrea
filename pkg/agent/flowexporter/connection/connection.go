@@ -106,9 +106,12 @@ type Connection struct {
 	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
 	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
 	IsFromExternal bool
-	// IsFromHostNetwork is set to true by the connection store when this connection was initiated
-	// by the host network stack of this Node (e.g., by kubelet, or by a hostNetwork Pod) rather
-	// than by a Pod. The source address of such a connection is the IP of this Node's gateway.
+	// IsFromHostNetwork is set to true during external correlation when this connection was
+	// initiated by the host network stack of this Node (e.g., by kubelet, or by a hostNetwork Pod)
+	// rather than by a Pod. The source address of such a connection is the gateway IP of this
+	// Node, unless it was also correlated as a from-external connection (IsFromExternal), which
+	// happens when the host translated it (e.g., kube-proxy for a ClusterIP): the source address
+	// is then the original source address on the host, which may be any IP of this Node.
 	IsFromHostNetwork bool
 }
 

@@ -41,7 +41,7 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
-	hostNetworkClassifier  *HostNetworkClassifier
+	nodeRouteQuerier       NodeRouteQuerier
 	connectionStore
 }
 
@@ -59,7 +59,7 @@ func NewConntrackConnectionStore(
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		hostNetworkClassifier:  cfg.HostNetworkClassifier,
+		nodeRouteQuerier:       cfg.NodeRouteQuerier,
 	}
 }
 
@@ -187,10 +187,15 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 // (e.g., by a hostNetwork Pod) towards a Pod running on another Node. IsFromHostNetwork is set by
 // the FromExternalCorrelator. This Node exports the source-Node half of such a flow, which the
 // FlowAggregator correlates with the destination-Node half, so that the flow is reported even
-// though neither endpoint is a Pod running on this Node.
+// though neither endpoint is a Pod running on this Node. The gateway IP of another Node also
+// belongs to its Pod subnet: such a connection is kept, but never exported (see
+// Destination.findFlowType).
 func (cs *ConntrackConnectionStore) isFromHostNetworkToRemotePod(conn *connection.Connection) bool {
-	return conn.IsFromHostNetwork && cs.hostNetworkClassifier != nil &&
-		cs.hostNetworkClassifier.IsRemotePodIP(conn.FlowKey.DestinationAddress)
+	if !conn.IsFromHostNetwork || cs.nodeRouteQuerier == nil {
+		return false
+	}
+	_, isRemotePodIP := cs.nodeRouteQuerier.GetNodeIPForPodIP(conn.FlowKey.DestinationAddress)
+	return isRemotePodIP
 }
 
 // resolveDestinationService fills conn.DestinationServicePortName for Service-marked and
