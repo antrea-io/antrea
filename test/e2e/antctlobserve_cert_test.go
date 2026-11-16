@@ -32,7 +32,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -147,22 +146,6 @@ func bindClusterRoleToUserInNamespace(t *testing.T, data *TestData, userName, cl
 	})
 }
 
-// getCoreDNSPodIPv4 returns an IPv4 address of a CoreDNS Pod: a peer that lives in a Namespace other
-// than the test's, which the cluster has already and which accepts TCP connections on port 53.
-func getCoreDNSPodIPv4(t *testing.T, data *TestData) string {
-	pods, err := data.clientset.CoreV1().Pods(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "k8s-app=kube-dns"})
-	require.NoError(t, err)
-	for i := range pods.Items {
-		for _, podIP := range pods.Items[i].Status.PodIPs {
-			if ip := net.ParseIP(podIP.IP); ip != nil && ip.To4() != nil {
-				return podIP.IP
-			}
-		}
-	}
-	require.FailNow(t, "no CoreDNS Pod with an IPv4 address was found")
-	return ""
-}
-
 // writeKubeconfigToStandinPod writes a kubeconfig, built from the given authentication, to a file in
 // the shared stand-in Pod and returns its path. server and caData are what the kubeconfig needs to
 // reach the Kubernetes API server; tests that never contact it can pass placeholders.
@@ -187,7 +170,10 @@ func writeKubeconfigToStandinPod(t *testing.T, data *TestData, name, server stri
 // client certificate for an identity of its own, as a kubeconfig issued by a cluster admin or an
 // identity provider that hands out certificates would carry. It also covers credentials the Flow
 // Aggregator must reject (the server's own Unauthenticated, rather than a refusal by the Kubernetes
-// API server). The authorized identity reads the flows that generateObserveFlows generated.
+// API server), and what an identity that is authorized in a single Namespace may observe: the flows
+// of that Namespace, with the peers in other Namespaces redacted. The cluster-wide authorized
+// identity reads the flows that generateObserveFlows generated, while the Namespace-scoped one reads
+// a flow that its subtest generates itself.
 func testAntctlObserveClientCertAuth(t *testing.T, data *TestData, flows observeFlows) {
 	// How the stand-in Pod reaches the API server: it is a host-network Pod, so cluster DNS does not
 	// apply, and the kubernetes Service's ClusterIP is what its in-cluster config uses too.
@@ -239,13 +225,18 @@ func testAntctlObserveClientCertAuth(t *testing.T, data *TestData, flows observe
 		kubeconfig := writeKubeconfigToStandinPod(t, data, user, apiServer, []byte(caData),
 			&clientcmdapi.AuthInfo{ClientCertificateData: certPEM, ClientKeyData: keyPEM})
 
-		// The destination is a Pod of kube-system, which the identity holds nothing in.
-		coreDNSIP := getCoreDNSPodIPv4(t, data)
-		generateOneFlow(t, data, "perftest-a", coreDNSIP, 53)
+		// The destination is a Pod of a Namespace of its own, which the identity holds nothing in. It
+		// runs on the Node of perftest-a, so that the flow is reported by that Node alone.
+		peerNamespace := randName("antctl-observe-peer-")
+		require.NoError(t, data.CreateNamespace(peerNamespace, nil))
+		t.Cleanup(func() { assert.NoError(t, data.DeleteNamespace(peerNamespace, defaultTimeout)) })
+		_, peerIPs, _ := createAndWaitForPod(t, data, data.createNginxPodOnNode, "observe-peer-", controlPlaneNodeName(), peerNamespace, false)
+		peerIP := peerIPs.IPv4.String()
+		generateOneFlow(t, data, "perftest-a", peerIP, containerPort)
 
 		// --pod and --ip narrow the flows of the Namespace down to this one, out of its background traffic.
 		args := []string{"--flow-aggregator-namespace", flowAggregatorNamespace, "--kubeconfig", kubeconfig,
-			"-n", data.testNamespace, "--pod", "perftest-a", "--ip", coreDNSIP}
+			"-n", data.testNamespace, "--pod", "perftest-a", "--ip", peerIP}
 		var records []observeRecord
 		require.NoError(t, wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 			stdout, stderr, err := runObserve(data, append(args, "-o", "json")...)
@@ -260,20 +251,20 @@ func testAntctlObserveClientCertAuth(t *testing.T, data *TestData, flows observe
 			assert.Equal(t, "full", r.SourceDisclosure, "the source is in the Namespace of the identity")
 			assert.Equal(t, "perftest-a", r.SourcePodName)
 			assert.Equal(t, "flow", r.DestinationDisclosure, "the destination is in a Namespace the identity does not hold")
-			assert.Equal(t, metav1.NamespaceSystem, r.DestinationPodNamespace)
+			assert.Equal(t, peerNamespace, r.DestinationPodNamespace)
 			assert.Empty(t, r.DestinationPodName)
-			assert.Equal(t, coreDNSIP, r.DestinationIP)
+			assert.Equal(t, peerIP, r.DestinationIP)
 		}
 
 		stdout, stderr, err := runObserve(data, args...)
 		require.NoError(t, err, stderr)
-		assert.Contains(t, stdout, fmt.Sprintf("%s/<redacted>(%s)", metav1.NamespaceSystem, coreDNSIP))
+		assert.Contains(t, stdout, fmt.Sprintf("%s/<redacted>(%s)", peerNamespace, peerIP))
 
 		// The same identity may not observe the Namespace that it only sees the peers of.
 		_, stderr, err = runObserve(data, "--flow-aggregator-namespace", flowAggregatorNamespace, "--kubeconfig", kubeconfig,
-			"-n", metav1.NamespaceSystem, "--max-count", "1")
+			"-n", peerNamespace, "--max-count", "1")
 		require.Error(t, err)
-		assert.Contains(t, stderr, "PermissionDenied", "the identity holds nothing in kube-system: %s", stderr)
+		assert.Contains(t, stderr, "PermissionDenied", "the identity holds nothing in %s: %s", peerNamespace, stderr)
 		assert.NotContains(t, stderr, "Unauthenticated")
 	})
 
