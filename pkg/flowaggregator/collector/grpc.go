@@ -25,8 +25,10 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -130,6 +132,16 @@ func (s *grpcService) Export(stream flowpb.FlowExportService_ExportServer) error
 			return err
 		}
 
+		// Validate the whole request before forwarding any record, so that a malformed request is
+		// rejected as a unit. Records sent over the gRPC collector are not trusted to be complete:
+		// the rest of the Flow Aggregator relies on the sub-messages checked here being set.
+		for i, record := range req.Flows {
+			if err := validateFlow(record); err != nil {
+				klog.ErrorS(err, "Rejecting invalid flow record", "index", i, "exporter", exportAddress)
+				return status.Errorf(codes.InvalidArgument, "invalid flow record at index %d: %v", i, err)
+			}
+		}
+
 		for _, record := range req.Flows {
 			s.numRecordsReceived.Add(1)
 			record.Ipfix.ExporterIp = exportAddress
@@ -138,4 +150,41 @@ func (s *grpcService) Export(stream flowpb.FlowExportService_ExportServer) error
 	}
 
 	return stream.SendAndClose(&flowpb.ExportResponse{})
+}
+
+// validateFlow checks that all the Flow sub-messages that the Flow Aggregator dereferences without
+// further checks are set. They are always set by the Flow Exporter in the Antrea Agent, and by the
+// IPFIX preprocessor. 'Aggregation' is not required, as it is populated by the Flow Aggregator itself.
+// 'App' is deprecated and unused.
+//
+// The Flow Aggregator must support Antrea Agents up to 4 minor versions older or newer than itself
+// (see docs/network-flow-visibility.md). Older Agents do not send sub-messages which were added to
+// Flow after their release, so a new sub-message cannot be required here until every Agent within
+// that window sends it, i.e., until at least 4 minor releases after it was introduced. Until then,
+// it must be treated as optional, and the code which reads it must handle it being nil. The same
+// rule applies to nested sub-messages coming from the Agent, none of which are required today.
+// TestValidateFlowCoversAllSubMessages ensures that every Flow sub-message is either required here
+// or explicitly listed as optional.
+func validateFlow(record *flowpb.Flow) error {
+	switch {
+	case record == nil:
+		return fmt.Errorf("flow is nil")
+	case record.Ipfix == nil:
+		return fmt.Errorf("missing field %q", "ipfix")
+	case record.StartTs == nil:
+		return fmt.Errorf("missing field %q", "start_ts")
+	case record.EndTs == nil:
+		return fmt.Errorf("missing field %q", "end_ts")
+	case record.Ip == nil:
+		return fmt.Errorf("missing field %q", "ip")
+	case record.Transport == nil:
+		return fmt.Errorf("missing field %q", "transport")
+	case record.K8S == nil:
+		return fmt.Errorf("missing field %q", "k8s")
+	case record.Stats == nil:
+		return fmt.Errorf("missing field %q", "stats")
+	case record.ReverseStats == nil:
+		return fmt.Errorf("missing field %q", "reverse_stats")
+	}
+	return nil
 }
