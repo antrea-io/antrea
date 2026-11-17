@@ -709,6 +709,16 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 		pf.serviceNames = append(pf.serviceNames, serviceName{namespace: namespace, name: name})
 	}
 
+	for _, outcome := range f.GetNetworkPolicyOutcomes() {
+		switch outcome {
+		case flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_UNPROTECTED,
+			flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_ALLOWED,
+			flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_DENIED:
+		default:
+			return flowFilter{}, fmt.Errorf("unsupported network policy outcome %v: expected UNPROTECTED, ALLOWED or DENIED", outcome)
+		}
+	}
+
 	for _, ipStr := range f.GetIps() {
 		if strings.Contains(ipStr, "/") {
 			prefix, err := netip.ParsePrefix(ipStr)
@@ -746,8 +756,10 @@ func matchFlow(f *flowpb.Flow, filters []flowFilter, since time.Time) bool {
 }
 
 // matchFilter reports whether f matches pf. Its criteria are AND-ed:
-//   - flow_types and service_names apply to the flow as a whole, whatever the direction:
-//     service_names matches the flow's destination Service, by name or by Namespace and name.
+//   - flow_types, service_names and network_policy_outcomes apply to the flow as a whole,
+//     whatever the direction: service_names matches the flow's destination Service, by name or by
+//     Namespace and name, and network_policy_outcomes matches the outcome of its ingress and
+//     egress rules taken together (see networkPolicyOutcome).
 //   - The directional criteria (namespaces, pod_names, pod_label_selector, ips) are all matched
 //     against the same endpoint, which the direction picks, so that for example namespaces and
 //     pod_names select a single Pod. With BOTH, either endpoint may be the one that matches.
@@ -764,6 +776,11 @@ func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {
 		if !slices.ContainsFunc(pf.serviceNames, func(s serviceName) bool {
 			return s.name == name && (s.namespace == "" || s.namespace == namespace)
 		}) {
+			return false
+		}
+	}
+	if outcomes := filter.GetNetworkPolicyOutcomes(); len(outcomes) > 0 {
+		if !slices.Contains(outcomes, networkPolicyOutcome(k8s)) {
 			return false
 		}
 	}
@@ -826,6 +843,24 @@ func matchEndpoint(f *flowpb.Flow, pf *flowFilter, source bool) bool {
 		}
 	}
 	return true
+}
+
+// networkPolicyOutcome returns the outcome of the network policy rules recorded for the flow
+// described by k8s, its ingress and egress sides taken together. A flow is denied if a rule dropped
+// or rejected it on either side: a connection allowed by its source's egress policy but dropped by
+// its destination's ingress policy was dropped. Otherwise it is unprotected if no rule was recorded
+// on either side, which is also how a record without Kubernetes metadata reads, and allowed if one
+// was.
+func networkPolicyOutcome(k8s *flowpb.Kubernetes) flowpb.NetworkPolicyOutcome {
+	const noAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION
+	switch {
+	case !connectionAllowed(k8s):
+		return flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_DENIED
+	case k8s.GetIngressNetworkPolicyRuleAction() == noAction && k8s.GetEgressNetworkPolicyRuleAction() == noAction:
+		return flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_UNPROTECTED
+	default:
+		return flowpb.NetworkPolicyOutcome_NETWORK_POLICY_OUTCOME_ALLOWED
+	}
 }
 
 func labelsFromProto(l *flowpb.Labels) labels.Set {
