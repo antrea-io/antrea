@@ -95,6 +95,9 @@ type FlowExporter struct {
 	v4Enabled              bool
 	v6Enabled              bool
 	isNetworkPolicyOnly    bool
+	// localGatewayIPs holds the gateway IPs of this Node, on Linux only (see
+	// DestinationConfig.localGatewayIPs).
+	localGatewayIPs sets.Set[netip.Addr]
 
 	// Destination dependencies
 	nodeRouteController *noderoute.Controller
@@ -165,11 +168,14 @@ func NewFlowExporter(
 	// conntrack entry, whose original source address is an IP of this Node. On Windows, the default
 	// zone is not the host's conntrack table, so these connections are never identified. In
 	// networkPolicyOnly mode, the Pod subnets are not managed by Antrea, so the Pods running on
-	// other Nodes cannot be identified, and only the connections to local Pods are reported.
-	var nodeIPs sets.Set[netip.Addr]
+	// other Nodes cannot be identified, and only the connections to local Pods are reported. The
+	// connections from the gateway IP of this Node to local Pods which are not identified are only
+	// reported on Linux too (see DestinationConfig.localGatewayIPs).
+	var nodeIPs, localGatewayIPs sets.Set[netip.Addr]
 	var remotePodQuerier connections.RemotePodQuerier
 	if !runtime.IsWindowsPlatform() {
 		nodeIPs = getNodeIPs(nodeConfig)
+		localGatewayIPs = getGatewayIPs(nodeConfig)
 		// Check for a nil pointer explicitly, as it would make a non-nil interface value.
 		if !networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() && nodeRouteController != nil {
 			remotePodQuerier = newRemotePodQuerier(nodeRouteController, networkConfig, nodeConfig)
@@ -209,6 +215,7 @@ func NewFlowExporter(
 		v4Enabled:              v4Enabled,
 		v6Enabled:              v6Enabled,
 		isNetworkPolicyOnly:    networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
+		localGatewayIPs:        localGatewayIPs,
 
 		nodeRouteController: nodeRouteController,
 		remotePodQuerier:    remotePodQuerier,
@@ -509,6 +516,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		staleConnectionTimeout: fe.staleConnectionTimeout,
 
 		isNetworkPolicyOnly: fe.isNetworkPolicyOnly,
+		localGatewayIPs:     fe.localGatewayIPs,
 		tlsConfig:           res.Spec.TLSConfig,
 		allowProtocolFilter: ptr.Deref(res.Spec.Filter, api.FlowExporterFilter{}).Protocols,
 
@@ -603,22 +611,30 @@ func getExporterProtocol(proto api.FlowExporterProtocol) exporterProtocol {
 // getNodeIPs returns the IPs of this Node known to the agent: its Node IPs, its transport IPs and
 // its gateway IPs.
 func getNodeIPs(nodeConfig *config.NodeConfig) sets.Set[netip.Addr] {
-	nodeIPs := sets.New[netip.Addr]()
-	addIP := func(ip net.IP) {
-		if addr, ok := netip.AddrFromSlice(ip); ok {
-			nodeIPs.Insert(addr.Unmap())
-		}
-	}
+	nodeIPs := getGatewayIPs(nodeConfig)
 	for _, ipNet := range []*net.IPNet{nodeConfig.NodeIPv4Addr, nodeConfig.NodeIPv6Addr, nodeConfig.NodeTransportIPv4Addr, nodeConfig.NodeTransportIPv6Addr} {
 		if ipNet != nil {
-			addIP(ipNet.IP)
+			insertIP(nodeIPs, ipNet.IP)
 		}
 	}
-	if nodeConfig.GatewayConfig != nil {
-		addIP(nodeConfig.GatewayConfig.IPv4)
-		addIP(nodeConfig.GatewayConfig.IPv6)
-	}
 	return nodeIPs
+}
+
+// getGatewayIPs returns the gateway IPs of this Node.
+func getGatewayIPs(nodeConfig *config.NodeConfig) sets.Set[netip.Addr] {
+	gatewayIPs := sets.New[netip.Addr]()
+	if nodeConfig.GatewayConfig != nil {
+		insertIP(gatewayIPs, nodeConfig.GatewayConfig.IPv4)
+		insertIP(gatewayIPs, nodeConfig.GatewayConfig.IPv6)
+	}
+	return gatewayIPs
+}
+
+// insertIP inserts ip into ips, unless it is not a valid IP.
+func insertIP(ips sets.Set[netip.Addr], ip net.IP) {
+	if addr, ok := netip.AddrFromSlice(ip); ok {
+		ips.Insert(addr.Unmap())
+	}
 }
 
 func genObservationID(nodeName string) uint32 {

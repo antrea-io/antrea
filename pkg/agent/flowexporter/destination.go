@@ -23,6 +23,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -60,7 +61,12 @@ type DestinationConfig struct {
 	staleConnectionTimeout time.Duration
 
 	isNetworkPolicyOnly bool
-	tlsConfig           *api.FlowExporterTLSConfig
+	// localGatewayIPs holds the gateway IPs of this Node. The connections from one of them to a
+	// local Pod which are not identified as initiated by the host network of this Node are
+	// exported as FROM_EXTERNAL (see findFlowType). It is empty on Windows, where the connections
+	// initiated by the host network are never identified, and are not supported.
+	localGatewayIPs sets.Set[netip.Addr]
+	tlsConfig       *api.FlowExporterTLSConfig
 
 	// allowProtocolFilter specifies whether the incoming connections will be accepted
 	allowProtocolFilter []string
@@ -346,11 +352,23 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		if conn.DestinationPodNamespace == "" {
 			return utils.FlowTypeUnsupported
 		}
-		// The source IP is the remote node's gateway: this is the destination-node half of either
-		// an inter-node FROM_EXTERNAL connection, or of a connection initiated by the host network
-		// of the remote Node. Export it as INTER_NODE so the FlowAggregator can use the standard
-		// inter-node correlation path. The FlowAggregator will merge it with the FROM_EXTERNAL
-		// source-node record and restore the final flow type to FROM_EXTERNAL.
+		if d.localGatewayIPs.Has(conn.FlowKey.SourceAddress) {
+			// The source IP is the gateway IP of this Node, and the destination Pod runs on this
+			// Node: the connection came from outside the Pod network through antrea-gw0, but
+			// was neither correlated with a connection from an external client nor identified
+			// as initiated by the host network of this Node. For example, the host does not
+			// track its connections to LoadBalancer IPs and external IPs with proxyAll, the
+			// default-zone entry may already be gone when the connection is first polled, and
+			// the host may masquerade connections from external clients to a Service that
+			// AntreaProxy ignores. No other Node exports a record for the connection, so it is
+			// exported as FROM_EXTERNAL, without the source Node name.
+			return utils.FlowTypeFromExternal
+		}
+		// The source IP is the gateway IP of another Node: this is the destination-Node half of
+		// either an inter-Node FROM_EXTERNAL connection, or of a connection initiated by the host
+		// network of the other Node. Export it as INTER_NODE so the FlowAggregator can use the
+		// standard inter-Node correlation path. The FlowAggregator will merge it with the
+		// FROM_EXTERNAL source-Node record and restore the final flow type to FROM_EXTERNAL.
 		return utils.FlowTypeInterNode
 	}
 	if !srcIsPod {

@@ -132,6 +132,9 @@ type defaultZoneSnapshot struct {
 	// neither a Service known to the proxier nor a NodePortLocal port (see
 	// connection.Connection.IsServiceUnresolved).
 	serviceUnresolved bool
+	// isFromHostNetworkTranslatedByHost is true if the connection was initiated by the host network
+	// of this Node, and translated by the host (see isTranslatedByHost).
+	isFromHostNetworkTranslatedByHost bool
 }
 
 func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapshot {
@@ -220,7 +223,9 @@ func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.
 // network of this Node if the default-zone connection is such an entry: the connection was
 // translated by the host (e.g., by kube-proxy for a Service, or by Antrea's masquerade rule). It
 // is still treated as a from-external connection, which reports the original source address and,
-// for a Service, the original destination.
+// for a Service, the original destination. When OVS also translates the destination of such a
+// connection (i.e., for a Service handled by AntreaProxy with proxyAll), the default-zone entry is
+// keyed on the destination before that translation (see popMatchingTranslatedByHost).
 func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) {
 	for _, conn := range defaultZoneConns {
 		c.ingestDefaultZoneFlow(conn)
@@ -287,7 +292,9 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 // keyFromDefaultZoneConn: the 5-tuple of the packets sent by the host to antrea-gw0, after any NAT
 // applied by the host. It is the 5-tuple of the packets received by OVS, before any NAT applied by
 // OVS (e.g., when AntreaProxy handles the traffic from the host to a ClusterIP), hence the use of
-// the original destination of the Antrea-zone connection.
+// the original destination of the Antrea-zone connection. It is used both to identify these
+// connections (see markIfFromHostNetwork), and to correlate the ones also translated by the host
+// (see popMatchingTranslatedByHost).
 func hostNetworkKeyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 	return correlatorKey{
 		srcIP:    conn.FlowKey.SourceAddress,
@@ -369,8 +376,10 @@ func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connecti
 	// the host network of this Node. These are retained if and only if the host translated them,
 	// regardless of the proxier, so that the source address used by the host before SNAT (e.g., the
 	// Node IP of a hostNetwork Pod masqueraded by Antrea's "masquerade LOCAL traffic" rule) and the
-	// original destination (e.g., the ClusterIP of a Service that AntreaProxy ignores) are reported
-	// whether AntreaProxy is enabled or not. Correlating the ones that the host did not translate
+	// original destination (e.g., the ClusterIP of a Service that AntreaProxy ignores, or the Node
+	// IP and NodePort of a Service handled by AntreaProxy with proxyAll) are reported whether
+	// AntreaProxy is enabled or not, and whether it handles the Service or not (see
+	// popMatchingTranslatedByHost). Correlating the ones that the host did not translate
 	// would not change the 5-tuple, the original destination, or the source address of their
 	// Antrea-zone half, but would only treat them as from-external connections, while
 	// markIfFromHostNetwork identifies them anyway.
@@ -414,6 +423,9 @@ func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 	identity := antreaZoneConnIdentityFromConn(conn, key)
 	snapshot, ok := c.popMatching(key)
 	if !ok {
+		snapshot, ok = c.popMatchingTranslatedByHost(conn)
+	}
+	if !ok {
 		// The default-zone conntrack entry is gone, typically because it expired right before the
 		// Antrea-zone entry, between the Antrea-zone dump and the default-zone dump of this poll.
 		// Only reuse the previous snapshot for this same conntrack entry (see
@@ -440,6 +452,7 @@ func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePort
 	snapshot := defaultZoneSnapshotFromConn(conn)
 	snapshot.nplServicePortName = nplServicePortName
 	snapshot.serviceUnresolved = serviceUnresolved
+	snapshot.isFromHostNetworkTranslatedByHost = c.isFromHostNetwork(conn.FlowKey.SourceAddress) && isTranslatedByHost(conn)
 	c.connections[keyFromDefaultZoneConn(conn)] = snapshot
 }
 
@@ -448,6 +461,32 @@ func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePort
 func (c *FromExternalCorrelator) popMatching(key correlatorKey) (defaultZoneSnapshot, bool) {
 	snapshot, exists := c.connections[key]
 	if !exists {
+		return defaultZoneSnapshot{}, false
+	}
+	delete(c.connections, key)
+	return snapshot, true
+}
+
+// popMatchingTranslatedByHost removes and returns the default-zone snapshot ingested during the
+// current poll for the given Antrea-zone connection, if the connection was initiated by the host
+// network of this Node and translated by both the host and OVS. This happens with proxyAll, when
+// the host masquerades a connection to a Service handled by AntreaProxy: e.g., a client bound to
+// the Node IP which connects to a ClusterIP, or any client which connects to <NodeIP>:<NodePort>,
+// whose destination the host also translates to the virtual NodePort DNAT IP. The default-zone
+// entry is then keyed on the destination before the translation applied by OVS, i.e., the original
+// destination of the Antrea-zone connection, rather than on the Endpoint (see
+// hostNetworkKeyFromAntreaZoneConn). The other default-zone entries matching this key are not
+// correlated:
+//   - The entries of connections from external clients to a NodePort with proxyAll, which are not
+//     initiated by the host network of this Node.
+//   - The entries of connections from the host network of this Node to a Service handled by
+//     AntreaProxy, that the host did not translate (e.g., from the gateway IP to a ClusterIP). As
+//     for the ones to a Pod (see ingestDefaultZoneFlow), they are identified by
+//     markIfFromHostNetwork instead.
+func (c *FromExternalCorrelator) popMatchingTranslatedByHost(conn *connection.Connection) (defaultZoneSnapshot, bool) {
+	key := hostNetworkKeyFromAntreaZoneConn(conn)
+	snapshot, exists := c.connections[key]
+	if !exists || !snapshot.isFromHostNetworkTranslatedByHost {
 		return defaultZoneSnapshot{}, false
 	}
 	delete(c.connections, key)

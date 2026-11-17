@@ -259,13 +259,14 @@ func TestFlowExporter_createDestinationFromResource(t *testing.T) {
 						ClientSecret: &api.NamespacedName{Name: "client1", Namespace: "client2"},
 					},
 					allowProtocolFilter: []string{"udp"},
+					localGatewayIPs:     sets.New(netip.MustParseAddr("10.244.1.1")),
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fe := &FlowExporter{}
+			fe := &FlowExporter{localGatewayIPs: sets.New(netip.MustParseAddr("10.244.1.1"))}
 			got, err := fe.createDestinationFromResource(tt.res)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want.DestinationConfig, got.DestinationConfig)
@@ -639,15 +640,17 @@ func TestFlowExporter_pollerLifecycle(t *testing.T) {
 	})
 }
 
+// TestGetNodeIPs validates getNodeIPs and getGatewayIPs.
 func TestGetNodeIPs(t *testing.T) {
 	ipNet := func(ip string, prefixLen int) *net.IPNet {
 		parsed := net.ParseIP(ip)
 		return &net.IPNet{IP: parsed, Mask: net.CIDRMask(prefixLen, len(parsed)*8)}
 	}
 	tests := []struct {
-		name       string
-		nodeConfig *config.NodeConfig
-		expected   sets.Set[netip.Addr]
+		name               string
+		nodeConfig         *config.NodeConfig
+		expected           sets.Set[netip.Addr]
+		expectedGatewayIPs sets.Set[netip.Addr]
 	}{
 		{
 			name: "dual-stack",
@@ -670,6 +673,10 @@ func TestGetNodeIPs(t *testing.T) {
 				netip.MustParseAddr("10.244.1.1"),
 				netip.MustParseAddr("fd00:10:244:1::1"),
 			),
+			expectedGatewayIPs: sets.New(
+				netip.MustParseAddr("10.244.1.1"),
+				netip.MustParseAddr("fd00:10:244:1::1"),
+			),
 		},
 		{
 			// In networkPolicyOnly mode, the gateway IP is the transport IP of the Node.
@@ -679,17 +686,20 @@ func TestGetNodeIPs(t *testing.T) {
 				NodeTransportIPv4Addr: ipNet("172.18.0.2", 16),
 				GatewayConfig:         &config.GatewayConfig{IPv4: net.ParseIP("172.18.0.2")},
 			},
-			expected: sets.New(netip.MustParseAddr("172.18.0.2")),
+			expected:           sets.New(netip.MustParseAddr("172.18.0.2")),
+			expectedGatewayIPs: sets.New(netip.MustParseAddr("172.18.0.2")),
 		},
 		{
-			name:       "no IP",
-			nodeConfig: &config.NodeConfig{},
-			expected:   sets.New[netip.Addr](),
+			name:               "no IP",
+			nodeConfig:         &config.NodeConfig{},
+			expected:           sets.New[netip.Addr](),
+			expectedGatewayIPs: sets.New[netip.Addr](),
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, getNodeIPs(tc.nodeConfig))
+			assert.Equal(t, tc.expectedGatewayIPs, getGatewayIPs(tc.nodeConfig))
 		})
 	}
 }

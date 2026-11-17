@@ -262,15 +262,32 @@ the traffic to these Nodes is tunneled (in `encap` mode, and in `hybrid` mode
 for Nodes in other subnets), including connections to Services whose Endpoint
 is such a Pod. With WireGuard encryption, this is only the case for connections
 to Services handled by AntreaProxy with `proxyAll` enabled. When the Node
-masquerades the connection, i.e., when kube-proxy masquerades a connection to a
-Service, or when a client bound to another IP of the Node connects directly to
-a Pod, the reported source is the IP that the Node used before masquerading.
-The other connections to Pods running on other Nodes are not supported yet, as
-they do not go through OVS on the source Node: in `noEncap` mode, and in
-`hybrid` mode for Nodes in the same subnet, the destination Node reports them
-as From External flows from an IP of the source Node, without
-`sourceNodeName`, and with WireGuard encryption, they are not reported. They are
-not supported in `networkPolicyOnly` mode either.
+masquerades the connection, e.g., when it connects to a ClusterIP handled by
+kube-proxy, when it connects to a NodePort on its own IP, or when a client bound
+to its Node IP connects to a Pod or to a ClusterIP, the reported source is the
+IP that the Node used before masquerading. Only the Node IPs, the transport IPs
+and the gateway IPs of the Node are recognized as its own: the connections from
+its other local addresses (e.g., the address of a secondary network interface)
+are not identified, and are reported without `sourceNodeName`, if at all.
+
+The following connections from the host network of a Node are not fully
+supported yet:
+
+* With `proxyAll` enabled, the Node does not track its connections to the
+  LoadBalancer IPs and the external IPs of Services, so it cannot identify them.
+  The ones to a local Endpoint are reported as From External flows from the
+  gateway IP of the Node, without `sourceNodeName`, and the ones to an Endpoint
+  running on another Node are not reported.
+* In `noEncap` mode, and in `hybrid` mode for Nodes in the same subnet, the
+  source Node routes the connections to Pods running on other Nodes through its
+  uplink, either directly, or after AntreaProxy translated the Service with
+  `proxyAll` enabled, in which case it masquerades them with its own IP. The
+  destination Node reports them as From External flows from an IP of the source
+  Node, without `sourceNodeName`.
+* With WireGuard encryption, the connections to Pods running on other Nodes
+  bypass OVS on the source Node, unless they are connections to Services
+  handled by AntreaProxy with `proxyAll` enabled, and are not reported.
+* In `networkPolicyOnly` mode, only the connections to local Pods are reported.
 
 Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
 

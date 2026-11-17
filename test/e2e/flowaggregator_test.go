@@ -2640,6 +2640,39 @@ func testHostNetworkToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		}, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout, time.Second,
 			"The masqueraded connection from %s:%s should only be reported with its original source", snatIP, snatPort)
 	})
+
+	t.Run("NodePort", func(t *testing.T) {
+		svcName := "host-net-to-pod-nodeport"
+		ipFamily := corev1.IPv4Protocol
+		nodeIP := nodeIPv4(destinationNodeIndex)
+		if isIPv6 {
+			svcName += "v6"
+			ipFamily = corev1.IPv6Protocol
+			nodeIP = nodeIPv6(destinationNodeIndex)
+		}
+		svc, err := data.CreateServiceWithAnnotations(svcName, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"antrea-e2e": nginxPodName}, false, false, corev1.ServiceTypeNodePort, &ipFamily, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcName, metav1.DeleteOptions{})
+		})
+		svcURL := "http://" + net.JoinHostPort(nodeIP, strconv.Itoa(int(svc.Spec.Ports[0].NodePort)))
+		// The destination is local, so the host selects it as the source address. Whether
+		// kube-proxy or AntreaProxy (with proxyAll) handles the NodePort, the host translates the
+		// destination, and masquerades the connection with its gateway IP when sending it to
+		// antrea-gw0. The record reports the source address used by the host before SNAT, and the
+		// NodePort Service.
+		sourceIP, sourcePort := connectFromHostNetwork(t, destinationNodeIndex, svcURL)
+		require.Equal(t, nodeIP, sourceIP, "The host should use its Node IP to connect to a NodePort on its Node IP")
+		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		snatIPField, _ := proxySnatIPField(isIPv6)
+		for _, record := range records {
+			checkFlowType(t, record, ipfixregistry.FlowTypeFromExternal)
+			assert.Equal(t, dstNodeName, recordField(t, record, "sourceNodeName"), "Record does not have the expected source Node")
+			assert.Equal(t, nginxPodName, recordField(t, record, "destinationPodName"), "Record does not have the expected destination Pod")
+			assert.Contains(t, recordField(t, record, "destinationServicePortName"), svcName, "Record does not have the expected Service")
+			assert.Equal(t, gatewayIP(destinationNodeIndex), recordField(t, record, snatIPField), "Record does not have the expected ProxySnat address")
+		}
+	})
 }
 
 type ClickHouseFullRow struct {

@@ -641,6 +641,197 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 	}
 }
 
+// TestFromExternalCorrelator_HostNetworkProxyAll validates the correlation of the connections
+// initiated by the host network of this Node to a Service handled by AntreaProxy with proxyAll. The
+// host does not translate the ClusterIP, and translates <NodeIP>:<NodePort> to the virtual NodePort
+// DNAT IP, so the default-zone entry is keyed on the destination before the translation applied by
+// OVS, rather than on the Endpoint. A connection is correlated if the host translated it, so that the
+// source address used by the host before SNAT and the original destination are reported, as with
+// kube-proxy.
+func TestFromExternalCorrelator_HostNetworkProxyAll(t *testing.T) {
+	const (
+		hostPort     = 40000
+		snatPort     = 61000
+		clientPort   = 50000
+		svcPort      = 80
+		nodePort     = 30080
+		endpointPort = 8080
+	)
+	refTime := time.Now()
+	clusterIPv4 := netip.MustParseAddr("10.96.0.10")
+	clusterIPv6 := netip.MustParseAddr("fd00:10:96::a")
+	// The virtual IP to which the host translates the destination of the connections to a NodePort
+	// with proxyAll.
+	nodePortDNATIP := netip.MustParseAddr("169.254.0.252")
+	proxier := staticProxier{
+		fmt.Sprintf("%s:%d/TCP", clusterIPv4, svcPort):            {},
+		fmt.Sprintf("%s:%d/TCP", clusterIPv6, svcPort):            {},
+		fmt.Sprintf("%s:%d/TCP", hostTestLocalNodeIPv4, nodePort): {},
+	}
+	addrPort := netip.AddrPortFrom
+
+	// defaultZoneConn returns the default-zone entry of a connection from src to origDst, whose
+	// destination is translated by the host to dst, and which is masqueraded by the host with snatIP
+	// if it is valid.
+	defaultZoneConn := func(src, origDst, dst netip.AddrPort, snatIP netip.Addr) *connection.Connection {
+		conn := &connection.Connection{
+			Zone:                       DefaultZone,
+			FlowKey:                    connection.Tuple{SourceAddress: src.Addr(), DestinationAddress: dst.Addr(), Protocol: 6, SourcePort: src.Port(), DestinationPort: dst.Port()},
+			OriginalDestinationAddress: origDst.Addr(),
+			OriginalDestinationPort:    origDst.Port(),
+		}
+		if snatIP.IsValid() {
+			conn.ProxySnatIP = snatIP
+			conn.ProxySnatPort = snatPort
+		}
+		return conn
+	}
+	// antreaZoneConn returns the Antrea-zone entry of a connection from src to origDst, translated
+	// by OVS to the Endpoint, at endpointIP:endpointPort.
+	antreaZoneConn := func(src, origDst netip.AddrPort, endpointIP netip.Addr) *connection.Connection {
+		return &connection.Connection{
+			ID:                         1,
+			Zone:                       openflow.CtZone,
+			StartTime:                  refTime,
+			FlowKey:                    connection.Tuple{SourceAddress: src.Addr(), DestinationAddress: endpointIP, Protocol: 6, SourcePort: src.Port(), DestinationPort: endpointPort},
+			OriginalDestinationAddress: origDst.Addr(),
+			OriginalDestinationPort:    origDst.Port(),
+		}
+	}
+
+	tests := []struct {
+		name               string
+		defaultZoneConn    *connection.Connection
+		antreaZoneConn     *connection.Connection
+		expectFromHostNet  bool
+		expectFromExternal bool
+		expectedSource     netip.AddrPort
+		// expectedProxySnat is the zero value if the connection has no ProxySnat address.
+		expectedProxySnat netip.AddrPort
+		expectedOrigDst   netip.AddrPort
+	}{
+		{
+			// For example, a hostNetwork Pod bound to its Node IP, masqueraded by Antrea's
+			// "masquerade LOCAL traffic" rule.
+			name:               "host bound to Node IP to ClusterIP with local Endpoint",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalNodeIPv4, hostPort), addrPort(clusterIPv4, svcPort), addrPort(clusterIPv4, svcPort), hostTestLocalGwIPv4),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv4, snatPort), addrPort(clusterIPv4, svcPort), hostTestLocalPodIPv4),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalNodeIPv4, hostPort),
+			expectedProxySnat:  addrPort(hostTestLocalGwIPv4, snatPort),
+			expectedOrigDst:    addrPort(clusterIPv4, svcPort),
+		},
+		{
+			// The FlowAggregator keys the record on its ProxySnat address, which is the source
+			// address seen by the destination Node.
+			name:               "host bound to Node IP to ClusterIP with remote Endpoint",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalNodeIPv4, hostPort), addrPort(clusterIPv4, svcPort), addrPort(clusterIPv4, svcPort), hostTestLocalGwIPv4),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv4, snatPort), addrPort(clusterIPv4, svcPort), hostTestRemotePodIPv4),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalNodeIPv4, hostPort),
+			expectedProxySnat:  addrPort(hostTestLocalGwIPv4, snatPort),
+			expectedOrigDst:    addrPort(clusterIPv4, svcPort),
+		},
+		{
+			name:               "IPv6 host bound to Node IP to ClusterIP with local Endpoint",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalNodeIPv6, hostPort), addrPort(clusterIPv6, svcPort), addrPort(clusterIPv6, svcPort), hostTestLocalGwIPv6),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv6, snatPort), addrPort(clusterIPv6, svcPort), hostTestLocalPodIPv6),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalNodeIPv6, hostPort),
+			expectedProxySnat:  addrPort(hostTestLocalGwIPv6, snatPort),
+			expectedOrigDst:    addrPort(clusterIPv6, svcPort),
+		},
+		{
+			// The host selects the Node IP as the source address, as the original destination
+			// is local, then translates the destination to the virtual NodePort DNAT IP, and
+			// masquerades the connection.
+			name:               "host to NodePort with local Endpoint",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalNodeIPv4, hostPort), addrPort(hostTestLocalNodeIPv4, nodePort), addrPort(nodePortDNATIP, nodePort), hostTestLocalGwIPv4),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv4, snatPort), addrPort(nodePortDNATIP, nodePort), hostTestLocalPodIPv4),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalNodeIPv4, hostPort),
+			expectedProxySnat:  addrPort(hostTestLocalGwIPv4, snatPort),
+			expectedOrigDst:    addrPort(hostTestLocalNodeIPv4, nodePort),
+		},
+		{
+			name:               "host to NodePort with remote Endpoint",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalNodeIPv4, hostPort), addrPort(hostTestLocalNodeIPv4, nodePort), addrPort(nodePortDNATIP, nodePort), hostTestLocalGwIPv4),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv4, snatPort), addrPort(nodePortDNATIP, nodePort), hostTestRemotePodIPv4),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalNodeIPv4, hostPort),
+			expectedProxySnat:  addrPort(hostTestLocalGwIPv4, snatPort),
+			expectedOrigDst:    addrPort(hostTestLocalNodeIPv4, nodePort),
+		},
+		{
+			// A client bound to the gateway IP is not masqueraded, but the host still
+			// translates the destination, which is reported.
+			name:               "host bound to gateway IP to NodePort",
+			defaultZoneConn:    defaultZoneConn(addrPort(hostTestLocalGwIPv4, hostPort), addrPort(hostTestLocalNodeIPv4, nodePort), addrPort(nodePortDNATIP, nodePort), netip.Addr{}),
+			antreaZoneConn:     antreaZoneConn(addrPort(hostTestLocalGwIPv4, hostPort), addrPort(nodePortDNATIP, nodePort), hostTestLocalPodIPv4),
+			expectFromHostNet:  true,
+			expectFromExternal: true,
+			expectedSource:     addrPort(hostTestLocalGwIPv4, hostPort),
+			expectedOrigDst:    addrPort(hostTestLocalNodeIPv4, nodePort),
+		},
+		{
+			// The host translates neither the source nor the destination: the connection is
+			// only identified as initiated by the host network, and is not correlated.
+			name:              "host gateway IP to ClusterIP",
+			defaultZoneConn:   defaultZoneConn(addrPort(hostTestLocalGwIPv4, hostPort), addrPort(clusterIPv4, svcPort), addrPort(clusterIPv4, svcPort), netip.Addr{}),
+			antreaZoneConn:    antreaZoneConn(addrPort(hostTestLocalGwIPv4, hostPort), addrPort(clusterIPv4, svcPort), hostTestLocalPodIPv4),
+			expectFromHostNet: true,
+			expectedSource:    addrPort(hostTestLocalGwIPv4, hostPort),
+			expectedOrigDst:   addrPort(clusterIPv4, svcPort),
+		},
+		{
+			// The default-zone entry matches the key of a connection initiated by the host
+			// network, but the connection is not: it is left unchanged.
+			name:            "external client to NodePort",
+			defaultZoneConn: defaultZoneConn(addrPort(hostTestExternalIPv4, clientPort), addrPort(hostTestLocalNodeIPv4, nodePort), addrPort(nodePortDNATIP, nodePort), netip.Addr{}),
+			antreaZoneConn:  antreaZoneConn(addrPort(hostTestExternalIPv4, clientPort), addrPort(nodePortDNATIP, nodePort), hostTestLocalPodIPv4),
+			expectedSource:  addrPort(hostTestExternalIPv4, clientPort),
+			expectedOrigDst: addrPort(nodePortDNATIP, nodePort),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			correlator := NewFromExternalCorrelator(proxier, nil, hostTestNodeIPs)
+			expectedDst := netip.AddrPortFrom(tc.antreaZoneConn.FlowKey.DestinationAddress, tc.antreaZoneConn.FlowKey.DestinationPort)
+			check := func(t *testing.T, conn *connection.Connection) {
+				assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
+				assert.Equal(t, tc.expectFromExternal, conn.IsFromExternal, "Unexpected IsFromExternal")
+				assert.False(t, conn.IsServiceUnresolved, "The Service should be resolved")
+				assert.Equal(t, tc.expectedSource, netip.AddrPortFrom(conn.FlowKey.SourceAddress, conn.FlowKey.SourcePort), "Unexpected source")
+				assert.Equal(t, expectedDst, netip.AddrPortFrom(conn.FlowKey.DestinationAddress, conn.FlowKey.DestinationPort), "Unexpected destination")
+				assert.Equal(t, tc.expectedOrigDst, netip.AddrPortFrom(conn.OriginalDestinationAddress, conn.OriginalDestinationPort), "Unexpected original destination")
+				var proxySnat netip.AddrPort
+				if conn.ProxySnatIP.IsValid() {
+					proxySnat = netip.AddrPortFrom(conn.ProxySnatIP, conn.ProxySnatPort)
+				}
+				assert.Equal(t, tc.expectedProxySnat, proxySnat, "Unexpected ProxySnat address")
+			}
+
+			conn := *tc.antreaZoneConn
+			correlator.Correlate([]*connection.Connection{tc.defaultZoneConn}, []*connection.Connection{&conn})
+			check(t, &conn)
+			assert.Empty(t, correlator.connections, "The default-zone connections should be cleared at the end of the poll")
+			if !tc.expectFromExternal {
+				return
+			}
+			// The default-zone entry may be gone before the Antrea-zone entry: the snapshot used
+			// for this conntrack entry during the previous poll is used again.
+			conn = *tc.antreaZoneConn
+			correlator.Correlate(nil, []*connection.Connection{&conn})
+			check(t, &conn)
+		})
+	}
+}
+
 // TestConntrackConnectionStore_HostNetworkServiceLookup validates that the connection store only
 // looks up the Service of a connection initiated by the host network of this Node and correlated
 // with its default-zone entry if the FromExternalCorrelator resolved it to a Service.
@@ -655,11 +846,15 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 	localPod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "local-pod", Namespace: "ns1", UID: "local-pod-uid"}}
 	refTime := time.Now()
 
+	localPodAddrPort := netip.AddrPortFrom(hostTestLocalPodIPv4, 80)
 	tests := []struct {
 		name string
-		// origDst is the original destination of the default-zone entry, translated by the
-		// host to the local Pod if it is not the local Pod IP.
-		origDst             netip.Addr
+		// origDst is the original destination of the default-zone entry.
+		origDst netip.AddrPort
+		// hostDst is the destination of the default-zone entry, after the translation applied
+		// by the host. If it is not the local Pod, OVS translates it to the local Pod, i.e.,
+		// AntreaProxy handles the Service with proxyAll.
+		hostDst             netip.AddrPort
 		isKnownService      bool
 		expectedServiceName string
 	}{
@@ -667,16 +862,35 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 			// For example, a hostNetwork Pod bound to its Node IP, masqueraded by Antrea's
 			// "masquerade LOCAL traffic" rule.
 			name:    "Node IP to local Pod",
-			origDst: hostTestLocalPodIPv4,
+			origDst: localPodAddrPort,
+			hostDst: localPodAddrPort,
 		},
 		{
 			// For example, a Service ignored by AntreaProxy.
 			name:    "Node IP to unknown ClusterIP masqueraded by kube-proxy",
-			origDst: clusterIP,
+			origDst: netip.AddrPortFrom(clusterIP, 80),
+			hostDst: localPodAddrPort,
 		},
 		{
 			name:                "Node IP to known ClusterIP masqueraded by kube-proxy",
-			origDst:             clusterIP,
+			origDst:             netip.AddrPortFrom(clusterIP, 80),
+			hostDst:             localPodAddrPort,
+			isKnownService:      true,
+			expectedServiceName: svc.String(),
+		},
+		{
+			name:                "Node IP to ClusterIP masqueraded by the host with proxyAll",
+			origDst:             netip.AddrPortFrom(clusterIP, 80),
+			hostDst:             netip.AddrPortFrom(clusterIP, 80),
+			isKnownService:      true,
+			expectedServiceName: svc.String(),
+		},
+		{
+			// The destination is translated by the host to the virtual NodePort DNAT IP, which
+			// is not a Service known to the proxier, while <NodeIP>:<NodePort> is.
+			name:                "Node IP to NodePort masqueraded by the host with proxyAll",
+			origDst:             netip.AddrPortFrom(hostTestLocalNodeIPv4, 30080),
+			hostDst:             netip.AddrPortFrom(netip.MustParseAddr("169.254.0.252"), 30080),
 			isKnownService:      true,
 			expectedServiceName: svc.String(),
 		},
@@ -685,7 +899,7 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
-			serviceStr := fmt.Sprintf("%s:80/TCP", tc.origDst)
+			serviceStr := fmt.Sprintf("%s:%d/TCP", tc.origDst.Addr(), tc.origDst.Port())
 			// The correlator looks up the original destination when it ingests the
 			// default-zone entry. The connection store only looks it up again if it is a
 			// Service.
@@ -705,17 +919,17 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 
 			defaultZoneConn := &connection.Connection{
 				Zone:                       DefaultZone,
-				FlowKey:                    connection.Tuple{SourceAddress: hostTestLocalNodeIPv4, DestinationAddress: hostTestLocalPodIPv4, Protocol: 6, SourcePort: 40000, DestinationPort: 80},
-				OriginalDestinationAddress: tc.origDst,
-				OriginalDestinationPort:    80,
+				FlowKey:                    connection.Tuple{SourceAddress: hostTestLocalNodeIPv4, DestinationAddress: tc.hostDst.Addr(), Protocol: 6, SourcePort: 40000, DestinationPort: tc.hostDst.Port()},
+				OriginalDestinationAddress: tc.origDst.Addr(),
+				OriginalDestinationPort:    tc.origDst.Port(),
 				ProxySnatIP:                hostTestLocalGwIPv4,
 				ProxySnatPort:              snatPort,
 			}
 			antreaZoneConn := &connection.Connection{
 				Zone:                       openflow.CtZone,
 				FlowKey:                    connection.Tuple{SourceAddress: hostTestLocalGwIPv4, DestinationAddress: hostTestLocalPodIPv4, Protocol: 6, SourcePort: snatPort, DestinationPort: 80},
-				OriginalDestinationAddress: hostTestLocalPodIPv4,
-				OriginalDestinationPort:    80,
+				OriginalDestinationAddress: tc.hostDst.Addr(),
+				OriginalDestinationPort:    tc.hostDst.Port(),
 				StartTime:                  refTime,
 				StopTime:                   refTime,
 			}
@@ -729,7 +943,7 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 			storedConn, exists := cs.GetConnByKey(antreaZoneConn.FlowKey)
 			require.True(t, exists)
 			assert.Equal(t, hostTestLocalNodeIPv4, storedConn.FlowKey.SourceAddress)
-			assert.Equal(t, tc.origDst, storedConn.OriginalDestinationAddress)
+			assert.Equal(t, tc.origDst, netip.AddrPortFrom(storedConn.OriginalDestinationAddress, storedConn.OriginalDestinationPort))
 			assert.Equal(t, tc.expectedServiceName, storedConn.DestinationServicePortName)
 		})
 	}
