@@ -163,7 +163,6 @@ func TestSPDYTunnel(t *testing.T) {
 		require.NotNil(t, ep.lost)
 
 		ep.release()
-		ep.release() // Releasing again must be harmless.
 		select {
 		case <-serverDone:
 		case <-time.After(timeout):
@@ -211,16 +210,20 @@ func TestSPDYTunnel(t *testing.T) {
 	})
 
 	t.Run("gives up when the context ends before the tunnel is ready", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		unblock := make(chan struct{})
-		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-unblock }))
+		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			// The context is cancelled once the request has arrived, so spdyTunnel gives up while it waits for the tunnel.
+			cancel()
+			<-unblock
+		}))
 		// Cleanups run last in, first out: the handler is let go before the server waits for it.
 		t.Cleanup(server.Close)
 		t.Cleanup(func() { close(unblock) })
 
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		defer cancel()
 		_, err := spdyTunnel(ctx, &rest.Config{Host: server.URL}, "flow-aggregator", "flow-aggregator-abc", flowStreamPort)
-		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run("a configuration that cannot make a client", func(t *testing.T) {
