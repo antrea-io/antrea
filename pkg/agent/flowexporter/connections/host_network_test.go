@@ -16,7 +16,6 @@ package connections
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"testing"
 	"time"
@@ -26,28 +25,31 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	objectstoretest "antrea.io/antrea/v2/pkg/util/objectstore/testing"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
-// fakeNodeRouteQuerier mimics noderoute.Controller.GetNodeIPForPodIP for a fixed set of Pod
-// subnets of other Nodes: an IP belongs to the Pod subnet of another Node if it belongs to one of
-// them (including the gateway IP of that Node).
-type fakeNodeRouteQuerier struct {
+// fakeRemotePodQuerier mimics the RemotePodQuerier of the FlowExporter for a fixed set of Pod
+// subnets of other Nodes, to which the traffic is tunneled: an IP is the IP of a Pod running on
+// another Node if it belongs to one of them, and is not the gateway IP of that Node.
+type fakeRemotePodQuerier struct {
 	remotePodSubnets []netip.Prefix
 }
 
-func (q *fakeNodeRouteQuerier) GetNodeIPForPodIP(ip netip.Addr) (net.IP, bool) {
+func (q *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
 	for _, prefix := range q.remotePodSubnets {
 		if prefix.Contains(ip) {
-			return net.IP(hostTestNodeIPv4.AsSlice()), true
+			return ip != prefix.Masked().Addr().Next()
 		}
 	}
-	return nil, false
+	return false
 }
 
 var (
@@ -74,8 +76,8 @@ var (
 	hostTestNodeIPs = sets.New(hostTestLocalGwIPv4, hostTestLocalGwIPv6, hostTestLocalNodeIPv4, hostTestLocalNodeIPv6, hostTestLocalTransportIPv4)
 )
 
-func newTestNodeRouteQuerier() *fakeNodeRouteQuerier {
-	return &fakeNodeRouteQuerier{remotePodSubnets: []netip.Prefix{hostTestRemotePodCIDRv4, hostTestRemotePodCIDRv6}}
+func newTestRemotePodQuerier() *fakeRemotePodQuerier {
+	return &fakeRemotePodQuerier{remotePodSubnets: []netip.Prefix{hostTestRemotePodCIDRv4, hostTestRemotePodCIDRv6}}
 }
 
 // TestFromExternalCorrelator_isFromHostNetwork validates the identification of the default-zone
@@ -126,8 +128,11 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		withQuerier       bool
+		name        string
+		withQuerier bool
+		// noRemotePodIPs makes the querier identify no remote Pod IP, as when the traffic to
+		// the other Nodes is not tunneled.
+		noRemotePodIPs    bool
 		conn              connection.Connection
 		localPodIP        netip.Addr
 		expectAdded       bool
@@ -171,11 +176,32 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 			expectAdded: false,
 		},
 		{
-			// The gateway IP of another Node belongs to its Pod subnet: the connection is
-			// kept, but it is never exported (see Destination.findFlowType).
-			name:              "local gateway to remote gateway",
-			withQuerier:       true,
-			conn:              hostConn(hostTestLocalGwIPv4, hostTestRemoteGwIPv4),
+			// The gateway IP of another Node belongs to its Pod subnet, but it is not a Pod.
+			name:        "local gateway to remote gateway",
+			withQuerier: true,
+			conn:        hostConn(hostTestLocalGwIPv4, hostTestRemoteGwIPv4),
+			expectAdded: false,
+		},
+		{
+			// For example, in noEncap mode, a connection to a Service handled by AntreaProxy,
+			// which the destination Node reports on its own.
+			name:           "local gateway to untunneled remote Pod",
+			withQuerier:    true,
+			noRemotePodIPs: true,
+			conn:           hostConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4),
+			expectAdded:    false,
+		},
+		{
+			// A connection correlated with its default-zone entry is kept regardless, but it
+			// is not exported (see Destination.findHostNetworkFlowType).
+			name:           "local Node IP to untunneled remote Pod correlated as from-external",
+			withQuerier:    true,
+			noRemotePodIPs: true,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: hostTestLocalNodeIPv4, DestinationAddress: hostTestRemotePodIPv4},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
+			},
 			expectAdded:       true,
 			expectFromHostNet: true,
 		},
@@ -205,7 +231,7 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 			expectFromHostNet: false,
 		},
 		{
-			name:        "local gateway to remote Pod without NodeRouteQuerier",
+			name:        "local gateway to remote Pod without RemotePodQuerier",
 			withQuerier: false,
 			conn:        hostConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4),
 			expectAdded: false,
@@ -223,8 +249,10 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 					return nil, false
 				}).AnyTimes()
 			cfg := testFlowExporterOptions
-			if tc.withQuerier {
-				cfg.NodeRouteQuerier = newTestNodeRouteQuerier()
+			if tc.noRemotePodIPs {
+				cfg.RemotePodQuerier = &fakeRemotePodQuerier{}
+			} else if tc.withQuerier {
+				cfg.RemotePodQuerier = newTestRemotePodQuerier()
 			}
 			cs := NewConntrackConnectionStore(nil, mockPodStore, nil, cfg)
 
@@ -330,7 +358,10 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 		antreaZoneConn     *connection.Connection
 		expectFromHostNet  bool
 		expectFromExternal bool
-		expectedSourceIP   netip.Addr
+		// expectServiceUnresolved is whether the original destination was looked up, and is
+		// not a Service known to the proxier.
+		expectServiceUnresolved bool
+		expectedSourceIP        netip.Addr
 		// expectedOrigDstIP is the expected original destination IP, if different from the
 		// destination IP.
 		expectedOrigDstIP netip.Addr
@@ -394,28 +425,32 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 			expectedSourceIP: hostTestLocalGwIPv4,
 		},
 		{
-			// For example, a hostNetwork Pod bound to its Node IP. The connection is not
-			// correlated as a from-external one, as its destination is not a Service.
-			name:              "host bound to Node IP to local Pod",
-			withNodeIPs:       true,
-			proxier:           clusterIPProxier,
-			defaultZoneConns:  []*connection.Connection{hostMasqueradedDefaultZoneConn(hostTestLocalNodeIPv4, hostTestLocalPodIPv4)},
-			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, hostTestLocalPodIPv4, hostTestLocalPodIPv4, 6, snatPort, 80, 80),
-			expectFromHostNet: true,
-			expectedSourceIP:  hostTestLocalGwIPv4,
+			// For example, a hostNetwork Pod bound to its Node IP. The connection is retained
+			// for correlation, although its destination is not a Service, as it was translated
+			// by the host, and the source address used by the host is reported.
+			name:                    "host bound to Node IP to local Pod",
+			withNodeIPs:             true,
+			proxier:                 clusterIPProxier,
+			defaultZoneConns:        []*connection.Connection{hostMasqueradedDefaultZoneConn(hostTestLocalNodeIPv4, hostTestLocalPodIPv4)},
+			antreaZoneConn:          antreaZoneConn(hostTestLocalGwIPv4, hostTestLocalPodIPv4, hostTestLocalPodIPv4, 6, snatPort, 80, 80),
+			expectFromHostNet:       true,
+			expectFromExternal:      true,
+			expectServiceUnresolved: true,
+			expectedSourceIP:        hostTestLocalNodeIPv4,
 		},
 		{
-			name:              "host bound to transport IP to remote Pod",
-			withNodeIPs:       true,
-			proxier:           clusterIPProxier,
-			defaultZoneConns:  []*connection.Connection{hostMasqueradedDefaultZoneConn(hostTestLocalTransportIPv4, hostTestRemotePodIPv4)},
-			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4, hostTestRemotePodIPv4, 6, snatPort, 80, 80),
-			expectFromHostNet: true,
-			expectedSourceIP:  hostTestLocalGwIPv4,
+			name:                    "host bound to transport IP to remote Pod",
+			withNodeIPs:             true,
+			proxier:                 clusterIPProxier,
+			defaultZoneConns:        []*connection.Connection{hostMasqueradedDefaultZoneConn(hostTestLocalTransportIPv4, hostTestRemotePodIPv4)},
+			antreaZoneConn:          antreaZoneConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4, hostTestRemotePodIPv4, 6, snatPort, 80, 80),
+			expectFromHostNet:       true,
+			expectFromExternal:      true,
+			expectServiceUnresolved: true,
+			expectedSourceIP:        hostTestLocalTransportIPv4,
 		},
 		{
-			// Without a proxier, the connection is retained for correlation, as it was
-			// translated by the host, and the source address used by the host is reported.
+			// The same as with a proxier, but the original destination is not looked up.
 			name:               "host bound to Node IP to local Pod without proxier",
 			withNodeIPs:        true,
 			defaultZoneConns:   []*connection.Connection{hostMasqueradedDefaultZoneConn(hostTestLocalNodeIPv4, hostTestLocalPodIPv4)},
@@ -523,6 +558,33 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 			expectedOrigDstIP:  clusterIP,
 		},
 		{
+			// A Service ignored by AntreaProxy: the connection is retained for correlation, as
+			// it was translated by the host, and the source address used by the host and the
+			// ClusterIP are reported, as without a proxier.
+			name:                    "host to unknown ClusterIP masqueraded by kube-proxy",
+			withNodeIPs:             true,
+			proxier:                 nodePortProxier,
+			defaultZoneConns:        []*connection.Connection{hostServiceDefaultZoneConn(hostTestLocalNodeIPv4, hostTestRemotePodIPv4, true)},
+			antreaZoneConn:          antreaZoneConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4, hostTestRemotePodIPv4, 6, snatPort, 80, 80),
+			expectFromHostNet:       true,
+			expectFromExternal:      true,
+			expectServiceUnresolved: true,
+			expectedSourceIP:        hostTestLocalNodeIPv4,
+			expectedOrigDstIP:       clusterIP,
+		},
+		{
+			name:                    "host gateway IP to unknown ClusterIP translated by kube-proxy",
+			withNodeIPs:             true,
+			proxier:                 nodePortProxier,
+			defaultZoneConns:        []*connection.Connection{hostServiceDefaultZoneConn(hostTestLocalGwIPv4, hostTestLocalPodIPv4, false)},
+			antreaZoneConn:          antreaZoneConn(hostTestLocalGwIPv4, hostTestLocalPodIPv4, hostTestLocalPodIPv4, 6, hostPort, 80, 80),
+			expectFromHostNet:       true,
+			expectFromExternal:      true,
+			expectServiceUnresolved: true,
+			expectedSourceIP:        hostTestLocalGwIPv4,
+			expectedOrigDstIP:       clusterIP,
+		},
+		{
 			name:               "host to ClusterIP translated by kube-proxy without masquerade",
 			withNodeIPs:        true,
 			proxier:            clusterIPProxier,
@@ -567,6 +629,7 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 			correlator.Correlate(tc.defaultZoneConns, []*connection.Connection{conn})
 			assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
 			assert.Equal(t, tc.expectFromExternal, conn.IsFromExternal, "Unexpected IsFromExternal")
+			assert.Equal(t, tc.expectServiceUnresolved, conn.IsServiceUnresolved, "Unexpected IsServiceUnresolved")
 			assert.Equal(t, tc.expectedSourceIP, conn.FlowKey.SourceAddress, "Unexpected source IP")
 			expectedOrigDstIP := tc.expectedOrigDstIP
 			if !expectedOrigDstIP.IsValid() {
@@ -574,6 +637,100 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 			}
 			assert.Equal(t, expectedOrigDstIP, conn.OriginalDestinationAddress, "Unexpected original destination IP")
 			assert.Empty(t, correlator.hostNetworkConns, "The host network connections should be cleared at the end of the poll")
+		})
+	}
+}
+
+// TestConntrackConnectionStore_HostNetworkServiceLookup validates that the connection store only
+// looks up the Service of a connection initiated by the host network of this Node and correlated
+// with its default-zone entry if the FromExternalCorrelator resolved it to a Service.
+func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
+	const snatPort = 61000
+	clusterIP := netip.MustParseAddr("10.96.0.10")
+	svc := k8sproxy.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "ns1", Name: "svc1"},
+		Port:           "http",
+		Protocol:       v1.ProtocolTCP,
+	}
+	localPod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "local-pod", Namespace: "ns1", UID: "local-pod-uid"}}
+	refTime := time.Now()
+
+	tests := []struct {
+		name string
+		// origDst is the original destination of the default-zone entry, translated by the
+		// host to the local Pod if it is not the local Pod IP.
+		origDst             netip.Addr
+		isKnownService      bool
+		expectedServiceName string
+	}{
+		{
+			// For example, a hostNetwork Pod bound to its Node IP, masqueraded by Antrea's
+			// "masquerade LOCAL traffic" rule.
+			name:    "Node IP to local Pod",
+			origDst: hostTestLocalPodIPv4,
+		},
+		{
+			// For example, a Service ignored by AntreaProxy.
+			name:    "Node IP to unknown ClusterIP masqueraded by kube-proxy",
+			origDst: clusterIP,
+		},
+		{
+			name:                "Node IP to known ClusterIP masqueraded by kube-proxy",
+			origDst:             clusterIP,
+			isKnownService:      true,
+			expectedServiceName: svc.String(),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
+			serviceStr := fmt.Sprintf("%s:80/TCP", tc.origDst)
+			// The correlator looks up the original destination when it ingests the
+			// default-zone entry. The connection store only looks it up again if it is a
+			// Service.
+			lookups := 1
+			if tc.isKnownService {
+				lookups = 2
+			}
+			mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(svc, tc.isKnownService).Times(lookups)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			mockPodStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ip string, _ time.Time) (*v1.Pod, bool) {
+					if ip == hostTestLocalPodIPv4.String() {
+						return localPod, true
+					}
+					return nil, false
+				}).AnyTimes()
+
+			defaultZoneConn := &connection.Connection{
+				Zone:                       DefaultZone,
+				FlowKey:                    connection.Tuple{SourceAddress: hostTestLocalNodeIPv4, DestinationAddress: hostTestLocalPodIPv4, Protocol: 6, SourcePort: 40000, DestinationPort: 80},
+				OriginalDestinationAddress: tc.origDst,
+				OriginalDestinationPort:    80,
+				ProxySnatIP:                hostTestLocalGwIPv4,
+				ProxySnatPort:              snatPort,
+			}
+			antreaZoneConn := &connection.Connection{
+				Zone:                       openflow.CtZone,
+				FlowKey:                    connection.Tuple{SourceAddress: hostTestLocalGwIPv4, DestinationAddress: hostTestLocalPodIPv4, Protocol: 6, SourcePort: snatPort, DestinationPort: 80},
+				OriginalDestinationAddress: hostTestLocalPodIPv4,
+				OriginalDestinationPort:    80,
+				StartTime:                  refTime,
+				StopTime:                   refTime,
+			}
+			correlator := NewFromExternalCorrelator(mockProxier, nil, hostTestNodeIPs)
+			correlator.Correlate([]*connection.Connection{defaultZoneConn}, []*connection.Connection{antreaZoneConn})
+			require.True(t, antreaZoneConn.IsFromExternal)
+			require.True(t, antreaZoneConn.IsFromHostNetwork)
+
+			cs := NewConntrackConnectionStore(nil, mockPodStore, mockProxier, testFlowExporterOptions)
+			cs.AddOrUpdateConn(antreaZoneConn)
+			storedConn, exists := cs.GetConnByKey(antreaZoneConn.FlowKey)
+			require.True(t, exists)
+			assert.Equal(t, hostTestLocalNodeIPv4, storedConn.FlowKey.SourceAddress)
+			assert.Equal(t, tc.origDst, storedConn.OriginalDestinationAddress)
+			assert.Equal(t, tc.expectedServiceName, storedConn.DestinationServicePortName)
 		})
 	}
 }

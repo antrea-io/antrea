@@ -82,7 +82,10 @@ type Destination struct {
 	denyPriorityQueue *priorityqueue.ExpirePriorityQueue
 
 	nodeRouteController podSubnetChecker
-	egressQuerier       querier.EgressQuerier
+	// remotePodQuerier is nil when the connections initiated by the host network of this Node
+	// towards the Pods running on other Nodes are not reported.
+	remotePodQuerier connections.RemotePodQuerier
+	egressQuerier    querier.EgressQuerier
 
 	exp       exporter.Interface
 	connected bool
@@ -97,7 +100,7 @@ func NewDestination(
 	exporter exporter.Interface,
 	k8sClient kubernetes.Interface,
 	nodeRouteController podSubnetChecker,
-	nodeRouteQuerier connections.NodeRouteQuerier,
+	remotePodQuerier connections.RemotePodQuerier,
 	podStore objectstore.PodStore,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
@@ -111,7 +114,7 @@ func NewDestination(
 		StaleConnectionTimeout: destinationConfig.staleConnectionTimeout,
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
-		NodeRouteQuerier:       nodeRouteQuerier,
+		RemotePodQuerier:       remotePodQuerier,
 	}
 	// External correlation is now done in the poller before connections are delivered to each
 	// destination's connection store, so no ExternalCorrelator is needed here.
@@ -129,6 +132,7 @@ func NewDestination(
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 
 		nodeRouteController: nodeRouteController,
+		remotePodQuerier:    remotePodQuerier,
 		egressQuerier:       egressQuerier,
 
 		exp:         exporter,
@@ -372,17 +376,18 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 // source is not a Pod, so the connection is exported as FROM_EXTERNAL. If the destination Pod runs
 // on this Node, this is the only record for the flow. Otherwise, this is the source-Node half of
 // the flow, and the exporter sets the source Node name: the FlowAggregator correlates it with the
-// INTER_NODE record exported by the destination Node (see findFlowType).
+// INTER_NODE record exported by the destination Node (see findFlowType). This is only possible if
+// the destination Node reports the connection with the same 5-tuple (see
+// connections.RemotePodQuerier), which also decides which of these connections the connection
+// store keeps.
 func (d *Destination) findHostNetworkFlowType(conn connection.Connection) uint8 {
 	// A local Pod is identified by name, as its IP may not belong to a Pod subnet.
 	if conn.DestinationPodName != "" {
 		return utils.FlowTypeFromExternal
 	}
-	// In networkPolicyOnly mode, the Pod subnets of the other Nodes are unknown.
-	if d.isNetworkPolicyOnly || d.nodeRouteController == nil {
-		return utils.FlowTypeUnsupported
-	}
-	if dstIsPod, dstIsGw := d.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress); dstIsPod && !dstIsGw {
+	// remotePodQuerier is nil in networkPolicyOnly mode, as the Pod subnets of the other Nodes are
+	// unknown, and when there is no NodeRouteController.
+	if d.remotePodQuerier != nil && d.remotePodQuerier.IsRemotePodIP(conn.FlowKey.DestinationAddress) {
 		return utils.FlowTypeFromExternal
 	}
 	return utils.FlowTypeUnsupported

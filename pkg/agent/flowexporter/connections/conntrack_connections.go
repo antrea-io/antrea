@@ -41,7 +41,7 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
-	nodeRouteQuerier       NodeRouteQuerier
+	remotePodQuerier       RemotePodQuerier
 	connectionStore
 }
 
@@ -59,7 +59,7 @@ func NewConntrackConnectionStore(
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		nodeRouteQuerier:       cfg.NodeRouteQuerier,
+		remotePodQuerier:       cfg.RemotePodQuerier,
 	}
 }
 
@@ -184,18 +184,17 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 }
 
 // isFromHostNetworkToRemotePod returns whether conn was initiated by the host network of this Node
-// (e.g., by a hostNetwork Pod) towards a Pod running on another Node. IsFromHostNetwork is set by
-// the FromExternalCorrelator. This Node exports the source-Node half of such a flow, which the
-// FlowAggregator correlates with the destination-Node half, so that the flow is reported even
-// though neither endpoint is a Pod running on this Node. The gateway IP of another Node also
-// belongs to its Pod subnet: such a connection is kept, but never exported (see
-// Destination.findFlowType).
+// (e.g., by a hostNetwork Pod) towards a Pod running on another Node, for which this Node exports
+// the source-Node half of the flow (see RemotePodQuerier). IsFromHostNetwork is set by the
+// FromExternalCorrelator. The FlowAggregator correlates this half with the destination-Node half,
+// so that the flow is reported even though neither endpoint is a Pod running on this Node. The
+// connection is only kept here if it is exported (see Destination.findHostNetworkFlowType), but a
+// connection correlated by the FromExternalCorrelator (IsFromExternal) is kept regardless.
 func (cs *ConntrackConnectionStore) isFromHostNetworkToRemotePod(conn *connection.Connection) bool {
-	if !conn.IsFromHostNetwork || cs.nodeRouteQuerier == nil {
+	if !conn.IsFromHostNetwork || cs.remotePodQuerier == nil {
 		return false
 	}
-	_, isRemotePodIP := cs.nodeRouteQuerier.GetNodeIPForPodIP(conn.FlowKey.DestinationAddress)
-	return isRemotePodIP
+	return cs.remotePodQuerier.IsRemotePodIP(conn.FlowKey.DestinationAddress)
 }
 
 // resolveDestinationService fills conn.DestinationServicePortName for Service-marked and
@@ -210,7 +209,9 @@ func (cs *ConntrackConnectionStore) resolveDestinationService(conn *connection.C
 		return
 	}
 	isServiceMarked := conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue()
-	if !isServiceMarked && !conn.IsFromExternal {
+	// For a from-external connection whose original destination the FromExternalCorrelator could
+	// not resolve to a Service, the lookup would fail again.
+	if !isServiceMarked && (!conn.IsFromExternal || conn.IsServiceUnresolved) {
 		return
 	}
 	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)

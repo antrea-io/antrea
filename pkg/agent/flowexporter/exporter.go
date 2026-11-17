@@ -98,10 +98,10 @@ type FlowExporter struct {
 
 	// Destination dependencies
 	nodeRouteController *noderoute.Controller
-	// nodeRouteQuerier is used to identify the Pods running on other Nodes, when the connections
+	// remotePodQuerier is used to identify the Pods running on other Nodes, when the connections
 	// initiated by the host network of this Node towards them can be reported. It is nil
 	// otherwise.
-	nodeRouteQuerier connections.NodeRouteQuerier
+	remotePodQuerier connections.RemotePodQuerier
 	podStore         objectstore.PodStore
 	proxier          proxy.ProxyQuerier
 	egressQuerier    querier.EgressQuerier
@@ -143,7 +143,7 @@ func NewFlowExporter(
 	proxier proxy.ProxyQuerier,
 	k8sClient kubernetes.Interface,
 	nodeRouteController *noderoute.Controller,
-	trafficEncapMode config.TrafficEncapModeType,
+	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
 	v4Enabled, v6Enabled bool,
 	serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
@@ -167,12 +167,12 @@ func NewFlowExporter(
 	// networkPolicyOnly mode, the Pod subnets are not managed by Antrea, so the Pods running on
 	// other Nodes cannot be identified, and only the connections to local Pods are reported.
 	var nodeIPs sets.Set[netip.Addr]
-	var nodeRouteQuerier connections.NodeRouteQuerier
+	var remotePodQuerier connections.RemotePodQuerier
 	if !runtime.IsWindowsPlatform() {
 		nodeIPs = getNodeIPs(nodeConfig)
 		// Check for a nil pointer explicitly, as it would make a non-nil interface value.
-		if !trafficEncapMode.IsNetworkPolicyOnly() && nodeRouteController != nil {
-			nodeRouteQuerier = nodeRouteController
+		if !networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() && nodeRouteController != nil {
+			remotePodQuerier = newRemotePodQuerier(nodeRouteController, networkConfig, nodeConfig)
 		}
 	}
 	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, nodeIPs)
@@ -208,10 +208,10 @@ func NewFlowExporter(
 		staleConnectionTimeout: o.StaleConnectionTimeout,
 		v4Enabled:              v4Enabled,
 		v6Enabled:              v6Enabled,
-		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
+		isNetworkPolicyOnly:    networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
 
 		nodeRouteController: nodeRouteController,
-		nodeRouteQuerier:    nodeRouteQuerier,
+		remotePodQuerier:    remotePodQuerier,
 		podStore:            podStore,
 		proxier:             proxier,
 		egressQuerier:       egressQuerier,
@@ -520,7 +520,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		exp,
 		fe.k8sClient,
 		fe.nodeRouteController,
-		fe.nodeRouteQuerier,
+		fe.remotePodQuerier,
 		fe.podStore,
 		fe.npQuerier,
 		fe.proxier,

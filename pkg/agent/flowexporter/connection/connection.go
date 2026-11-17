@@ -106,12 +106,20 @@ type Connection struct {
 	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
 	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
 	IsFromExternal bool
+	// IsServiceUnresolved is set to true by the correlator, along with IsFromExternal, when the
+	// original destination of the matching default-zone entry was looked up, and is neither a
+	// Service known to the proxier nor a NodePortLocal port. This only happens for some connections
+	// initiated by the host network of this Node (see IsFromHostNetwork), which are correlated even
+	// though they may not be connections to a Service.
+	IsServiceUnresolved bool
 	// IsFromHostNetwork is set to true during external correlation when this connection was
 	// initiated by the host network stack of this Node (e.g., by kubelet, or by a hostNetwork Pod)
-	// rather than by a Pod. The source address of such a connection is the gateway IP of this
-	// Node, unless it was also correlated as a from-external connection (IsFromExternal), which
-	// happens when the host translated it (e.g., kube-proxy for a ClusterIP): the source address
-	// is then the original source address on the host, which may be any IP of this Node.
+	// rather than by a Pod. If the host translated the connection and OVS did not (e.g., kube-proxy
+	// for a ClusterIP, or Antrea's masquerade rule for a client bound to the Node IP), it is also
+	// correlated as a from-external connection (IsFromExternal), and its source address is the
+	// original source address on the host, which may be any IP of this Node. Otherwise, its source
+	// address is the one of the packets sent by the host to antrea-gw0, i.e., the gateway IP of
+	// this Node.
 	IsFromHostNetwork bool
 }
 

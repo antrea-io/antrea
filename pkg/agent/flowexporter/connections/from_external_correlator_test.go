@@ -48,7 +48,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		store.add(defaultZoneConn, "")
+		store.add(defaultZoneConn, "", false)
 		assert.True(t, contains(store, defaultZoneConn), "Expected store to contain newly added connection")
 	})
 	t.Run("popMatching", func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
-			store.add(defaultZoneConn, "")
+			store.add(defaultZoneConn, "", false)
 			match, ok := store.popMatching(keyFromAntreaZoneConn(antreaZeroConn))
 			assert.True(t, ok, "Expected a matching default-zone connection to have been stored")
 			assert.Equal(t, defaultZoneSnapshotFromConn(defaultZoneConn), match)
@@ -116,7 +116,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
-			store.add(defaultZoneConn, "")
+			store.add(defaultZoneConn, "", false)
 			_, ok := store.popMatching(keyFromAntreaZoneConn(antreaZeroConn))
 			assert.False(t, ok, "Expected store to return no match")
 		})
@@ -779,8 +779,8 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 	}
 
 	correlator := NewFromExternalCorrelator(nil, nil, nil)
-	correlator.add(defaultZoneA, "")
-	correlator.add(defaultZoneB, "")
+	correlator.add(defaultZoneA, "", false)
+	correlator.add(defaultZoneB, "", false)
 	assert.Len(t, correlator.connections, 2, "flows with different dstPorts must occupy separate map entries")
 
 	snatIP := netip.MustParseAddr("172.18.0.2")
@@ -867,8 +867,8 @@ func TestFromExternalCorrelator_NoCollisionNonSNATDifferentClients(t *testing.T)
 	}
 
 	correlator := NewFromExternalCorrelator(nil, nil, nil)
-	correlator.add(defaultZoneA, "")
-	correlator.add(defaultZoneB, "")
+	correlator.add(defaultZoneA, "", false)
+	correlator.add(defaultZoneB, "", false)
 	assert.Len(t, correlator.connections, 2, "non-SNAT flows from different clients must occupy separate map entries")
 
 	// Antrea-zone counterpart for flow A: no SNAT, so FlowKey.SourceAddress is the real external

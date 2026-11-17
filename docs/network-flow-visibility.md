@@ -257,12 +257,20 @@ flows, as their source is not a Pod. `hostNetwork` Pods cannot be told apart
 from the Node itself, so the source Pod information is empty. On Linux Nodes,
 when the connection goes through the Antrea gateway of the source Node, the
 flow is reported by that Node, and `sourceNodeName` is set to its name. This is
-the case for connections to local Pods, and to Pods running on other Nodes in
-`encap` mode, including connections to Services whose Endpoint is such a Pod.
-When kube-proxy masquerades a connection to a Service, the reported source is
-the IP that the Node used before masquerading. Connections to Pods running on
-other Nodes are not supported with WireGuard encryption, as they do not go
-through OVS on the source Node, nor in `networkPolicyOnly` mode.
+the case for connections to local Pods, and to Pods running on other Nodes when
+the traffic to these Nodes is tunneled (in `encap` mode, and in `hybrid` mode
+for Nodes in other subnets), including connections to Services whose Endpoint
+is such a Pod. With WireGuard encryption, this is only the case for connections
+to Services handled by AntreaProxy with `proxyAll` enabled. When the Node
+masquerades the connection, i.e., when kube-proxy masquerades a connection to a
+Service, or when a client bound to another IP of the Node connects directly to
+a Pod, the reported source is the IP that the Node used before masquerading.
+The other connections to Pods running on other Nodes are not supported yet, as
+they do not go through OVS on the source Node: in `noEncap` mode, and in
+`hybrid` mode for Nodes in the same subnet, the destination Node reports them
+as From External flows from an IP of the source Node, without
+`sourceNodeName`, and with WireGuard encryption, they are not reported. They are
+not supported in `networkPolicyOnly` mode either.
 
 Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
 

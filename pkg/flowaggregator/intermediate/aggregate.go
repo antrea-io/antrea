@@ -539,8 +539,10 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	// fields on the correlated record so the exported flow reports the external client as the
 	// source. When the records arrive in the opposite order, the correlated record is already
 	// the ingress-Node record and these fields are unchanged. When the source is the host network
-	// of the source Node, the addresses are the same on both records, and only the FlowType (and
-	// the source Node name, merged above) is restored.
+	// of the source Node, the source Node name is merged above. If the host masqueraded the
+	// connection (e.g., kube-proxy for a Service), the source address/port used by the host before
+	// SNAT and the ProxySnat address/port are restored as for an external client. Otherwise, the
+	// addresses are the same on both records, and only the FlowType is restored.
 	if isSourceNodeFromExternalFlow(incomingRecord) {
 		existingRecord.Ip.Source = incomingRecord.Ip.Source
 		existingRecord.Transport.SourcePort = incomingRecord.Transport.SourcePort
@@ -776,8 +778,11 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 //     source-NAT'd it towards the destination Node. It carries the ProxySnat address/port applied
 //     by the gateway.
 //   - The record exported by the Node whose host network initiated the connection (e.g., a
-//     hostNetwork Pod), using the IP of its gateway as the source address. No SNAT is applied, and
-//     the record has no source Pod, but carries the name of the source Node.
+//     hostNetwork Pod). It has no source Pod, but carries the name of the source Node. If the host
+//     masqueraded the connection (e.g., kube-proxy for a Service, or Antrea for a client bound to
+//     the Node IP), its source is the address used by the host before SNAT, and it carries the
+//     ProxySnat address/port, as above. Otherwise, its source is the gateway IP of the source Node,
+//     and it has no ProxySnat address.
 func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
 	if record.K8S == nil ||
 		record.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL ||
@@ -828,8 +833,9 @@ func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 // therefore key the ingress-Node record on its ProxySnat address/port rather than the external
 // client's address/port, so that both halves land under the same key. The external client's
 // address/port are restored on the merged record by correlateRecords. When the connection was
-// initiated by the host network of the source Node, no SNAT is applied and both Nodes observe the
-// same 5-tuple, so the record is keyed on its own source address/port.
+// initiated by the host network of the source Node, the record is keyed the same way if the host
+// masqueraded the connection. Otherwise, it has no ProxySnat address, both Nodes observe the same
+// 5-tuple, and the record is keyed on its own source address/port.
 func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	source := net.IP(record.Ip.Source).String()
 	sourcePort := uint16(record.Transport.SourcePort)
