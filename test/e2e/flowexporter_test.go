@@ -192,7 +192,7 @@ func TestFlowExporterFlowExporterDestinations(t *testing.T) {
 			setupFlowExporterDestinationTest(t, opt1, opt2)
 
 			createFlowExporterDestination(t, "single-exporter", true, flowAggregatorNamespace1)
-			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, flowAggregatorNamespace1), "Error when checking metrics of Flow Aggregator")
+			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, true, flowAggregatorNamespace1), "Error when checking metrics of Flow Aggregator")
 
 			generateTrafficAndVerify(t, data, isIPv6, verifyRecords(collector1Name))
 		})
@@ -203,8 +203,8 @@ func TestFlowExporterFlowExporterDestinations(t *testing.T) {
 			createFlowExporterDestination(t, "multi-exporter-ag1", true, flowAggregatorNamespace1)
 			createFlowExporterDestination(t, "multi-exporter-ag2", true, flowAggregatorNamespace2)
 
-			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, flowAggregatorNamespace1), "Error when checking metrics of Flow Aggregator")
-			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, flowAggregatorNamespace2), "Error when checking metrics of Flow Aggregator 2")
+			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, true, flowAggregatorNamespace1), "Error when checking metrics of Flow Aggregator")
+			require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, true, flowAggregatorNamespace2), "Error when checking metrics of Flow Aggregator 2")
 			generateTrafficAndVerify(t, data, isIPv6, verifyRecords(collector1Name), verifyRecords(collector2Name))
 		})
 	}
