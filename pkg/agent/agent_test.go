@@ -757,6 +757,23 @@ func TestRestorePortConfigs(t *testing.T) {
 			},
 			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable",
 		},
+		{
+			name: "fail for some ports, the others are still set",
+			existingInterfaces: []*interfacestore.InterfaceConfig{
+				interfacestore.NewTrafficControlInterface("antrea-tap1",
+					&interfacestore.OVSPortConfig{OFPort: 10, PortUUID: "uuid1"}),
+				interfacestore.NewTrafficControlInterface("antrea-tap2",
+					&interfacestore.OVSPortConfig{OFPort: 11, PortUUID: "uuid2"}),
+				interfacestore.NewTrafficControlInterface("antrea-tap3",
+					&interfacestore.OVSPortConfig{OFPort: 12, PortUUID: "uuid3"}),
+			},
+			expectedOVSCtlCalls: func(client *ovsctltest.MockOVSCtlClientMockRecorder) {
+				client.SetPortNoFlood(10).Return(fmt.Errorf("server unavailable"))
+				client.SetPortNoFlood(11).Return(nil)
+				client.SetPortNoFlood(12).Return(fmt.Errorf("connection refused"))
+			},
+			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable\nfailed to set no-flood for port antrea-tap3: connection refused",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -773,7 +790,10 @@ func TestRestorePortConfigs(t *testing.T) {
 			if tt.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.ErrorContains(t, err, tt.expectedErr)
+				// The errors of different ports are joined, in an unspecified order.
+				for expectedErr := range strings.SplitSeq(tt.expectedErr, "\n") {
+					assert.ErrorContains(t, err, expectedErr)
+				}
 			}
 		})
 	}
@@ -1129,80 +1149,125 @@ func TestDeleteStaleFlowsWithRetry(t *testing.T) {
 	})
 }
 
-func TestReplayFlowsOnReconnection(t *testing.T) {
+func TestRestoreOVSOnReconnection(t *testing.T) {
 	testErr := errors.New("bundle reply is timeout")
 
-	// start runs replayFlowsOnReconnection in the background. It returns the channel used to
-	// notify reconnections, a function returning the number of afterReplay calls, and a channel
-	// closed when replayFlowsOnReconnection returns.
-	start := func(initializer *Initializer) (chan struct{}, func() int, chan struct{}) {
+	// fakeStep is a reconnectionStep which fails with testErr for the first failures calls, and
+	// records the time of every call, relative to testStart. The times must only be read after
+	// restoreOVSOnReconnection has returned.
+	type fakeStep struct {
+		reconnectionStep
+		callTimes []time.Duration
+	}
+	newFakeStep := func(name string, testStart time.Time, failures int) *fakeStep {
+		s := &fakeStep{}
+		s.reconnectionStep = reconnectionStep{
+			name: name,
+			run: func() error {
+				s.callTimes = append(s.callTimes, time.Since(testStart))
+				if len(s.callTimes) <= failures {
+					return testErr
+				}
+				return nil
+			},
+		}
+		return s
+	}
+	stepsOf := func(steps ...*fakeStep) []reconnectionStep {
+		result := make([]reconnectionStep, 0, len(steps))
+		for _, s := range steps {
+			result = append(result, s.reconnectionStep)
+		}
+		return result
+	}
+
+	// start runs restoreOVSOnReconnection in the background. It returns the channel used to
+	// notify reconnections, and a channel closed when restoreOVSOnReconnection returns.
+	start := func(steps []reconnectionStep, stopCh chan struct{}) (chan struct{}, chan struct{}) {
+		initializer := &Initializer{stopCh: stopCh}
 		ofConnCh := make(chan struct{})
-		afterReplayCalls := 0
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			initializer.replayFlowsOnReconnection(ofConnCh, func() { afterReplayCalls++ })
+			initializer.restoreOVSOnReconnection(ofConnCh, steps)
 		}()
-		return ofConnCh, func() int { return afterReplayCalls }, done
-	}
-
-	// expectReplays expects ReplayFlows to be called once for each of results, in order, and
-	// returns the times of the calls, relative to the start of the test. All expectations must be
-	// set before replayFlowsOnReconnection starts, as gomock does not support setting them
-	// concurrently with calls. The returned times must only be read after
-	// replayFlowsOnReconnection has returned.
-	expectReplays := func(mockOFClient *openflowtest.MockClient, results ...error) *[]time.Duration {
-		testStart := time.Now()
-		var replayTimes []time.Duration
-		calls := make([]any, 0, len(results))
-		for _, result := range results {
-			calls = append(calls, mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
-				replayTimes = append(replayTimes, time.Since(testStart))
-				return result
-			}))
-		}
-		mock.InOrder(calls...)
-		return &replayTimes
+		return ofConnCh, done
 	}
 
 	t.Run("retries failed replay with backoff until it succeeds", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOFClient := openflowtest.NewMockClient(ctrl)
-			replayTimes := expectReplays(mockOFClient, testErr, testErr, nil)
+			testStart := time.Now()
+			replay := newFakeStep("replay", testStart, 2)
+			restorePorts := newFakeStep("restorePorts", testStart, 0)
+			removeFlag := newFakeStep("removeFlag", testStart, 0)
 			stopCh := make(chan struct{})
-			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
-			ofConnCh, afterReplayCalls, done := start(initializer)
+			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
+
+			ofConnCh <- struct{}{}
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
+			synctest.Wait()
+			close(stopCh)
+			<-done
+
+			// The retry delay doubles after each failure, and no more replay happens after a
+			// successful one.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, replay.callTimes)
+			// The other steps run right after the first replay, even if it failed, and are not
+			// run again as they succeeded.
+			assert.Equal(t, []time.Duration{0}, restorePorts.callTimes)
+			assert.Equal(t, []time.Duration{0}, removeFlag.callTimes)
+		})
+	})
+
+	t.Run("failed steps are retried independently", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			testStart := time.Now()
+			replay := newFakeStep("replay", testStart, 0)
+			restorePorts := newFakeStep("restorePorts", testStart, 1)
+			removeFlag := newFakeStep("removeFlag", testStart, 2)
+			stopCh := make(chan struct{})
+			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
+
+			ofConnCh <- struct{}{}
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
+			synctest.Wait()
+			close(stopCh)
+			<-done
+
+			assert.Equal(t, []time.Duration{0}, replay.callTimes)
+			assert.Equal(t, []time.Duration{0, 1 * time.Second}, restorePorts.callTimes)
+			// The flag removal is retried even though the port configs restoration failed
+			// in the same attempt, and with the same backoff.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, removeFlag.callTimes)
+		})
+	})
+
+	t.Run("a failed step does not prevent the following ones from running", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			testStart := time.Now()
+			// Every step keeps failing.
+			replay := newFakeStep("replay", testStart, 100)
+			restorePorts := newFakeStep("restorePorts", testStart, 100)
+			removeFlag := newFakeStep("removeFlag", testStart, 100)
+			stopCh := make(chan struct{})
+			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
 
 			ofConnCh <- struct{}{}
 			synctest.Wait()
-			// OVS configs are restored right after the first replay, even if it failed.
-			assert.Equal(t, 1, afterReplayCalls())
-
-			// No more replay after a successful one, and OVS configs are not restored again.
-			time.Sleep(10 * replayFlowsMaxRetryDelay)
-			synctest.Wait()
-			assert.Equal(t, 1, afterReplayCalls())
-
 			close(stopCh)
 			<-done
-			// The retry delay doubles after each failure.
-			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, *replayTimes)
+
+			assert.Len(t, replay.callTimes, 1)
+			assert.Len(t, restorePorts.callTimes, 1)
+			assert.Len(t, removeFlag.callTimes, 1)
 		})
 	})
 
 	t.Run("retry delay is capped", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOFClient := openflowtest.NewMockClient(ctrl)
-			var replayTimes []time.Time
-			mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
-				replayTimes = append(replayTimes, time.Now())
-				return testErr
-			}).AnyTimes()
+			replay := newFakeStep("replay", time.Now(), 100)
 			stopCh := make(chan struct{})
-			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
-			ofConnCh, _, done := start(initializer)
+			ofConnCh, done := start(stepsOf(replay), stopCh)
 
 			expectedDelays := []time.Duration{
 				1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second,
@@ -1220,52 +1285,151 @@ func TestReplayFlowsOnReconnection(t *testing.T) {
 			<-done
 
 			var delays []time.Duration
-			for i := 1; i < len(replayTimes); i++ {
-				delays = append(delays, replayTimes[i].Sub(replayTimes[i-1]))
+			for i := 1; i < len(replay.callTimes); i++ {
+				delays = append(delays, replay.callTimes[i]-replay.callTimes[i-1])
 			}
 			assert.Equal(t, expectedDelays, delays)
 		})
 	})
 
-	t.Run("reconnection triggers an immediate replay and resets the retry delay", func(t *testing.T) {
+	t.Run("reconnection runs all steps immediately and resets the retry delay", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOFClient := openflowtest.NewMockClient(ctrl)
-			replayTimes := expectReplays(mockOFClient, testErr, testErr, testErr, nil)
+			testStart := time.Now()
+			replay := newFakeStep("replay", testStart, 3)
+			restorePorts := newFakeStep("restorePorts", testStart, 0)
 			stopCh := make(chan struct{})
-			initializer := &Initializer{ofClient: mockOFClient, stopCh: stopCh}
-			ofConnCh, afterReplayCalls, done := start(initializer)
+			ofConnCh, done := start(stepsOf(replay, restorePorts), stopCh)
 
 			ofConnCh <- struct{}{}
 			time.Sleep(replayFlowsInitialRetryDelay)
 			synctest.Wait()
 
-			// The next retry is due in 2s; a reconnection replays immediately instead.
+			// The next retry is due in 2s; a reconnection runs all the steps immediately instead.
 			ofConnCh <- struct{}{}
 			synctest.Wait()
-			assert.Equal(t, 2, afterReplayCalls())
 
 			time.Sleep(10 * replayFlowsMaxRetryDelay)
 			synctest.Wait()
 			close(stopCh)
 			<-done
 			// After the reconnection, the retry delay is reset to its initial value.
-			assert.Equal(t, []time.Duration{0, 1 * time.Second, 1 * time.Second, 2 * time.Second}, *replayTimes)
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 1 * time.Second, 2 * time.Second}, replay.callTimes)
+			// All steps run after each reconnection, but not after a retry.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second}, restorePorts.callTimes)
 		})
 	})
 
 	t.Run("returns when ofConnCh is closed", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOFClient := openflowtest.NewMockClient(ctrl)
-			expectReplays(mockOFClient, testErr)
-			initializer := &Initializer{ofClient: mockOFClient, stopCh: make(chan struct{})}
-			ofConnCh, _, done := start(initializer)
+			replay := newFakeStep("replay", time.Now(), 100)
+			ofConnCh, done := start(stepsOf(replay), make(chan struct{}))
 
 			ofConnCh <- struct{}{}
 			synctest.Wait()
 			close(ofConnCh)
 			<-done
+		})
+	})
+}
+
+func TestReconnectionSteps(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := mock.NewController(t)
+		mockOFClient := openflowtest.NewMockClient(ctrl)
+		mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+		mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+		ifaceStore := interfacestore.NewInterfaceStore()
+		ifaceStore.AddInterfaces([]*interfacestore.InterfaceConfig{
+			interfacestore.NewTrafficControlInterface("antrea-tap1", &interfacestore.OVSPortConfig{OFPort: 10, PortUUID: "uuid1"}),
+		})
+		stopCh := make(chan struct{})
+		initializer := &Initializer{
+			ofClient:        mockOFClient,
+			ovsBridgeClient: mockOVSBridgeClient,
+			ovsCtlClient:    mockOVSCtlClient,
+			ifaceStore:      ifaceStore,
+			stopCh:          stopCh,
+		}
+
+		// The first replay and the first port configs restoration fail, and the flag removal
+		// keeps failing until OVS is reachable again. Every step is retried until it succeeds.
+		replayCalls := 0
+		mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
+			replayCalls++
+			if replayCalls == 1 {
+				return errors.New("bundle reply is timeout")
+			}
+			return nil
+		}).Times(2)
+		portCalls := 0
+		mockOVSCtlClient.EXPECT().SetPortNoFlood(10).DoAndReturn(func(int) error {
+			portCalls++
+			if portCalls == 1 {
+				return errors.New("server unavailable")
+			}
+			return nil
+		}).Times(2)
+		flagRemoved := false
+		// OVS is unreachable during the first flag removal attempt, which lasts 10s, and
+		// reachable during the second one.
+		ovsUnreachableUntil := time.Now().Add(10 * time.Second)
+		mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().DoAndReturn(func() (map[string]string, error) {
+			if time.Now().Before(ovsUnreachableUntil) {
+				return nil, errors.New("connection refused")
+			}
+			if flagRemoved {
+				return map[string]string{}, nil
+			}
+			return map[string]string{"flow-restore-wait": "true"}, nil
+		}).AnyTimes()
+		mockOVSBridgeClient.EXPECT().DeleteOVSOtherConfig([]string{"flow-restore-wait"}).DoAndReturn(func([]string) error {
+			flagRemoved = true
+			return nil
+		}).Times(1)
+
+		ofConnCh := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			initializer.restoreOVSOnReconnection(ofConnCh, initializer.reconnectionSteps())
+		}()
+		ofConnCh <- struct{}{}
+		time.Sleep(10 * replayFlowsMaxRetryDelay)
+		synctest.Wait()
+		close(stopCh)
+		<-done
+
+		assert.True(t, flagRemoved)
+		assert.Equal(t, 2, replayCalls)
+		assert.Equal(t, 2, portCalls)
+	})
+}
+
+func TestRemoveFlowRestoreWait(t *testing.T) {
+	t.Run("OVS unreachable", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(nil, errors.New("connection refused")).AnyTimes()
+			initializer := &Initializer{ovsBridgeClient: mockOVSBridgeClient}
+
+			err := initializer.removeFlowRestoreWait()
+			assert.ErrorContains(t, err, "failed to clean up flow-restore-wait config")
+			assert.ErrorContains(t, err, "error when getting OVS other config")
+		})
+	})
+	t.Run("success", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			mock.InOrder(
+				mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(map[string]string{"flow-restore-wait": "true"}, nil),
+				mockOVSBridgeClient.EXPECT().DeleteOVSOtherConfig([]string{"flow-restore-wait"}).Return(nil),
+				mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil),
+			)
+			initializer := &Initializer{ovsBridgeClient: mockOVSBridgeClient}
+
+			assert.NoError(t, initializer.removeFlowRestoreWait())
 		})
 	})
 }

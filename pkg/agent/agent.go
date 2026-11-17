@@ -381,7 +381,10 @@ func (i *Initializer) initInterfaceStore() error {
 	return nil
 }
 
+// restorePortConfigs sets the no-flood config of the IPsec tunnel and TrafficControl ports. It
+// tries every port even if some fail, and returns all the errors. It is idempotent.
 func (i *Initializer) restorePortConfigs() error {
+	var errs []error
 	interfaces := i.ifaceStore.ListInterfaces()
 	for _, intf := range interfaces {
 		switch intf.Type {
@@ -393,12 +396,13 @@ func (i *Initializer) restorePortConfigs() error {
 				continue
 			}
 			if err := i.ovsCtlClient.SetPortNoFlood(int(intf.OFPort)); err != nil {
-				return fmt.Errorf("failed to set no-flood for port %s: %w", intf.InterfaceName, err)
+				errs = append(errs, fmt.Errorf("failed to set no-flood for port %s: %w", intf.InterfaceName, err))
+				continue
 			}
 			klog.InfoS("Set no-flood for port", "port", intf.InterfaceName)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // Initialize sets up agent initial configurations.
@@ -594,33 +598,71 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		persistRoundNum(roundInfo.RoundNum, i.ovsBridgeClient, 1*time.Second, maxRetryForRoundNumSave)
 	}()
 
-	go i.replayFlowsOnReconnection(ofConnCh, i.restoreOVSConfigsAfterReplay)
+	go i.restoreOVSOnReconnection(ofConnCh, i.reconnectionSteps())
 
 	return nil
 }
 
-// replayFlowsOnReconnection replays the flows, groups and meters cached by the OpenFlow client
-// every time ofConnCh notifies a reconnection to OVS, and then calls afterReplay. It returns when
-// ofConnCh or stopCh is closed.
+// reconnectionStep is a step to run every time the Agent reconnects to OVS. Steps must be
+// idempotent, as they are retried until they succeed.
+type reconnectionStep struct {
+	name string
+	run  func() error
+}
+
+// reconnectionSteps are the steps to run after a reconnection to OVS, in this order:
+//   - Replay the flows, groups and meters cached by the OpenFlow client.
+//   - Restore the OF port configs, which are lost when OVS resets the bridge.
+//   - Remove the flow-restore-wait config.
 //
-// A replay can fail part way, e.g. if OVS is too slow to acknowledge a bundle before it times
-// out. Because ReplayFlows starts by deleting all groups and meters, a failed replay can leave
-// OVS without entries that are never installed again otherwise, such as the NetworkPolicy
-// logging groups, which would cause all subsequent installations of flows referencing them to
-// fail. Failed replays are therefore retried with exponential backoff until one succeeds. A new
-// reconnection resets the backoff, since it triggers a full replay anyway.
-func (i *Initializer) replayFlowsOnReconnection(ofConnCh <-chan struct{}, afterReplay func()) {
+// The order for the first attempt: flow-restore-wait is meant to be removed once the flows have
+// been replayed. However, the success of a step is not a precondition for the others: a failure
+// does not prevent the following steps from running, and a failed step is retried on its own, as
+// each step is safe to run more than once. As a result, a retried step may complete after the ones
+// which follow it, e.g. flow-restore-wait may be removed before a failed replay succeeds.
+func (i *Initializer) reconnectionSteps() []reconnectionStep {
+	return []reconnectionStep{
+		{name: "Replay OF flows", run: i.ofClient.ReplayFlows},
+		{name: "Restore OF port configs", run: i.restorePortConfigs},
+		{name: "Remove flow-restore-wait config", run: i.removeFlowRestoreWait},
+	}
+}
+
+// restoreOVSOnReconnection runs steps every time ofConnCh notifies a reconnection to OVS. It
+// returns when ofConnCh or stopCh is closed.
+//
+// A step can fail, e.g. a flow replay can fail part way if OVS is too slow to acknowledge a
+// bundle before it times out. Because ReplayFlows starts by deleting all groups and meters, a
+// failed replay can leave OVS without entries that are never installed again otherwise, such as
+// the NetworkPolicy logging groups, which would cause all subsequent installations of flows
+// referencing them to fail. Failed steps are therefore retried with exponential backoff until
+// they succeed, without running again the steps which already succeeded. A new reconnection
+// resets the backoff, and runs all the steps again, since it triggers a full replay anyway.
+//
+// All the steps run even if a previous one failed: retries may take a while, and e.g. the
+// flow-restore-wait config would otherwise prevent OVS from installing new datapath flows in the
+// meantime.
+func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}, steps []reconnectionStep) {
 	var retryCh <-chan time.Time
+	var failedSteps []reconnectionStep
 	retryDelay := replayFlowsInitialRetryDelay
-	replay := func() {
-		if err := i.ofClient.ReplayFlows(); err != nil {
-			klog.ErrorS(err, "Flow replay failed, will retry", "retryDelay", retryDelay)
-			retryCh = time.After(retryDelay)
-			retryDelay = min(2*retryDelay, replayFlowsMaxRetryDelay)
+	runSteps := func(steps []reconnectionStep) {
+		failedSteps = nil
+		for _, step := range steps {
+			klog.InfoS("Running step after OVS reconnection", "step", step.name)
+			if err := step.run(); err != nil {
+				klog.ErrorS(err, "Step failed after OVS reconnection, will retry", "step", step.name, "retryDelay", retryDelay)
+				failedSteps = append(failedSteps, step)
+				continue
+			}
+			klog.InfoS("Step completed after OVS reconnection", "step", step.name)
+		}
+		if len(failedSteps) == 0 {
+			retryCh = nil
 			return
 		}
-		klog.Info("Flow replay completed")
-		retryCh = nil
+		retryCh = time.After(retryDelay)
+		retryDelay = min(2*retryDelay, replayFlowsMaxRetryDelay)
 	}
 	for {
 		select {
@@ -630,45 +672,39 @@ func (i *Initializer) replayFlowsOnReconnection(ofConnCh <-chan struct{}, afterR
 			}
 			klog.Info("Replaying OF flows to OVS bridge")
 			retryDelay = replayFlowsInitialRetryDelay
-			replay()
-			// This is done even if the replay failed: retries may take a while, and the
-			// flow-restore-wait config would otherwise prevent OVS from installing new
-			// datapath flows in the meantime.
-			afterReplay()
+			runSteps(steps)
 		case <-retryCh:
-			klog.Info("Retrying replay of OF flows to OVS bridge")
-			replay()
+			runSteps(failedSteps)
 		case <-i.stopCh:
 			return
 		}
 	}
 }
 
-// restoreOVSConfigsAfterReplay restores the OF port configs and removes the flow-restore-wait
-// config after flows have been replayed to OVS.
-func (i *Initializer) restoreOVSConfigsAfterReplay() {
-	klog.InfoS("Restoring OF port configs to OVS bridge")
-	if err := i.restorePortConfigs(); err != nil {
-		klog.ErrorS(err, "Failed to restore OF port configs")
-	} else {
-		klog.InfoS("Port configs restoration completed")
-	}
+// removeFlowRestoreWait removes the flow-restore-wait config after flows have been replayed to
+// OVS. It returns an error if the config could not be removed.
+func (i *Initializer) removeFlowRestoreWait() error {
 	// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
 	// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
 	// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
 	// to ensure the flag can be removed successfully.
+	var lastErr error
 	err := wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 10*time.Second, true,
 		func(ctx context.Context) (done bool, err error) {
-			if err := i.FlowRestoreComplete(); err != nil {
+			if lastErr = i.FlowRestoreComplete(); lastErr != nil {
 				return false, nil
 			}
 			return true, nil
 		})
-	// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
-	// to clean up the config again so an error log should be fine.
+	// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, the
+	// caller will try to clean up the config again.
 	if err != nil {
-		klog.ErrorS(err, "Failed to clean up flow-restore-wait config")
+		if lastErr != nil {
+			err = lastErr
+		}
+		return fmt.Errorf("failed to clean up flow-restore-wait config: %w", err)
 	}
+	return nil
 }
 
 func (i *Initializer) FlowRestoreComplete() error {

@@ -3047,52 +3047,120 @@ func Test_client_ReplayFlowsError(t *testing.T) {
 	replayErr := ofctrl.ErrBundleCommitReplyTimeout
 	for _, tc := range []struct {
 		name string
+		// enableMeters enables OVS meters, so that the PacketIn meters are installed by
+		// initialize, and the Egress QoS meter is replayed.
+		enableMeters bool
 		// failDefaultFlows makes the installation of the default flows fail, which aborts
 		// initialize before the initial groups and flows of features are installed.
 		failDefaultFlows bool
+		// failFeatureGroupsIndex is the index in activatedFeatures of the feature whose group
+		// replay fails, or -1.
+		failFeatureGroupsIndex int
 		// failFeatureFlowsIndex is the index in activatedFeatures of the feature whose flow
 		// replay fails, or -1.
 		failFeatureFlowsIndex int
-		expectedErrString     string
+		// failMeterReplay makes the replay of the Egress QoS meter fail.
+		failMeterReplay   bool
+		expectedErrString string
 	}{
 		{
-			name:                  "default flows installation fails",
-			failDefaultFlows:      true,
-			failFeatureFlowsIndex: -1,
-			expectedErrString:     "failed to install default flows",
+			name:                   "default flows installation fails",
+			failDefaultFlows:       true,
+			failFeatureGroupsIndex: -1,
+			failFeatureFlowsIndex:  -1,
+			expectedErrString:      "failed to install default flows",
 		},
 		{
-			name:                  "feature flows replay fails",
-			failFeatureFlowsIndex: 0,
-			expectedErrString:     "failed to replay feature PodConnectivity flows",
+			name:                   "feature groups replay fails",
+			failFeatureGroupsIndex: 0,
+			failFeatureFlowsIndex:  -1,
+			expectedErrString:      "failed to replay feature PodConnectivity groups",
+		},
+		{
+			name:                   "feature groups replay fails after default flows installation fails",
+			failDefaultFlows:       true,
+			failFeatureGroupsIndex: 1,
+			failFeatureFlowsIndex:  -1,
+			expectedErrString:      "failed to install default flows",
+		},
+		{
+			name:                   "feature flows replay fails",
+			failFeatureGroupsIndex: -1,
+			failFeatureFlowsIndex:  0,
+			expectedErrString:      "failed to replay feature PodConnectivity flows",
+		},
+		{
+			name:                   "feature meters replay fails",
+			enableMeters:           true,
+			failFeatureGroupsIndex: -1,
+			failFeatureFlowsIndex:  -1,
+			failMeterReplay:        true,
+			expectedErrString:      "failed to replay feature Egress meters",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			bridge := ovsoftest.NewMockBridge(ctrl)
-			fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge)
+			var options []clientOptionsFn
+			if tc.enableMeters {
+				options = append(options, enableEgressTrafficShaping)
+			}
+			fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge, options...)
 			defer resetPipelines()
 			numFeatures := len(fc.activatedFeatures)
 			require.Equal(t, "PodConnectivity", fc.activatedFeatures[0].getFeatureName())
 
-			// OVS meters are disabled in the fake client, so no meter is deleted or installed.
 			bridge.EXPECT().ResetFlowTableStatus()
 			bridge.EXPECT().DeleteGroupAll().Return(nil)
+			if tc.enableMeters {
+				bridge.EXPECT().DeleteMeterAll().Return(nil)
+				// The PacketIn meters are installed by initialize.
+				for _, id := range []binding.MeterIDType{PacketInMeterIDNP, PacketInMeterIDTF, PacketInMeterIDDNS, PacketInMeterIDIGMP} {
+					meter := ovsoftest.NewMockMeter(ctrl)
+					meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)
+					bridge.EXPECT().NewMeter(id, ofctrl.MeterBurst|ofctrl.MeterPktps).Return(meter)
+					meter.EXPECT().MeterBand().Return(meterBuilder)
+					meterBuilder.EXPECT().MeterType(ofctrl.MeterDrop).Return(meterBuilder)
+					meterBuilder.EXPECT().Rate(uint32(defaultPacketInRate)).Return(meterBuilder)
+					meterBuilder.EXPECT().Burst(uint32(2 * defaultPacketInRate)).Return(meterBuilder)
+					meterBuilder.EXPECT().Done().Return(meter)
+					meter.EXPECT().Add().Return(nil)
+				}
+				// The Egress QoS meter is replayed.
+				egressMeter := ovsoftest.NewMockMeter(ctrl)
+				egressMeter.EXPECT().Reset()
+				var meterErr error
+				if tc.failMeterReplay {
+					meterErr = replayErr
+				}
+				egressMeter.EXPECT().Add().Return(meterErr)
+				fc.featureEgress.cachedMeter.Store(uint32(1), egressMeter)
+			}
+
 			var calls []any
+			numInitGroupsCalls := numFeatures
 			if tc.failDefaultFlows {
 				calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(replayErr))
 				// initialize returns before installing the initial groups of features, so only
 				// the replayed groups are installed.
-				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(numFeatures)
+				numInitGroupsCalls = 0
 			} else {
 				calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(nil))
 				for range numFeatures {
 					calls = append(calls, m.EXPECT().AddAll(gomock.Any()).Return(nil))
 				}
-				// The initial and the replayed groups of every feature are installed.
-				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(2 * numFeatures)
 			}
+			// The initial groups of every feature, if any, are installed before the replayed ones.
+			numAddOFEntriesCalls := 0
+			m.EXPECT().AddOFEntries(gomock.Any()).DoAndReturn(func([]binding.OFEntry) error {
+				featureIndex := numAddOFEntriesCalls - numInitGroupsCalls
+				numAddOFEntriesCalls++
+				if featureIndex >= 0 && featureIndex == tc.failFeatureGroupsIndex {
+					return replayErr
+				}
+				return nil
+			}).Times(numInitGroupsCalls + numFeatures)
 			for i := range numFeatures {
 				// Every feature replays its flows, even after a previous step failed.
 				err := error(nil)

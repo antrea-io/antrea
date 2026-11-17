@@ -17,6 +17,9 @@ package e2e
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,15 +102,58 @@ func TestFlowReplayRetry(t *testing.T) {
 		}
 		return count
 	}
-	// isConnectionDropped distinguishes a failed connection from an error executing nc.
-	isConnectionDropped := func() (bool, error) {
-		cmd := []string{"nc", "-vz", "-w", "3", serverIP.String(), "80"}
-		_, _, err := data.RunCommandFromPod(namespace, clientName, toolboxContainerName, cmd)
-		var exitErr utilexec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitStatus() == 1 {
-			return true, nil
+	// isConnectionDropped tells whether a TCP connection to the server is dropped, i.e. it times
+	// out, as opposed to succeeding or being refused by the server. Any other failure, e.g. an
+	// error executing nc or a DNS or routing error, does not tell anything about the policy
+	// enforcement, and is returned as an error.
+	isConnectionDropped := func(port int32) (bool, error) {
+		cmd := []string{"nc", "-vz", "-w", "3", serverIP.String(), strconv.Itoa(int(port))}
+		_, stderr, err := data.RunCommandFromPod(namespace, clientName, toolboxContainerName, cmd)
+		if err == nil {
+			return false, nil
 		}
-		return false, err
+		var exitErr utilexec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.ExitStatus() != 1 {
+			return false, err
+		}
+		// The nc in the toolbox image is Ncat, which reports "Ncat: TIMEOUT." when the connection
+		// times out and "Ncat: Connection refused." when it is refused. "timed out" is how other
+		// implementations report a timeout.
+		switch lowerStderr := strings.ToLower(stderr); {
+		case strings.Contains(lowerStderr, "timeout"), strings.Contains(lowerStderr, "timed out"):
+			return true, nil
+		case strings.Contains(lowerStderr, "refused"):
+			return false, nil
+		}
+		return false, fmt.Errorf("unexpected failure of nc: %w, stderr: %s", err, stderr)
+	}
+	// waitForConnection waits until the connection to the server is dropped or not, as
+	// expected. Errors when probing the connection are retried.
+	waitForConnection := func(port int32, expectedDropped bool, timeout time.Duration) error {
+		return wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+			dropped, err := isConnectionDropped(port)
+			if err != nil {
+				t.Logf("Failed to probe the connection to port %d, will retry: %v", port, err)
+				return false, nil
+			}
+			return dropped == expectedDropped, nil
+		})
+	}
+	// countAgentLogLines counts the lines of the Agent log containing all of the given strings.
+	countAgentLogLines := func(ctx context.Context, substrings ...string) (int, error) {
+		logs, err := data.clientset.CoreV1().Pods(antreaNamespace).GetLogs(antreaPodName, &corev1.PodLogOptions{
+			Container: agentContainerName,
+		}).DoRaw(ctx)
+		if err != nil {
+			return 0, err
+		}
+		count := 0
+		for line := range strings.Lines(string(logs)) {
+			if !slices.ContainsFunc(substrings, func(substring string) bool { return !strings.Contains(line, substring) }) {
+				count++
+			}
+		}
+		return count, nil
 	}
 	newDropRuleWithLogging := func(name string, port int32) *crdv1beta1.NetworkPolicy {
 		return &crdv1beta1.NetworkPolicy{
@@ -130,20 +176,14 @@ func TestFlowReplayRetry(t *testing.T) {
 	}
 
 	// Verify that the server is reachable before testing policy enforcement.
-	err = wait.PollUntilContextTimeout(context.Background(), time.Second, defaultTimeout, true, func(ctx context.Context) (bool, error) {
-		dropped, err := isConnectionDropped()
-		return !dropped, err
-	})
-	require.NoError(t, err, "Connection should succeed before installing the ANNP")
+	require.NoError(t, waitForConnection(80, false, defaultTimeout), "Connection should succeed before installing the ANNP")
 
 	t.Logf("Creating an ANNP with a Drop rule with logging enabled")
 	annp, err := data.CreateOrUpdateANNP(newDropRuleWithLogging(randName("drop-logged-"), 80))
 	require.NoError(t, err)
 	defer data.DeleteANNP(namespace, annp.Name)
 	require.NoError(t, data.waitForANNPRealized(t, namespace, annp.Name, policyRealizedTimeout))
-	dropped, err := isConnectionDropped()
-	require.NoError(t, err)
-	require.True(t, dropped, "Connection should be dropped by the ANNP")
+	require.NoError(t, waitForConnection(80, true, defaultTimeout), "Connection should be dropped by the ANNP")
 	numLoggingGroups := countLoggingGroups()
 	require.NotZero(t, numLoggingGroups, "NetworkPolicy logging groups should be installed")
 
@@ -166,7 +206,19 @@ func TestFlowReplayRetry(t *testing.T) {
 	if protocols == `["OpenFlow15"]` || protocols == "[OpenFlow15]" {
 		newProtocols = "OpenFlow10,OpenFlow15"
 	}
-	replayStart := metav1.Now()
+	// The Agent logs are not filtered by time, as the precision of the log timestamp filter is
+	// one second and lines logged just before the fault could be selected. Instead, count the
+	// lines logged before the reconnection, and wait for new ones.
+	// See restoreOVSOnReconnection in pkg/agent/agent.go for these messages.
+	const (
+		reconnectedLog   = "Replaying OF flows to OVS bridge"
+		replayFailedLog  = "Step failed after OVS reconnection"
+		replayFailedStep = `step="Replay OF flows"`
+	)
+	numReconnections, err := countAgentLogLines(context.Background(), reconnectedLog)
+	require.NoError(t, err)
+	numReplayFailures, err := countAgentLogLines(context.Background(), replayFailedLog, replayFailedStep)
+	require.NoError(t, err)
 	runOVSCommand("ovs-vsctl", "set", "Bridge", defaultBridgeName, "protocols="+newProtocols)
 	defer func() {
 		restoredProtocols := strings.Trim(protocols, "[]")
@@ -174,18 +226,21 @@ func TestFlowReplayRetry(t *testing.T) {
 		runOVSCommand("ovs-vsctl", "set", "Bridge", defaultBridgeName, "protocols="+restoredProtocols)
 	}()
 
+	// Changing the protocols may not close the OpenFlow connection with some OVS versions. Check
+	// that the Agent reconnected first, so that the cause is clear if it did not.
+	t.Logf("Waiting for the Agent to reconnect to OVS")
+	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		count, err := countAgentLogLines(ctx, reconnectedLog)
+		return count > numReconnections, err
+	})
+	require.NoError(t, err, "The Agent should reconnect to OVS after the bridge protocols are changed")
+
 	t.Logf("Waiting for the flow replay to fail and leave OVS without NetworkPolicy logging groups")
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		// Groups disappear during every replay. Wait for the attempt to fail before
 		// removing the fault, so recovery must come from a subsequent retry.
-		logs, err := data.clientset.CoreV1().Pods(antreaNamespace).GetLogs(antreaPodName, &corev1.PodLogOptions{
-			Container: agentContainerName,
-			SinceTime: &replayStart,
-		}).DoRaw(ctx)
-		if err != nil {
-			return false, err
-		}
-		return strings.Contains(string(logs), "Flow replay failed, will retry"), nil
+		count, err := countAgentLogLines(ctx, replayFailedLog, replayFailedStep)
+		return count > numReplayFailures, err
 	})
 	require.NoError(t, err, "The Agent should report a failed flow replay")
 	require.Zero(t, countLoggingGroups(), "NetworkPolicy logging groups should be deleted by the failed flow replay")
@@ -197,13 +252,26 @@ func TestFlowReplayRetry(t *testing.T) {
 			return false, nil
 		}
 		// initialize restores groups before the cached policy action flows are replayed.
-		return isConnectionDropped()
+		dropped, err := isConnectionDropped(80)
+		if err != nil {
+			t.Logf("Failed to probe the connection to port 80, will retry: %v", err)
+			return false, nil
+		}
+		return dropped, nil
 	})
 	require.NoError(t, err, "A flow replay retry should restore logging groups and ANNP Drop enforcement")
 
 	t.Logf("Creating another ANNP with a Drop rule with logging enabled")
-	annp2, err := data.CreateOrUpdateANNP(newDropRuleWithLogging(randName("drop-logged-"), 8080))
+	// Nothing listens on this port, so the server refuses connections until the rule is enforced.
+	const anotherPort = 8080
+	require.NoError(t, waitForConnection(anotherPort, false, defaultTimeout), "Connection should be refused before installing the second ANNP")
+	annp2, err := data.CreateOrUpdateANNP(newDropRuleWithLogging(randName("drop-logged-"), anotherPort))
 	require.NoError(t, err)
 	defer data.DeleteANNP(namespace, annp2.Name)
-	assert.NoError(t, data.waitForANNPRealized(t, namespace, annp2.Name, policyRealizedTimeout))
+	require.NoError(t, data.waitForANNPRealized(t, namespace, annp2.Name, policyRealizedTimeout))
+	// The logging groups are shared by all the rules (there is one per table), so installing a
+	// rule must not add any. What proves that the new rule works is that its Drop action, which
+	// refers to a logging group, is enforced.
+	assert.NoError(t, waitForConnection(anotherPort, true, defaultTimeout), "Connection should be dropped by the second ANNP")
+	assert.Equal(t, numLoggingGroups, countLoggingGroups(), "NetworkPolicy logging groups should not change")
 }
