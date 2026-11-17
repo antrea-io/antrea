@@ -119,21 +119,14 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			queryParams: url.Values{
 				"domain": {"example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^example[.]com$")},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^example[.]com$")},
 		},
 		{
 			name: "Valid regex domain",
 			queryParams: url.Values{
 				"domain": {"*.example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^.*[.]example[.]com$")},
-		},
-		{
-			name: "Uppercase domain matches lowercase cache names",
-			queryParams: url.Values{
-				"domain": {"EXAMPLE.COM"},
-			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("(?i)^EXAMPLE[.]COM$")},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^.*[.]example[.]com$")},
 		},
 		{
 			name: "Invalid regex domain",
@@ -159,10 +152,59 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 }
 
 func TestNewFilterFromURLQueryCaseInsensitive(t *testing.T) {
-	result, err := newFilterFromURLQuery(url.Values{"domain": {"EXAMPLE.COM"}})
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.DomainRegex.MatchString("example.com"))
-	assert.True(t, result.DomainRegex.MatchString("EXAMPLE.COM"))
-	assert.False(t, result.DomainRegex.MatchString("example.org"))
+	for _, tc := range []struct {
+		domain     string
+		matches    []string
+		nonMatches []string
+	}{
+		{
+			// Uppercase ASCII matches the lowercase names in the cache, and the
+			// anchors still reject a subdomain or a longer name.
+			domain:     "EXAMPLE.COM",
+			matches:    []string{"example.com"},
+			nonMatches: []string{"sub.example.com", "example.com.evil", "example.org"},
+		},
+		{
+			domain:     "*.Example.COM",
+			matches:    []string{"www.example.com"},
+			nonMatches: []string{"example.com.evil"},
+		},
+		{
+			// DNS case folding is ASCII-only: U+017F LATIN SMALL LETTER LONG S
+			// is not "s".
+			domain:     "ſ.example.com",
+			nonMatches: []string{"s.example.com"},
+		},
+		{
+			// Regexp escapes keep their meaning: \S is "not whitespace", not "s".
+			domain:     `\Sxample.COM`,
+			matches:    []string{"example.com"},
+			nonMatches: []string{"sxample.com.evil"},
+		},
+	} {
+		t.Run(tc.domain, func(t *testing.T) {
+			result, err := newFilterFromURLQuery(url.Values{"domain": {tc.domain}})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			for _, name := range tc.matches {
+				assert.True(t, result.DomainRegex.MatchString(name), "%q should match %q", tc.domain, name)
+			}
+			for _, name := range tc.nonMatches {
+				assert.False(t, result.DomainRegex.MatchString(name), "%q should not match %q", tc.domain, name)
+			}
+		})
+	}
+}
+
+func TestASCIILowerOutsideEscapes(t *testing.T) {
+	for in, want := range map[string]string{
+		"EXAMPLE.COM":   "example.com",
+		`\Sxample.COM`:  `\Sxample.com`,
+		`\p{Greek}.ORG`: `\p{Greek}.org`,
+		`\PL.NET`:       `\PL.net`,
+		"ſ.Example":     "ſ.example",
+		`TRAILING\`:     `trailing\`,
+	} {
+		assert.Equal(t, want, asciiLowerOutsideEscapes(in), in)
+	}
 }
