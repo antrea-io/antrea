@@ -47,6 +47,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	agentutil "antrea.io/antrea/v2/pkg/agent/util"
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -769,31 +770,32 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 // primary InterfaceStore is empty, preventing the secondary InterfaceStore from
 // initializing correctly. Consequently, secondary IPs assigned to old Pods (with
 // previous container IDs) are not deleted. To resolve this, all IPPool allocations
-// must be checked, and any IPs associated with non-existing container IDs should be
-// released. Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
+// must be checked, and any IPs associated with non-existing secondary interfaces
+// must be released. This also covers allocations left behind by deleted Pods.
+// Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
 // We run it periodically to cover the case where a Pod is recreated with
 // the same name on another Node and has any secondary IP as well.
 func (pc *PodController) cleanUpStaleIPAddresses() {
 	pools, _ := pc.ipPoolLister.List(labels.Everything())
 	for _, ipPool := range pools {
 		for _, address := range ipPool.Status.IPAddresses {
-			if address.Owner.Pod == nil {
+			stalePodOwner := address.Owner.Pod
+			if stalePodOwner == nil {
 				klog.InfoS("IPAM allocation found with no Pod owner", "IPPool", ipPool.Name)
 				continue
 			}
-			if _, err := pc.podLister.Pods(address.Owner.Pod.Namespace).Get(address.Owner.Pod.Name); err == nil {
-				if _, found := pc.interfaceStore.GetContainerInterface(address.Owner.Pod.ContainerID); !found {
-					stalePodOwner := address.Owner.Pod
-					// Only consider SecondaryNetwork interfaces
-					if stalePodOwner.IFName == "" {
-						continue
-					}
-					klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
-					if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
-						klog.ErrorS(err, "Error when releasing IPAM allocation",
-							"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
-					}
-				}
+			// Only consider SecondaryNetwork interfaces.
+			if stalePodOwner.IFName == "" {
+				continue
+			}
+			interfaceKey := agentutil.GenerateContainerInterfaceKey(stalePodOwner.ContainerID, stalePodOwner.IFName)
+			if _, found := pc.interfaceStore.GetInterface(interfaceKey); found {
+				continue
+			}
+			klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
+			if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
+				klog.ErrorS(err, "Error when releasing IPAM allocation",
+					"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
 			}
 		}
 	}

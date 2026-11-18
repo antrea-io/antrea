@@ -246,6 +246,56 @@ func init() {
 	}
 }
 
+func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
+	activeOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: containerID, IFName: "eth1",
+	}
+	staleOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: containerID, IFName: "eth2",
+	}
+	deletedPodOwner := &crdv1beta1.PodOwner{
+		Name: "deleted-pod", Namespace: testNamespace, ContainerID: "deleted-container", IFName: "eth1",
+	}
+	primaryOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: containerID,
+	}
+	pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "secondary-network-pool"},
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges:   []crdv1beta1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+			SubnetInfo: crdv1beta1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+		},
+		Status: crdv1beta1.IPPoolStatus{IPAddresses: []crdv1beta1.IPAddressState{
+			{IPAddress: "10.2.2.10", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: activeOwner}},
+			{IPAddress: "10.2.2.11", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: staleOwner}},
+			{IPAddress: "10.2.2.12", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: deletedPodOwner}},
+			{IPAddress: "10.2.2.13", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: primaryOwner}},
+		}},
+	}
+
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, _, _ := testPodController(ctrl)
+	activeInterface := interfacestore.NewContainerInterface(
+		"host-eth1", containerID, podName, testNamespace, "eth1", containerNetNS(containerID), nil, nil, 0)
+	pc.interfaceStore.AddInterface(activeInterface)
+
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	poolInformer := informerFactory.Crd().V1beta1().IPPools()
+	pc.ipPoolLister = poolInformer.Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+
+	// The active interface and primary network allocation must be preserved. The
+	// stale eth2 allocation must be released even though eth1 uses the same
+	// container ID, and a deleted Pod must not prevent cleanup.
+	mockIPAM.EXPECT().SecondaryNetworkRelease(staleOwner).Return(nil)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(deletedPodOwner).Return(nil)
+	pc.cleanUpStaleIPAddresses()
+}
+
 func TestPodControllerRun(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
