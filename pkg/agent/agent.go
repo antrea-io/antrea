@@ -608,23 +608,31 @@ func (i *Initializer) initOpenFlowPipeline() error {
 type reconnectionStep struct {
 	name string
 	run  func() error
+	// requires is the name of a step which must have completed since the last reconnection to
+	// OVS before this step can run. That step must come before this one.
+	requires string
 }
+
+const replayFlowsStepName = "Replay OF flows"
 
 // reconnectionSteps are the steps to run after a reconnection to OVS, in this order:
 //   - Replay the flows, groups and meters cached by the OpenFlow client.
 //   - Restore the OF port configs, which are lost when OVS resets the bridge.
-//   - Remove the flow-restore-wait config.
+//   - Remove the flow-restore-wait config, once the flows have been replayed.
 //
-// The order for the first attempt: flow-restore-wait is meant to be removed once the flows have
-// been replayed. However, the success of a step is not a precondition for the others: a failure
-// does not prevent the following steps from running, and a failed step is retried on its own, as
-// each step is safe to run more than once. As a result, a retried step may complete after the ones
-// which follow it, e.g. flow-restore-wait may be removed before a failed replay succeeds.
+// The flow-restore-wait config is only set when ovs-vswitchd restarts, in which case it starts
+// with empty flow tables. While it is set, ovs-vswitchd keeps the existing datapath flows but
+// does not process any packet, so existing connections are not disrupted, but new ones cannot be
+// established. If it was removed while some flows are still missing, ovs-vswitchd would process
+// packets with an incomplete pipeline, which can leave existing connections with a conntrack
+// state that outlives the replay (see #625). It is therefore kept until a replay succeeds, as on
+// Agent startup, where it is only removed after the initial flows have been installed. Restoring
+// the OF port configs does not depend on the replay.
 func (i *Initializer) reconnectionSteps() []reconnectionStep {
 	return []reconnectionStep{
-		{name: "Replay OF flows", run: i.ofClient.ReplayFlows},
+		{name: replayFlowsStepName, run: i.ofClient.ReplayFlows},
 		{name: "Restore OF port configs", run: i.restorePortConfigs},
-		{name: "Remove flow-restore-wait config", run: i.removeFlowRestoreWait},
+		{name: "Remove flow-restore-wait config", run: i.removeFlowRestoreWait, requires: replayFlowsStepName},
 	}
 }
 
@@ -639,25 +647,32 @@ func (i *Initializer) reconnectionSteps() []reconnectionStep {
 // they succeed, without running again the steps which already succeeded. A new reconnection
 // resets the backoff, and runs all the steps again, since it triggers a full replay anyway.
 //
-// All the steps run even if a previous one failed: retries may take a while, and e.g. the
-// flow-restore-wait config would otherwise prevent OVS from installing new datapath flows in the
-// meantime.
+// A failed step does not prevent the following steps from running, unless they require it: these
+// are deferred, and retried with the failed steps, until the step they require completes.
 func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}, steps []reconnectionStep) {
 	var retryCh <-chan time.Time
-	var failedSteps []reconnectionStep
+	var pendingSteps []reconnectionStep
+	// completedSteps are the names of the steps which have completed since the last reconnection.
+	completedSteps := sets.New[string]()
 	retryDelay := replayFlowsInitialRetryDelay
 	runSteps := func(steps []reconnectionStep) {
-		failedSteps = nil
+		pendingSteps = nil
 		for _, step := range steps {
+			if step.requires != "" && !completedSteps.Has(step.requires) {
+				klog.InfoS("Step deferred after OVS reconnection until a required step completes", "step", step.name, "requiredStep", step.requires)
+				pendingSteps = append(pendingSteps, step)
+				continue
+			}
 			klog.InfoS("Running step after OVS reconnection", "step", step.name)
 			if err := step.run(); err != nil {
 				klog.ErrorS(err, "Step failed after OVS reconnection, will retry", "step", step.name, "retryDelay", retryDelay)
-				failedSteps = append(failedSteps, step)
+				pendingSteps = append(pendingSteps, step)
 				continue
 			}
+			completedSteps.Insert(step.name)
 			klog.InfoS("Step completed after OVS reconnection", "step", step.name)
 		}
-		if len(failedSteps) == 0 {
+		if len(pendingSteps) == 0 {
 			retryCh = nil
 			return
 		}
@@ -672,9 +687,10 @@ func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}, steps [
 			}
 			klog.Info("Replaying OF flows to OVS bridge")
 			retryDelay = replayFlowsInitialRetryDelay
+			completedSteps.Clear()
 			runSteps(steps)
 		case <-retryCh:
-			runSteps(failedSteps)
+			runSteps(pendingSteps)
 		case <-i.stopCh:
 			return
 		}

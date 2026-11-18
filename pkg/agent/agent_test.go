@@ -1200,6 +1200,7 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			replay := newFakeStep("replay", testStart, 2)
 			restorePorts := newFakeStep("restorePorts", testStart, 0)
 			removeFlag := newFakeStep("removeFlag", testStart, 0)
+			removeFlag.requires = replay.name
 			stopCh := make(chan struct{})
 			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
 
@@ -1212,10 +1213,11 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			// The retry delay doubles after each failure, and no more replay happens after a
 			// successful one.
 			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, replay.callTimes)
-			// The other steps run right after the first replay, even if it failed, and are not
-			// run again as they succeeded.
+			// A step which does not require the replay runs right after the first replay,
+			// even if it failed, and is not run again as it succeeded.
 			assert.Equal(t, []time.Duration{0}, restorePorts.callTimes)
-			assert.Equal(t, []time.Duration{0}, removeFlag.callTimes)
+			// A step which requires the replay only runs once the replay succeeds.
+			assert.Equal(t, []time.Duration{3 * time.Second}, removeFlag.callTimes)
 		})
 	})
 
@@ -1225,6 +1227,7 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			replay := newFakeStep("replay", testStart, 0)
 			restorePorts := newFakeStep("restorePorts", testStart, 1)
 			removeFlag := newFakeStep("removeFlag", testStart, 2)
+			removeFlag.requires = replay.name
 			stopCh := make(chan struct{})
 			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
 
@@ -1234,6 +1237,7 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			close(stopCh)
 			<-done
 
+			// The replay is not run again for the steps which require it to be retried.
 			assert.Equal(t, []time.Duration{0}, replay.callTimes)
 			assert.Equal(t, []time.Duration{0, 1 * time.Second}, restorePorts.callTimes)
 			// The flag removal is retried even though the port configs restoration failed
@@ -1242,24 +1246,58 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 		})
 	})
 
-	t.Run("a failed step does not prevent the following ones from running", func(t *testing.T) {
+	t.Run("a failed step only prevents the steps which require it from running", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			testStart := time.Now()
 			// Every step keeps failing.
 			replay := newFakeStep("replay", testStart, 100)
 			restorePorts := newFakeStep("restorePorts", testStart, 100)
 			removeFlag := newFakeStep("removeFlag", testStart, 100)
+			removeFlag.requires = replay.name
 			stopCh := make(chan struct{})
 			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
 
 			ofConnCh <- struct{}{}
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
 			synctest.Wait()
 			close(stopCh)
 			<-done
 
-			assert.Len(t, replay.callTimes, 1)
-			assert.Len(t, restorePorts.callTimes, 1)
-			assert.Len(t, removeFlag.callTimes, 1)
+			assert.Greater(t, len(replay.callTimes), 1)
+			assert.Equal(t, replay.callTimes, restorePorts.callTimes)
+			assert.Empty(t, removeFlag.callTimes)
+		})
+	})
+
+	t.Run("a reconnection requires steps to complete again", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			testStart := time.Now()
+			replay := newFakeStep("replay", testStart, 0)
+			// The replay fails after the second reconnection only.
+			replay.run = func() error {
+				replay.callTimes = append(replay.callTimes, time.Since(testStart))
+				if len(replay.callTimes) == 2 {
+					return testErr
+				}
+				return nil
+			}
+			removeFlag := newFakeStep("removeFlag", testStart, 0)
+			removeFlag.requires = replay.name
+			stopCh := make(chan struct{})
+			ofConnCh, done := start(stepsOf(replay, removeFlag), stopCh)
+
+			ofConnCh <- struct{}{}
+			time.Sleep(5 * time.Second)
+			synctest.Wait()
+			ofConnCh <- struct{}{}
+			time.Sleep(10 * replayFlowsMaxRetryDelay)
+			synctest.Wait()
+			close(stopCh)
+			<-done
+
+			assert.Equal(t, []time.Duration{0, 5 * time.Second, 6 * time.Second}, replay.callTimes)
+			// The replay which completed before the second reconnection does not count.
+			assert.Equal(t, []time.Duration{0, 6 * time.Second}, removeFlag.callTimes)
 		})
 	})
 
@@ -1297,8 +1335,10 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			testStart := time.Now()
 			replay := newFakeStep("replay", testStart, 3)
 			restorePorts := newFakeStep("restorePorts", testStart, 0)
+			removeFlag := newFakeStep("removeFlag", testStart, 0)
+			removeFlag.requires = replay.name
 			stopCh := make(chan struct{})
-			ofConnCh, done := start(stepsOf(replay, restorePorts), stopCh)
+			ofConnCh, done := start(stepsOf(replay, restorePorts, removeFlag), stopCh)
 
 			ofConnCh <- struct{}{}
 			time.Sleep(replayFlowsInitialRetryDelay)
@@ -1316,6 +1356,7 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			assert.Equal(t, []time.Duration{0, 1 * time.Second, 1 * time.Second, 2 * time.Second}, replay.callTimes)
 			// All steps run after each reconnection, but not after a retry.
 			assert.Equal(t, []time.Duration{0, 1 * time.Second}, restorePorts.callTimes)
+			assert.Equal(t, []time.Duration{2 * time.Second}, removeFlag.callTimes)
 		})
 	})
 
@@ -1351,8 +1392,9 @@ func TestReconnectionSteps(t *testing.T) {
 			stopCh:          stopCh,
 		}
 
-		// The first replay and the first port configs restoration fail, and the flag removal
-		// keeps failing until OVS is reachable again. Every step is retried until it succeeds.
+		// The first replay and the first port configs restoration fail. The flag removal waits
+		// for the replay to succeed, and then keeps failing until OVS is reachable again. Every
+		// step is retried until it succeeds.
 		replayCalls := 0
 		mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
 			replayCalls++
@@ -1370,10 +1412,12 @@ func TestReconnectionSteps(t *testing.T) {
 			return nil
 		}).Times(2)
 		flagRemoved := false
-		// OVS is unreachable during the first flag removal attempt, which lasts 10s, and
-		// reachable during the second one.
-		ovsUnreachableUntil := time.Now().Add(10 * time.Second)
+		// The first flag removal attempt starts after the replay succeeds, 1s after the
+		// reconnection, and lasts 10s. OVS is unreachable during that attempt, and reachable
+		// during the second one.
+		ovsUnreachableUntil := time.Now().Add(12 * time.Second)
 		mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().DoAndReturn(func() (map[string]string, error) {
+			assert.Equal(t, 2, replayCalls, "flow-restore-wait should only be removed after a successful replay")
 			if time.Now().Before(ovsUnreachableUntil) {
 				return nil, errors.New("connection refused")
 			}
