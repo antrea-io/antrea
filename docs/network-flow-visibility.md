@@ -274,10 +274,15 @@ The following connections from the host network of a Node are not fully
 supported yet:
 
 * With `proxyAll` enabled, the Node does not track its connections to the
-  LoadBalancer IPs and the external IPs of Services, so it cannot identify them.
-  The ones to a local Endpoint are reported as From External flows from the
-  gateway IP of the Node, without `sourceNodeName`, and the ones to an Endpoint
-  running on another Node are not reported.
+  LoadBalancer IPs and the external IPs of Services, so it neither masquerades
+  nor identifies them. The ones to a local Endpoint are reported as From
+  External flows, without `sourceNodeName`, from the gateway IP of the Node, or
+  from the Node IP when the client is bound to it (e.g., a `hostNetwork` Pod
+  using `status.hostIP`). The ones to an Endpoint running on another Node are
+  reported as described in the next bullet in `noEncap` mode and in `hybrid`
+  mode for Nodes in the same subnet, and otherwise are exported by the
+  destination Node as Inter-Node flows from the gateway IP of the source Node,
+  which the Flow Aggregator drops.
 * In `noEncap` mode, and in `hybrid` mode for Nodes in the same subnet, the
   source Node routes the connections to Pods running on other Nodes through its
   uplink, either directly, or after AntreaProxy translated the Service with
@@ -286,8 +291,14 @@ supported yet:
   Node, without `sourceNodeName`.
 * With WireGuard encryption, the connections to Pods running on other Nodes
   bypass OVS on the source Node, unless they are connections to Services
-  handled by AntreaProxy with `proxyAll` enabled, and are not reported.
+  handled by AntreaProxy with `proxyAll` enabled. As `antrea-wg0` has the
+  gateway IP of the source Node, the destination Node exports them as
+  Inter-Node flows from that IP, which the Flow Aggregator drops.
 * In `networkPolicyOnly` mode, only the connections to local Pods are reported.
+* On Windows Nodes, the connections initiated by the host network are never
+  identified. In particular, the ones to local Pods, whose source is the
+  gateway IP of the Node, are exported as Inter-Node flows, which the Flow
+  Aggregator drops.
 
 Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
 
