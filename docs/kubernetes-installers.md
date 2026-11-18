@@ -40,7 +40,7 @@ want. Once the cluster has been created, this CIDR cannot be changed.
 ### Rancher
 
 Follow these steps to deploy Antrea (as a [custom CNI](https://rke.docs.rancher.com/config-options/add-ons/network-plugins/custom-network-plugin-example))
-on [Rancher](https://ranchermanager.docs.rancher.com/pages-for-subheaders/kubernetes-clusters-in-rancher-setup) cluster:
+on [Rancher](https://ranchermanager.docs.rancher.com/how-to-guides/new-user-guides/kubernetes-clusters-in-rancher-setup/) cluster:
 
 * Edit the cluster YAML and set the `network-plugin` option to none.
 
