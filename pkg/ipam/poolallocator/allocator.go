@@ -97,15 +97,23 @@ func (a *IPPoolAllocator) getPool() (*v1beta1.IPPool, error) {
 
 // retryPoolStatusUpdate retries IPPool status updates on conflicts.
 func (a *IPPoolAllocator) retryPoolStatusUpdate(update func(*v1beta1.IPPool) error) error {
+	return a.retryPoolStatusUpdateWithInitialRead(true, update)
+}
+
+// retryPoolStatusUpdateWithInitialRead retries IPPool status updates on conflicts. useCache
+// controls only the initial read; conflict retries always read from the API server.
+func (a *IPPoolAllocator) retryPoolStatusUpdateWithInitialRead(
+	useCache bool, update func(*v1beta1.IPPool) error,
+) error {
 	isRetry := false
 	return retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		var pool *v1beta1.IPPool
 		var err error
-		if isRetry {
-			// Fetch the IPPool from the API server after a conflict to avoid stale cached status.
+		if isRetry || !useCache {
+			// Fetch the IPPool from the API server after a conflict, or when the caller
+			// needs to validate potentially stale cached state.
 			pool, err = a.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
 		} else {
-			// Read the IPPool from the informer cache on the first attempt.
 			pool, err = a.getPool()
 		}
 		isRetry = true
@@ -369,21 +377,19 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1beta1.IPAddressPhase, ow
 func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1beta1.IPAddressOwner) (net.IP, *v1beta1.SubnetInfo, error) {
 	podOwner := owner.Pod
 	// Same resource can not ask for allocation twice without release.
-	// This needs to be verified even at the expense of another API call.
 	ip, subnetInfo, err := a.getExistingAllocation(podOwner)
 	if err != nil {
 		return nil, nil, err
 	}
-	if ip != nil {
-		// This can happen when the container requests IPs from multiple pools, and after an
-		// allocation failure, not all allocated IPs were successfully released, and then
-		// CNI ADD is retried.
-		klog.InfoS("Container already has an IP allocated", "container", podOwner.ContainerID, "interface", podOwner.IFName, "IPPool", a.ipPoolName)
-		return ip, subnetInfo, err
-	}
+	// A cached allocation may have been released before the informer observed the update.
+	// Validate it against the API server and use the same authoritative snapshot to reserve
+	// the address again if it is no longer allocated.
+	useCache := ip == nil
+	ip = nil
+	subnetInfo = nil
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err = a.retryPoolStatusUpdate(func(ipPool *v1beta1.IPPool) error {
+	err = a.retryPoolStatusUpdateWithInitialRead(useCache, func(ipPool *v1beta1.IPPool) error {
 		allocators, err := a.initIPAllocators(ipPool)
 		if err != nil {
 			return err
@@ -394,6 +400,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 		if entry := findPodAllocation(ipPool, podOwner.ContainerID, podOwner.IFName); entry != nil {
 			ip = net.ParseIP(entry.IPAddress)
 			subnetInfo = &ipPool.Spec.SubnetInfo
+			klog.InfoS("Container already has an IP allocated", "container", podOwner.ContainerID, "interface", podOwner.IFName, "IPPool", a.ipPoolName)
 			return nil
 		}
 
