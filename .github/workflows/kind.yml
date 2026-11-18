@@ -54,7 +54,7 @@ jobs:
       with:
         name: antrea-ubuntu-cov
         path: antrea-ubuntu.tar
-        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
+        retention-days: 7 # allow failed jobs to be rerun without rebuilding images
 
   build-flow-aggregator-coverage-image:
     name: Build Flow Aggregator image to be used for Kind e2e tests
@@ -73,7 +73,7 @@ jobs:
       with:
         name: flow-aggregator-cov
         path: flow-aggregator.tar
-        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
+        retention-days: 7 # allow failed jobs to be rerun without rebuilding images
 
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
