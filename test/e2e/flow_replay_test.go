@@ -37,7 +37,7 @@ import (
 )
 
 // replayRetryTimeout is the maximum delay between two flow replay attempts in the Agent
-// (replayFlowsMaxRetryDelay).
+// (ovsRestoreMaxRetryDelay).
 const replayRetryTimeout = 30 * time.Second
 
 // klogHeaderRegex matches the header which starts every klog entry, e.g.
@@ -224,10 +224,9 @@ func TestFlowReplayRetry(t *testing.T) {
 	// entries logged before the reconnection, and wait for new ones.
 	// See restoreOVSOnReconnection in pkg/agent/agent.go for these messages.
 	const (
-		reconnectedLog   = "Replaying OF flows to OVS bridge"
-		stepFailedLog    = "Step failed after OVS reconnection"
-		stepCompletedLog = "Step completed after OVS reconnection"
-		replayStep       = `step="Replay OF flows"`
+		reconnectedLog     = "Reconnected to OVS, restoring OVS state"
+		replayFailedLog    = "Failed to replay OF flows"
+		replayCompletedLog = "Flow replay completed"
 	)
 	// waitForReplayAfterReconnection waits until the Agent has reconnected to OVS more than
 	// numReconnections times, and has replayed flows successfully after the last reconnection.
@@ -242,7 +241,7 @@ func TestFlowReplayRetry(t *testing.T) {
 				if containsAll(entry, reconnectedLog) {
 					reconnections++
 					replayed = false
-				} else if containsAll(entry, stepCompletedLog, replayStep) {
+				} else if containsAll(entry, replayCompletedLog) {
 					replayed = true
 				}
 			}
@@ -295,7 +294,7 @@ func TestFlowReplayRetry(t *testing.T) {
 	t.Logf("Forcing the Agent to reconnect to OVS by changing the bridge protocols from %v to %v", origProtocols, newProtocols)
 	numReconnections, err := countAgentLogEntries(context.Background(), reconnectedLog)
 	require.NoError(t, err)
-	numReplayFailures, err := countAgentLogEntries(context.Background(), stepFailedLog, replayStep)
+	numReplayFailures, err := countAgentLogEntries(context.Background(), replayFailedLog)
 	require.NoError(t, err)
 	setProtocols(newProtocols)
 	protocolsChanged = true
@@ -314,7 +313,7 @@ func TestFlowReplayRetry(t *testing.T) {
 		// Groups disappear during every replay. Wait for the attempt to fail before
 		// removing the fault, so recovery must come from a subsequent retry. The failure
 		// is logged as a multi-line entry when several errors are joined.
-		count, err := countAgentLogEntries(ctx, stepFailedLog, replayStep)
+		count, err := countAgentLogEntries(ctx, replayFailedLog)
 		return count > numReplayFailures, err
 	})
 	require.NoError(t, err, "The Agent should report a failed flow replay")

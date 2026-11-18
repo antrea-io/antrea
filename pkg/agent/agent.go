@@ -79,10 +79,11 @@ const (
 	ovsTunnelMaxMTU = 65000
 	// staleFlowDeleteRetryInterval is the wait between DeleteStaleFlows attempts on error.
 	staleFlowDeleteRetryInterval = 2 * time.Second
-	// replayFlowsInitialRetryDelay and replayFlowsMaxRetryDelay bound the exponential backoff
-	// between ReplayFlows attempts on error.
-	replayFlowsInitialRetryDelay = 1 * time.Second
-	replayFlowsMaxRetryDelay     = 30 * time.Second
+	// ovsRestoreInitialRetryDelay and ovsRestoreMaxRetryDelay bound the exponential backoff
+	// between attempts to restore the OVS state after a reconnection, see
+	// restoreOVSOnReconnection.
+	ovsRestoreInitialRetryDelay = 1 * time.Second
+	ovsRestoreMaxRetryDelay     = 30 * time.Second
 )
 
 var (
@@ -598,107 +599,110 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		persistRoundNum(roundInfo.RoundNum, i.ovsBridgeClient, 1*time.Second, maxRetryForRoundNumSave)
 	}()
 
-	go i.restoreOVSOnReconnection(ofConnCh, i.reconnectionSteps())
+	go i.restoreOVSOnReconnection(ofConnCh)
 
 	return nil
 }
 
-// reconnectionStep is a step to run every time the Agent reconnects to OVS. Steps must be
-// idempotent, as they are retried until they succeed.
-type reconnectionStep struct {
-	name string
-	run  func() error
-	// requires is the name of a step which must have completed since the last reconnection to
-	// OVS before this step can run. That step must come before this one.
-	requires string
-}
-
-const replayFlowsStepName = "Replay OF flows"
-
-// reconnectionSteps are the steps to run after a reconnection to OVS, in this order:
+// restoreOVSOnReconnection restores the OVS state every time ofConnCh notifies a reconnection to
+// OVS, until ofConnCh or stopCh is closed. It runs these steps, which are all idempotent:
 //   - Replay the flows, groups and meters cached by the OpenFlow client.
 //   - Restore the OF port configs, which are lost when OVS resets the bridge.
-//   - Remove the flow-restore-wait config, once the flows have been replayed.
-//
-// The flow-restore-wait config is only set when ovs-vswitchd restarts, in which case it starts
-// with empty flow tables. While it is set, ovs-vswitchd keeps the existing datapath flows but
-// does not process any packet, so existing connections are not disrupted, but new ones cannot be
-// established. If it was removed while some flows are still missing, ovs-vswitchd would process
-// packets with an incomplete pipeline, which can leave existing connections with a conntrack
-// state that outlives the replay (see #625). It is therefore kept until a replay succeeds, as on
-// Agent startup, where it is only removed after the initial flows have been installed. Restoring
-// the OF port configs does not depend on the replay.
-func (i *Initializer) reconnectionSteps() []reconnectionStep {
-	return []reconnectionStep{
-		{name: replayFlowsStepName, run: i.ofClient.ReplayFlows},
-		{name: "Restore OF port configs", run: i.restorePortConfigs},
-		{name: "Remove flow-restore-wait config", run: i.removeFlowRestoreWait, requires: replayFlowsStepName},
-	}
-}
-
-// restoreOVSOnReconnection runs steps every time ofConnCh notifies a reconnection to OVS. It
-// returns when ofConnCh or stopCh is closed.
+//   - Remove the flow-restore-wait config, but only once the flows have been replayed since the
+//     last reconnection (see removeFlowRestoreWait).
 //
 // A step can fail, e.g. a flow replay can fail part way if OVS is too slow to acknowledge a
 // bundle before it times out. Because ReplayFlows starts by deleting all groups and meters, a
 // failed replay can leave OVS without entries that are never installed again otherwise, such as
 // the NetworkPolicy logging groups, which would cause all subsequent installations of flows
-// referencing them to fail. Failed steps are therefore retried with exponential backoff until
-// they succeed, without running again the steps which already succeeded. A new reconnection
-// resets the backoff, and runs all the steps again, since it triggers a full replay anyway.
-//
-// A failed step does not prevent the following steps from running, unless they require it: these
-// are deferred, and retried with the failed steps, until the step they require completes.
-func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}, steps []reconnectionStep) {
+// referencing them to fail. Failed steps are therefore retried with exponential backoff, with
+// no limit on the number of retries, until they succeed. A step which succeeded is not run again
+// until the next reconnection, which runs all the steps again and resets the backoff.
+func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}) {
+	// Whether each step has yet to succeed since the last reconnection.
+	var replayPending, portConfigsPending, flowRestoreWaitPending bool
 	var retryCh <-chan time.Time
-	var pendingSteps []reconnectionStep
-	// completedSteps are the names of the steps which have completed since the last reconnection.
-	completedSteps := sets.New[string]()
-	retryDelay := replayFlowsInitialRetryDelay
-	runSteps := func(steps []reconnectionStep) {
-		pendingSteps = nil
-		for _, step := range steps {
-			if step.requires != "" && !completedSteps.Has(step.requires) {
-				klog.InfoS("Step deferred after OVS reconnection until a required step completes", "step", step.name, "requiredStep", step.requires)
-				pendingSteps = append(pendingSteps, step)
-				continue
-			}
-			klog.InfoS("Running step after OVS reconnection", "step", step.name)
-			if err := step.run(); err != nil {
-				klog.ErrorS(err, "Step failed after OVS reconnection, will retry", "step", step.name, "retryDelay", retryDelay)
-				pendingSteps = append(pendingSteps, step)
-				continue
-			}
-			completedSteps.Insert(step.name)
-			klog.InfoS("Step completed after OVS reconnection", "step", step.name)
-		}
-		if len(pendingSteps) == 0 {
-			retryCh = nil
-			return
-		}
-		retryCh = time.After(retryDelay)
-		retryDelay = min(2*retryDelay, replayFlowsMaxRetryDelay)
-	}
+	retryDelay := ovsRestoreInitialRetryDelay
 	for {
 		select {
 		case _, ok := <-ofConnCh:
 			if !ok {
 				return
 			}
-			klog.Info("Replaying OF flows to OVS bridge")
-			retryDelay = replayFlowsInitialRetryDelay
-			completedSteps.Clear()
-			runSteps(steps)
+			klog.Info("Reconnected to OVS, restoring OVS state")
+			replayPending, portConfigsPending, flowRestoreWaitPending = true, true, true
+			retryDelay = ovsRestoreInitialRetryDelay
 		case <-retryCh:
-			runSteps(pendingSteps)
+			// Retry the steps which are still pending.
 		case <-i.stopCh:
 			return
 		}
+
+		if replayPending {
+			klog.Info("Replaying OF flows to OVS bridge")
+			if err := i.ofClient.ReplayFlows(); err != nil {
+				klog.ErrorS(err, "Failed to replay OF flows, will retry", "retryDelay", retryDelay)
+			} else {
+				klog.Info("Flow replay completed")
+				replayPending = false
+			}
+		}
+		// Restoring the OF port configs does not depend on the flow replay.
+		if portConfigsPending {
+			klog.Info("Restoring OF port configs to OVS bridge")
+			if err := i.restorePortConfigs(); err != nil {
+				klog.ErrorS(err, "Failed to restore OF port configs, will retry", "retryDelay", retryDelay)
+			} else {
+				klog.Info("Port configs restoration completed")
+				portConfigsPending = false
+			}
+		}
+		// Removing flow-restore-wait depends on the flow replay: the config must be kept until
+		// the flows have been replayed.
+		if flowRestoreWaitPending {
+			if replayPending {
+				klog.Info("Keeping flow-restore-wait config, if set, until OF flows are replayed")
+			} else if err := i.removeFlowRestoreWait(); err != nil {
+				klog.ErrorS(err, "Failed to remove flow-restore-wait config, will retry", "retryDelay", retryDelay)
+			} else {
+				flowRestoreWaitPending = false
+			}
+		}
+
+		if !replayPending && !portConfigsPending && !flowRestoreWaitPending {
+			retryCh = nil
+			continue
+		}
+		retryCh = time.After(retryDelay)
+		retryDelay = min(2*retryDelay, ovsRestoreMaxRetryDelay)
 	}
 }
 
-// removeFlowRestoreWait removes the flow-restore-wait config after flows have been replayed to
-// OVS. It returns an error if the config could not be removed.
+// removeFlowRestoreWait removes the flow-restore-wait config after the flows have been replayed
+// to OVS. It returns an error if the config could not be removed.
+//
+// The config is set by start_ovs whenever it starts ovs-vswitchd, which then has empty flow
+// tables. After a reconnection to an ovs-vswitchd which did not restart, there is nothing to
+// remove. While the config is set, ovs-vswitchd neither flushes nor expires the existing
+// datapath flows, but it does not handle the packets which miss them either. Packets which match
+// an existing datapath flow, as most packets of established connections do, are still forwarded.
+// Other packets are dropped, which blocks new connections, and can also cause brief drops for
+// established ones.
+//
+// The caller must only call it once a replay has succeeded since the last reconnection, as on
+// Agent startup, where the config is removed after the initial flows have been installed. If the
+// config was removed while flows are still missing, ovs-vswitchd would handle packets with an
+// incomplete pipeline. That can leave existing connections with a conntrack state that outlives
+// the replay (see #625), and lets through traffic which a missing NetworkPolicy flow should deny.
+//
+// This favors correctness over availability. Replay retries are unbounded, so if the replay keeps
+// failing after ovs-vswitchd restarts, the config stays set, and new connections through this
+// Node fail until a retry succeeds. Giving up after some time and removing the config would
+// restore some connectivity, but through a pipeline which may lack default flows, in which case
+// most packets would be dropped anyway, or NetworkPolicy flows, in which case traffic would
+// bypass these policies. The replayed entries were all accepted by OVS when first installed, so a
+// replay which keeps failing points to an OVS issue that needs fixing. The error logged on every
+// retry surfaces it.
 func (i *Initializer) removeFlowRestoreWait() error {
 	// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
 	// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it

@@ -198,7 +198,8 @@ type Client interface {
 	// to replay as many flows as possible, and returns an error if any entry cannot be
 	// installed. In that case, the OVS bridge may be missing flows, groups or meters, and the
 	// caller should call ReplayFlows again: every call starts by deleting all groups and meters,
-	// so it is safe to retry.
+	// so it is safe to retry. A retry briefly disrupts again the flows which reference groups
+	// or meters, until they are replayed.
 	ReplayFlows() error
 
 	// DeleteStaleFlows deletes all flows from the previous round which are no longer needed. It
@@ -1206,6 +1207,19 @@ func (c *client) ReplayFlows() error {
 	// part way, some of these groups will be missing from OVS, and the feature flows which
 	// reference them cannot be installed. Keep replaying the remaining entries, so that as
 	// much as possible is restored, but report the failure so that the caller retries.
+	//
+	// Every call replays everything from scratch, including a retry on the same connection, so
+	// a retry does not depend on what a failed attempt left in OVS. Retrying only the failed
+	// part would require knowing which entries OVS has: a group or meter cannot be added again
+	// while it exists, and when a bundle reply times out, whether OVS committed the bundle is
+	// unknown. The cost is that a retry disrupts again the entries which a failed attempt had
+	// already restored. OVS removes the flows which reference a deleted group or meter (e.g.
+	// the Service load balancing flows, and the flows which send packets to the Agent), until
+	// they are replayed later in the same call. Flows which reference neither are replaced in
+	// place, without disruption. Any replay on a connection to an ovs-vswitchd which did not
+	// restart already causes this disruption, and it only lasts as long as the replay. A retry
+	// repeats it, but only happens after a failed replay, which has already left some entries
+	// missing from OVS for longer than that.
 	if err := c.initialize(); err != nil {
 		klog.ErrorS(err, "Error during flow replay")
 		errs = append(errs, err)
