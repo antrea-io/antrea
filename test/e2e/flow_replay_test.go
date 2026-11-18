@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,6 +39,30 @@ import (
 // replayRetryTimeout is the maximum delay between two flow replay attempts in the Agent
 // (replayFlowsMaxRetryDelay).
 const replayRetryTimeout = 30 * time.Second
+
+// klogHeaderRegex matches the header which starts every klog entry, e.g.
+// "E1117 18:50:43.070068      15 agent.go:654] ".
+var klogHeaderRegex = regexp.MustCompile(`^[IWEF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6}\s`)
+
+// splitKlogEntries splits logs written by klog into entries. An entry can span multiple lines, as
+// klog writes a value containing line breaks, e.g. an error joining several errors, on separate
+// lines, followed by the remaining key/value pairs of the entry.
+func splitKlogEntries(logs string) []string {
+	var entries []string
+	for line := range strings.Lines(logs) {
+		if len(entries) == 0 || klogHeaderRegex.MatchString(line) {
+			entries = append(entries, line)
+		} else {
+			entries[len(entries)-1] += line
+		}
+	}
+	return entries
+}
+
+// containsAll tells whether s contains all of the given substrings.
+func containsAll(s string, substrings ...string) bool {
+	return !slices.ContainsFunc(substrings, func(substring string) bool { return !strings.Contains(s, substring) })
+}
 
 // TestFlowReplayRetry verifies that the Agent recovers when replaying flows after a reconnection
 // to OVS fails. Every replay starts by deleting all OVS groups, so a replay that fails before
@@ -139,17 +164,24 @@ func TestFlowReplayRetry(t *testing.T) {
 			return dropped == expectedDropped, nil
 		})
 	}
-	// countAgentLogLines counts the lines of the Agent log containing all of the given strings.
-	countAgentLogLines := func(ctx context.Context, substrings ...string) (int, error) {
+	getAgentLogEntries := func(ctx context.Context) ([]string, error) {
 		logs, err := data.clientset.CoreV1().Pods(antreaNamespace).GetLogs(antreaPodName, &corev1.PodLogOptions{
 			Container: agentContainerName,
 		}).DoRaw(ctx)
 		if err != nil {
+			return nil, err
+		}
+		return splitKlogEntries(string(logs)), nil
+	}
+	// countAgentLogEntries counts the entries of the Agent log containing all of the given strings.
+	countAgentLogEntries := func(ctx context.Context, substrings ...string) (int, error) {
+		entries, err := getAgentLogEntries(ctx)
+		if err != nil {
 			return 0, err
 		}
 		count := 0
-		for line := range strings.Lines(string(logs)) {
-			if !slices.ContainsFunc(substrings, func(substring string) bool { return !strings.Contains(line, substring) }) {
+		for _, entry := range entries {
+			if containsAll(entry, substrings...) {
 				count++
 			}
 		}
@@ -187,6 +219,52 @@ func TestFlowReplayRetry(t *testing.T) {
 	numLoggingGroups := countLoggingGroups()
 	require.NotZero(t, numLoggingGroups, "NetworkPolicy logging groups should be installed")
 
+	// The Agent logs are not filtered by time, as the precision of the log timestamp filter is
+	// one second and entries logged just before the fault could be selected. Instead, count the
+	// entries logged before the reconnection, and wait for new ones.
+	// See restoreOVSOnReconnection in pkg/agent/agent.go for these messages.
+	const (
+		reconnectedLog   = "Replaying OF flows to OVS bridge"
+		stepFailedLog    = "Step failed after OVS reconnection"
+		stepCompletedLog = "Step completed after OVS reconnection"
+		replayStep       = `step="Replay OF flows"`
+	)
+	// waitForReplayAfterReconnection waits until the Agent has reconnected to OVS more than
+	// numReconnections times, and has replayed flows successfully after the last reconnection.
+	waitForReplayAfterReconnection := func(numReconnections int) error {
+		return wait.PollUntilContextTimeout(context.Background(), time.Second, 2*replayRetryTimeout, true, func(ctx context.Context) (bool, error) {
+			entries, err := getAgentLogEntries(ctx)
+			if err != nil {
+				return false, err
+			}
+			reconnections, replayed := 0, false
+			for _, entry := range entries {
+				if containsAll(entry, reconnectedLog) {
+					reconnections++
+					replayed = false
+				} else if containsAll(entry, stepCompletedLog, replayStep) {
+					replayed = true
+				}
+			}
+			return reconnections > numReconnections && replayed, nil
+		})
+	}
+
+	// Changing the OpenFlow versions allowed by the bridge makes OVS close the OpenFlow
+	// connections, after which the Agent reconnects and replays flows. Toggle OpenFlow13, which
+	// is used neither by the Agent, which uses OpenFlow15, nor by the ovs-ofctl commands it runs
+	// after a reconnection to restore port configs, which use OpenFlow10.
+	protocols := runOVSCommand("ovs-vsctl", "get", "Bridge", defaultBridgeName, "protocols")
+	origProtocols := strings.Split(strings.NewReplacer("[", "", "]", "", `"`, "", " ", "").Replace(protocols), ",")
+	require.Contains(t, origProtocols, "OpenFlow15")
+	newProtocols := append(slices.Clone(origProtocols), "OpenFlow13")
+	if slices.Contains(origProtocols, "OpenFlow13") {
+		newProtocols = slices.DeleteFunc(slices.Clone(origProtocols), func(p string) bool { return p == "OpenFlow13" })
+	}
+	setProtocols := func(protocols []string) {
+		runOVSCommand("ovs-vsctl", "set", "Bridge", defaultBridgeName, "protocols="+strings.Join(protocols, ","))
+	}
+
 	t.Logf("Making OVS reject new flows in table 0 on Node '%s'", nodeName)
 	// The default flows are already installed, and OVS replaces an existing flow instead of
 	// adding a new one, so delete one of them to make the bundle of default flows fail.
@@ -196,41 +274,37 @@ func TestFlowReplayRetry(t *testing.T) {
 	removeFlowLimit := func() {
 		runOVSCommand("ovs-vsctl", "--if-exists", "remove", "Bridge", defaultBridgeName, "flow_tables", "0")
 	}
-	defer removeFlowLimit()
-
-	// Changing the OpenFlow versions allowed by the bridge makes OVS close the OpenFlow
-	// connections, after which the Agent reconnects and replays flows.
-	protocols := runOVSCommand("ovs-vsctl", "get", "Bridge", defaultBridgeName, "protocols")
-	t.Logf("Forcing the Agent to reconnect to OVS by changing the bridge protocols from %s", protocols)
-	newProtocols := "OpenFlow15"
-	if protocols == `["OpenFlow15"]` || protocols == "[OpenFlow15]" {
-		newProtocols = "OpenFlow10,OpenFlow15"
-	}
-	// The Agent logs are not filtered by time, as the precision of the log timestamp filter is
-	// one second and lines logged just before the fault could be selected. Instead, count the
-	// lines logged before the reconnection, and wait for new ones.
-	// See restoreOVSOnReconnection in pkg/agent/agent.go for these messages.
-	const (
-		reconnectedLog   = "Replaying OF flows to OVS bridge"
-		replayFailedLog  = "Step failed after OVS reconnection"
-		replayFailedStep = `step="Replay OF flows"`
-	)
-	numReconnections, err := countAgentLogLines(context.Background(), reconnectedLog)
-	require.NoError(t, err)
-	numReplayFailures, err := countAgentLogLines(context.Background(), replayFailedLog, replayFailedStep)
-	require.NoError(t, err)
-	runOVSCommand("ovs-vsctl", "set", "Bridge", defaultBridgeName, "protocols="+newProtocols)
+	protocolsChanged := false
 	defer func() {
-		restoredProtocols := strings.Trim(protocols, "[]")
-		restoredProtocols = strings.ReplaceAll(strings.ReplaceAll(restoredProtocols, `"`, ""), " ", "")
-		runOVSCommand("ovs-vsctl", "set", "Bridge", defaultBridgeName, "protocols="+restoredProtocols)
+		// Remove the flow limit first, so that the replay after restoring the protocols can
+		// succeed.
+		removeFlowLimit()
+		if !protocolsChanged {
+			return
+		}
+		numReconnections, err := countAgentLogEntries(context.Background(), reconnectedLog)
+		setProtocols(origProtocols)
+		if !assert.NoError(t, err, "Failed to get the Agent logs") {
+			return
+		}
+		// Wait for the replay, so that the Agent is not disconnected from OVS while the test
+		// resources are deleted, nor when the next test starts.
+		assert.NoError(t, waitForReplayAfterReconnection(numReconnections), "The Agent should replay flows after the bridge protocols are restored")
 	}()
+
+	t.Logf("Forcing the Agent to reconnect to OVS by changing the bridge protocols from %v to %v", origProtocols, newProtocols)
+	numReconnections, err := countAgentLogEntries(context.Background(), reconnectedLog)
+	require.NoError(t, err)
+	numReplayFailures, err := countAgentLogEntries(context.Background(), stepFailedLog, replayStep)
+	require.NoError(t, err)
+	setProtocols(newProtocols)
+	protocolsChanged = true
 
 	// Changing the protocols may not close the OpenFlow connection with some OVS versions. Check
 	// that the Agent reconnected first, so that the cause is clear if it did not.
 	t.Logf("Waiting for the Agent to reconnect to OVS")
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
-		count, err := countAgentLogLines(ctx, reconnectedLog)
+		count, err := countAgentLogEntries(ctx, reconnectedLog)
 		return count > numReconnections, err
 	})
 	require.NoError(t, err, "The Agent should reconnect to OVS after the bridge protocols are changed")
@@ -238,8 +312,9 @@ func TestFlowReplayRetry(t *testing.T) {
 	t.Logf("Waiting for the flow replay to fail and leave OVS without NetworkPolicy logging groups")
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		// Groups disappear during every replay. Wait for the attempt to fail before
-		// removing the fault, so recovery must come from a subsequent retry.
-		count, err := countAgentLogLines(ctx, replayFailedLog, replayFailedStep)
+		// removing the fault, so recovery must come from a subsequent retry. The failure
+		// is logged as a multi-line entry when several errors are joined.
+		count, err := countAgentLogEntries(ctx, stepFailedLog, replayStep)
 		return count > numReplayFailures, err
 	})
 	require.NoError(t, err, "The Agent should report a failed flow replay")
