@@ -12,6 +12,7 @@
 - [Deprecation policies](#deprecation-policies)
   - [Prometheus metrics deprecation policy](#prometheus-metrics-deprecation-policy)
   - [APIs deprecation policy](#apis-deprecation-policy)
+    - [Egress and ExternalIPPool storage migration](#egress-and-externalippool-storage-migration)
 - [Introducing new API resources](#introducing-new-api-resources)
   - [Introducing new CRDs](#introducing-new-crds)
 - [Upgrading from Antrea v1 to Antrea v2](#upgrading-from-antrea-v1-to-antrea-v2)
@@ -131,6 +132,13 @@ transient issues and compromise the "graceful" upgrade. For upgrade scenarios,
 we therefore recommend that you "split-up" the manifest to ensure that the
 Controller is upgraded first.
 
+With either Helm or `kubectl apply`, requests requiring a newly introduced CRD
+conversion webhook may fail until the Controller has been upgraded. If newer
+CRDs are retained during rollback, requests requiring conversion need a
+Controller serving those webhooks. Restoring both CRDs and Controller avoids
+this dependency when stored versions and object features are compatible with
+the older release.
+
 ## Supported K8s versions
 
 Each Antrea minor release should support [maintained K8s
@@ -223,6 +231,42 @@ the following rules:
 * For deprecated Beta and GA API versions, a [conversion webhook] must be
   provided along with each Antrea release, until the API version is removed
   altogether.
+
+#### Egress and ExternalIPPool storage migration
+
+Antrea v2.8 serves v1beta2 for `Egress` and `ExternalIPPool` and deprecates
+v1beta1, retaining v1beta1 storage to preserve storage rollback to v2.7. Storing
+v1beta2 would add it to `status.storedVersions` and prevent restoring v2.7 CRDs,
+which do not declare it. v2.8's v1beta2 API and conversion support also provide
+the API compatibility needed to roll back to v2.8 after a later storage switch.
+
+Retaining v1beta1 storage also allows v1beta1 clients to read and write between
+installing the new CRDs and upgrading the Controller. Requests using v1beta2
+require the upgraded Controller's conversion webhook.
+
+Until storage is switched and existing objects are migrated, Agents intentionally
+list/watch v1beta1 and convert locally to avoid depending on the conversion
+webhook. Agents also publish single-IP Egress status through v1beta1 to avoid
+blocking BGP failover on conversion. Agents suppress these two expected
+deprecation warnings in their logs; API server metrics and audit annotations
+still record this deprecated API usage.
+
+The storage-switch release and final migration and removal schedule will be
+determined in a follow-up PR. In the release that switches storage to v1beta2,
+users will need to run
+[`antctl upgrade api-storage`](antctl.md#upgrade-existing-objects-of-crds) after
+upgrading the CRDs and Controller. This rewrites existing objects and updates
+`status.storedVersions`, which must contain only v1beta2 before v1beta1 can be
+removed.
+
+v1beta1 must remain served for at least nine months after its v2.8 deprecation
+and while required by Agents within the supported four-minor-version skew
+window.
+
+Conversion-data annotations remain necessary while v1beta1 is served, including
+after the storage switch, to preserve fields during v1beta1 round-trip updates.
+Their encoding and decoding can be removed once v1beta1 is retired and the
+preserved data has been restored to native v1beta2 fields.
 
 ## Introducing new API resources
 
