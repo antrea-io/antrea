@@ -416,3 +416,96 @@ func TestIDAllocatorWithPreAllocation(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLabelIdentityExportNamespacedName(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputName     string
+		wantClusterID string
+		wantLabelHash string
+		wantErr       bool
+	}{
+		{
+			name:          "valid name with single hyphen",
+			inputName:     "cluster1-hash123",
+			wantClusterID: "cluster1",
+			wantLabelHash: "hash123",
+			wantErr:       false,
+		},
+		{
+			name:          "valid name with hyphens in clusterID",
+			inputName:     "cluster-west-1-hash456",
+			wantClusterID: "cluster-west-1",
+			wantLabelHash: "hash456",
+			wantErr:       false,
+		},
+		{
+			name:      "missing hyphen delimiter",
+			inputName: "nohypheninname",
+			wantErr:   true,
+		},
+		{
+			name:      "empty name",
+			inputName: "",
+			wantErr:   true,
+		},
+		{
+			name:      "leading hyphen missing clusterID",
+			inputName: "-hash123",
+			wantErr:   true,
+		},
+		{
+			name:      "trailing hyphen missing labelHash",
+			inputName: "cluster1-",
+			wantErr:   true,
+		},
+		{
+			name:      "only hyphen delimiter",
+			inputName: "-",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clusterID, labelHash, err := parseLabelIdentityExportNamespacedName(types.NamespacedName{
+				Namespace: common.LeaderNamespace,
+				Name:      tt.inputName,
+			})
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantClusterID, clusterID)
+				assert.Equal(t, tt.wantLabelHash, labelHash)
+			}
+		})
+	}
+}
+
+func TestLabelIdentityResourceExportReconcile_MalformedName(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
+
+	malformedNames := []string{
+		"nohypheninname",
+		"",
+		"-hashonly",
+		"clusteronly-",
+		"-",
+	}
+
+	for _, name := range malformedNames {
+		t.Run(name, func(t *testing.T) {
+			req := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: common.LeaderNamespace,
+					Name:      name,
+				},
+			}
+			res, err := r.Reconcile(common.TestCtx, req)
+			assert.NoError(t, err)
+			assert.Equal(t, ctrl.Result{}, res)
+		})
+	}
+}
