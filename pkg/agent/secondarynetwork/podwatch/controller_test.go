@@ -275,6 +275,12 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, _, _ := testPodController(ctrl)
+	localPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace},
+		Spec:       corev1.PodSpec{NodeName: testNode},
+	}
+	pc.kubeClient = fake.NewSimpleClientset(localPod)
+	pc.nodeConfig.Name = testNode
 	activeInterface := interfacestore.NewContainerInterface(
 		"host-eth1", containerID, podName, testNamespace, "eth1", containerNetNS(containerID), nil, nil, 0)
 	pc.interfaceStore.AddInterface(activeInterface)
@@ -293,6 +299,42 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 	// container ID, and a deleted Pod must not prevent cleanup.
 	mockIPAM.EXPECT().SecondaryNetworkRelease(staleOwner).Return(nil)
 	mockIPAM.EXPECT().SecondaryNetworkRelease(deletedPodOwner).Return(nil)
+	pc.cleanUpStaleIPAddresses()
+}
+
+func TestCleanUpStaleIPAddressesPreservesRemotePod(t *testing.T) {
+	remotePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "remote-pod", Namespace: testNamespace},
+		Spec:       corev1.PodSpec{NodeName: "remote-node"},
+	}
+	remoteOwner := &crdv1beta1.PodOwner{
+		Name: remotePod.Name, Namespace: remotePod.Namespace, ContainerID: "remote-container", IFName: "eth1",
+	}
+	pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "secondary-network-pool"},
+		Status: crdv1beta1.IPPoolStatus{IPAddresses: []crdv1beta1.IPAddressState{
+			{
+				IPAddress: "10.2.2.10",
+				Phase:     crdv1beta1.IPAddressPhaseAllocated,
+				Owner:     crdv1beta1.IPAddressOwner{Pod: remoteOwner},
+			},
+		}},
+	}
+
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, _, _ := testPodController(ctrl)
+	pc.kubeClient = fake.NewSimpleClientset(remotePod)
+	pc.nodeConfig.Name = testNode
+
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	pc.ipPoolLister = informerFactory.Crd().V1beta1().IPPools().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+
+	mockIPAM.EXPECT().SecondaryNetworkRelease(remoteOwner).Times(0)
 	pc.cleanUpStaleIPAddresses()
 }
 
@@ -353,7 +395,7 @@ func TestPodControllerRun(t *testing.T) {
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
 	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatewayIP)}
-	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
+	nodeConfig := &config.NodeConfig{Name: pod.Spec.NodeName, PodIPv4CIDR: nil, GatewayConfig: gateway}
 	podController, _ := NewPodController(
 		client,
 		netdefclient,

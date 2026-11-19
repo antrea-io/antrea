@@ -29,6 +29,7 @@ import (
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -790,6 +791,19 @@ func (pc *PodController) cleanUpStaleIPAddresses() {
 			}
 			interfaceKey := agentutil.GenerateContainerInterfaceKey(stalePodOwner.ContainerID, stalePodOwner.IFName)
 			if _, found := pc.interfaceStore.GetInterface(interfaceKey); found {
+				continue
+			}
+			// The IPPool cache is cluster-wide while interfaceStore only contains local interfaces.
+			// Use authoritative Pod state to preserve allocations for live Pods on other Nodes.
+			pod, err := pc.kubeClient.CoreV1().Pods(stalePodOwner.Namespace).Get(
+				context.TODO(), stalePodOwner.Name, metav1.GetOptions{})
+			if err == nil {
+				if pod.Spec.NodeName != pc.nodeConfig.Name {
+					continue
+				}
+			} else if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to get Pod before releasing stale IPAM allocation",
+					"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
 				continue
 			}
 			klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
