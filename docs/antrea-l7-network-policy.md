@@ -318,7 +318,6 @@ Allow ingress from client (10.10.1.9) to web (10.10.1.10/public/*).
   "dest_port": 80,
   "proto": "TCP",
   "pkt_src": "wire/pcap",
-  "tenant_id": 2,
   "tx_id": 0,
   "http": {
     "hostname": "10.10.1.10",
@@ -350,16 +349,14 @@ Deny ingress from client (10.10.1.4) to web (10.10.1.3/admin/*).
   "dest_port": 80,
   "proto": "TCP",
   "pkt_src": "wire/pcap",
-  "tenant_id": 2,
   "alert": {
     "action": "blocked",
     "gid": 1,
-    "signature_id": 1,
+    "signature_id": 7,
     "rev": 0,
     "signature": "Reject by AntreaNetworkPolicy:default/allow-privileged-url-to-admin-role",
     "category": "",
     "severity": 3,
-    "tenant_id": 2
   },
   "app_proto": "http",
   "direction": "to_server",
@@ -395,7 +392,6 @@ packets in Suricata matching the dst IP address of the packet generating the ale
   "dest_port": 80,
   "proto": "TCP",
   "pkt_src": "wire/pcap",
-  "tenant_id": 2,
   "packet": "dtwWezuaHlOhfWpNgQAAAggARQAAjU/0QABABtRcCgoBBAoKAQOv6gBQgOZTvPTauPuAGAH7TZcAAAEBCAouFZzsR8fBM0dFVCAvYWRtaW4vaW5kZXguaHRtbCBIVFRQLzEuMQ0KSG9zdDogMTAuMTAuMS4zDQpVc2VyLUFnZW50OiBjdXJsLzcuNzQuMA0KQWNjZXB0OiAqLyoNCg0K",
   "packet_info": {
     "linktype": 1
@@ -406,3 +402,20 @@ packets in Suricata matching the dst IP address of the packet generating the ale
 ## Limitations
 
 This feature is currently only supported for Nodes running Linux.
+
+A connection which none of a rule's criteria has matched is rejected once it has sent 64 KiB, or
+after five seconds, whichever comes first. This covers traffic whose application protocol the
+detection engine never identifies, which cannot be rejected on its protocol, since identification
+only concludes once either side of the connection has sent data.
+
+Both limits apply only until one of the rule's criteria has matched the connection, so an allowed
+request keeps its connection for as long as it likes, however large its body, and a keep-alive
+connection stays allowed for its later requests. Only a connection which has never matched anything
+is cut, and it is reported like any other rejection.
+
+The rejection is decided once the engine has parsed the fields the rule matches on, which is what
+lets a request larger than the MTU be allowed, and until then the traffic is forwarded. A protocol
+the engine identifies, which it does from the first packets of a real handshake, is rejected with
+nothing delivered. Traffic it cannot identify reaches the application, up to the limits above, and
+a client sending it may then see the connection closed by the application rather than reset by the
+engine.
