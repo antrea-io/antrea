@@ -84,7 +84,7 @@ func TestWebhookGatewayEvents(t *testing.T) {
 				Raw: newGW,
 			},
 			UserInfo: authenticationv1.UserInfo{
-				Username: "system:serviceaccount:mcs1:antrea-mc-controller",
+				Username: "system:serviceaccount:antrea-multicluster:antrea-mc-controller",
 				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
 			},
 		},
@@ -113,10 +113,21 @@ func TestWebhookGatewayEvents(t *testing.T) {
 				Raw: updatedGW,
 			},
 			UserInfo: authenticationv1.UserInfo{
-				Username: "system:serviceaccount:mcs1:other-sa",
+				Username: "system:serviceaccount:antrea-multicluster:other-sa",
 				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
 			},
 		},
+	}
+
+	createReqWithUser := func(username string) admission.Request {
+		req := newReq.DeepCopy()
+		req.UserInfo.Username = username
+		return admission.Request{AdmissionRequest: *req}
+	}
+	updateReqWithUser := func(username string) admission.Request {
+		req := updateReqWithInvalidSA.DeepCopy()
+		req.UserInfo.Username = username
+		return admission.Request{AdmissionRequest: *req}
 	}
 
 	newReqCopy := newReq.DeepCopy()
@@ -125,7 +136,7 @@ func TestWebhookGatewayEvents(t *testing.T) {
 	}
 	invalidReq.Object = runtime.RawExtension{Raw: []byte("a")}
 	updateReqCopy := updateReqWithInvalidSA.DeepCopy()
-	updateReqCopy.UserInfo.Username = "system:serviceaccount:mcs1:antrea-mc-controller"
+	updateReqCopy.UserInfo.Username = "system:serviceaccount:antrea-multicluster:antrea-mc-controller"
 	updateReq := admission.Request{
 		AdmissionRequest: *updateReqCopy,
 	}
@@ -159,6 +170,58 @@ func TestWebhookGatewayEvents(t *testing.T) {
 			isAllowed:       false,
 		},
 		{
+			name:            "update a Gateway with ServiceAccount antrea-agent successfully",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:kube-system:antrea-agent"),
+			isAllowed:       true,
+		},
+		{
+			name:      "create a Gateway with ServiceAccount antrea-agent successfully",
+			req:       createReqWithUser("system:serviceaccount:kube-system:antrea-agent"),
+			isAllowed: true,
+		},
+		{
+			name:            "failed to update a Gateway with ServiceAccount antrea-agent from other Namespace",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:other-namespace:antrea-agent"),
+			isAllowed:       false,
+		},
+		{
+			name:            "failed to update a Gateway with ServiceAccount antrea-mc-controller from other Namespace",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:other-namespace:antrea-mc-controller"),
+			isAllowed:       false,
+		},
+		{
+			name:      "failed to create a Gateway with ServiceAccount antrea-mc-controller from other Namespace",
+			req:       createReqWithUser("system:serviceaccount:other-namespace:antrea-mc-controller"),
+			isAllowed: false,
+		},
+		{
+			name:            "failed to update a Gateway with ServiceAccount antrea-agent from multi-cluster controller Namespace",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:antrea-multicluster:antrea-agent"),
+			isAllowed:       false,
+		},
+		{
+			name:            "failed to update a Gateway with ServiceAccount antrea-mc-controller from Antrea Namespace",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:kube-system:antrea-mc-controller"),
+			isAllowed:       false,
+		},
+		{
+			name:            "failed to update a Gateway with other ServiceAccount from Antrea Namespace",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("system:serviceaccount:kube-system:other-sa"),
+			isAllowed:       false,
+		},
+		{
+			name:            "failed to update a Gateway with non-ServiceAccount user",
+			existingGateway: existingGateway,
+			req:             updateReqWithUser("kubernetes-admin"),
+			isAllowed:       false,
+		},
+		{
 			name:            "connect to a Gateway with other ServiceAccount successfully",
 			existingGateway: existingGateway,
 			req:             connectReq,
@@ -179,9 +242,10 @@ func TestWebhookGatewayEvents(t *testing.T) {
 			fakeClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingGateway).Build()
 		}
 		gatewayWebhookUnderTest = &gatewayValidator{
-			Client:    fakeClient,
-			decoder:   decoder,
-			namespace: "default",
+			Client:          fakeClient,
+			decoder:         decoder,
+			namespace:       "antrea-multicluster",
+			antreaNamespace: "kube-system",
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
