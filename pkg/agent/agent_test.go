@@ -1159,6 +1159,8 @@ type reconnectionTest struct {
 	start    time.Time
 
 	mutex sync.Mutex
+	// connected is whether the fake OpenFlow connection is up.
+	connected bool
 	// flowRestoreWait is the value of the flow-restore-wait config in the fake OVSDB.
 	flowRestoreWait bool
 	// replayed is whether the last flow replay succeeded.
@@ -1173,9 +1175,10 @@ type reconnectionTestConfig struct {
 	// replayErr and portConfigErr return the error of the n-th call, starting from 1, to
 	// ReplayFlows and SetPortNoFlood. If they are nil, every call succeeds.
 	replayErr, portConfigErr func(n int) error
-	// ovsdbUnreachableUntil is the time, relative to the start of the test, until which OVSDB
-	// calls fail.
-	ovsdbUnreachableUntil time.Duration
+	// ovsdbErrUntil is the time, relative to the start of the test, until which OVSDB calls
+	// fail. The OVSDB client waits for the connection when it is down, so this is another error,
+	// e.g. a failed transaction.
+	ovsdbErrUntil time.Duration
 }
 
 func startReconnectionTest(t *testing.T, cfg reconnectionTestConfig) *reconnectionTest {
@@ -1200,9 +1203,15 @@ func startReconnectionTest(t *testing.T, cfg reconnectionTestConfig) *reconnecti
 		return errFn(n)
 	}
 
+	mockOFClient.EXPECT().IsConnected().DoAndReturn(func() bool {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		return rt.connected
+	}).AnyTimes()
 	mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
 		rt.mutex.Lock()
 		defer rt.mutex.Unlock()
+		assert.True(t, rt.connected, "flows should not be replayed while disconnected from OVS")
 		rt.replayTimes = append(rt.replayTimes, time.Since(rt.start))
 		err := callErr(cfg.replayErr, len(rt.replayTimes))
 		rt.replayed = err == nil
@@ -1218,8 +1227,8 @@ func startReconnectionTest(t *testing.T, cfg reconnectionTestConfig) *reconnecti
 		rt.mutex.Lock()
 		defer rt.mutex.Unlock()
 		assert.True(t, rt.replayed, "flow-restore-wait should only be removed after a successful flow replay")
-		if time.Since(rt.start) < cfg.ovsdbUnreachableUntil {
-			return nil, errors.New("connection refused")
+		if time.Since(rt.start) < cfg.ovsdbErrUntil {
+			return nil, errors.New("transaction failed")
 		}
 		if rt.flowRestoreWait {
 			return map[string]string{"flow-restore-wait": "true"}, nil
@@ -1252,9 +1261,17 @@ func startReconnectionTest(t *testing.T, cfg reconnectionTestConfig) *reconnecti
 // flow-restore-wait.
 func (rt *reconnectionTest) reconnect() {
 	rt.mutex.Lock()
+	rt.connected = true
 	rt.flowRestoreWait = true
 	rt.mutex.Unlock()
 	rt.ofConnCh <- struct{}{}
+}
+
+// disconnect makes the fake OpenFlow connection go down.
+func (rt *reconnectionTest) disconnect() {
+	rt.mutex.Lock()
+	defer rt.mutex.Unlock()
+	rt.connected = false
 }
 
 // advance lets restoreOVSOnReconnection run for d.
@@ -1301,11 +1318,10 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 
 	t.Run("failed steps are retried independently", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			// An attempt to remove flow-restore-wait gives up after 10s. OVSDB is unreachable
-			// during the first two attempts, from 0s to 10s and from 11s to 21s.
+			// OVSDB fails the first two attempts to remove flow-restore-wait, at 0s and 1s.
 			rt := startReconnectionTest(t, reconnectionTestConfig{
-				portConfigErr:         failFirst(1),
-				ovsdbUnreachableUntil: 22 * time.Second,
+				portConfigErr: failFirst(1),
+				ovsdbErrUntil: 2 * time.Second,
 			})
 			rt.reconnect()
 			rt.advance(10 * ovsRestoreMaxRetryDelay)
@@ -1313,12 +1329,40 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 
 			// The replay is not run again when the steps which depend on it are retried.
 			assert.Equal(t, []time.Duration{0}, rt.replayTimes)
-			// The port configs are restored on the first retry, 1s after the first removal
-			// attempt gave up, and not again as that succeeded.
-			assert.Equal(t, []time.Duration{0, 11 * time.Second}, rt.portConfigTimes)
+			// The port configs are restored on the first retry, and not again as that
+			// succeeded.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second}, rt.portConfigTimes)
 			// The removal is retried even though the port configs restoration failed in the
 			// same attempt, and with the same backoff.
-			assert.Equal(t, []time.Duration{23 * time.Second}, rt.flagRemovalTimes)
+			assert.Equal(t, []time.Duration{3 * time.Second}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("no retry while disconnected", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{
+				replayErr:     failFirst(1),
+				portConfigErr: failFirst(1),
+			})
+			rt.reconnect()
+			synctest.Wait()
+			// The OpenFlow connection goes down before the first retry, which is due in 1s.
+			rt.disconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			// The steps are not retried while disconnected, and the reconnection runs them.
+			assert.Equal(t, []time.Duration{0}, rt.replayTimes)
+			assert.Equal(t, []time.Duration{0}, rt.portConfigTimes)
+			assert.Empty(t, rt.flagRemovalTimes)
+			assert.True(t, rt.flowRestoreWait)
+
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			reconnectionTime := 10 * ovsRestoreMaxRetryDelay
+			assert.Equal(t, []time.Duration{0, reconnectionTime}, rt.replayTimes)
+			assert.Equal(t, []time.Duration{0, reconnectionTime}, rt.portConfigTimes)
+			assert.Equal(t, []time.Duration{reconnectionTime}, rt.flagRemovalTimes)
 		})
 	})
 
@@ -1408,35 +1452,6 @@ func TestRestoreOVSOnReconnection(t *testing.T) {
 			synctest.Wait()
 			close(rt.ofConnCh)
 			<-rt.done
-		})
-	})
-}
-
-func TestRemoveFlowRestoreWait(t *testing.T) {
-	t.Run("OVS unreachable", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-			mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(nil, errors.New("connection refused")).AnyTimes()
-			initializer := &Initializer{ovsBridgeClient: mockOVSBridgeClient}
-
-			err := initializer.removeFlowRestoreWait()
-			assert.ErrorContains(t, err, "failed to clean up flow-restore-wait config")
-			assert.ErrorContains(t, err, "error when getting OVS other config")
-		})
-	})
-	t.Run("success", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-			mock.InOrder(
-				mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(map[string]string{"flow-restore-wait": "true"}, nil),
-				mockOVSBridgeClient.EXPECT().DeleteOVSOtherConfig([]string{"flow-restore-wait"}).Return(nil),
-				mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil),
-			)
-			initializer := &Initializer{ovsBridgeClient: mockOVSBridgeClient}
-
-			assert.NoError(t, initializer.removeFlowRestoreWait())
 		})
 	})
 }

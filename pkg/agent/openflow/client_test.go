@@ -3068,7 +3068,7 @@ func Test_client_ReplayFlowsError(t *testing.T) {
 			failDefaultFlows:       true,
 			failFeatureGroupsIndex: -1,
 			failFeatureFlowsIndex:  -1,
-			expectedErrString:      "failed to install default flows",
+			expectedErrString:      "failed to replay initial flows, groups and meters: failed to install default flows",
 		},
 		{
 			name:                   "feature groups replay fails",
@@ -3081,7 +3081,7 @@ func Test_client_ReplayFlowsError(t *testing.T) {
 			failDefaultFlows:       true,
 			failFeatureGroupsIndex: 1,
 			failFeatureFlowsIndex:  -1,
-			expectedErrString:      "failed to install default flows",
+			expectedErrString:      "failed to replay initial flows, groups and meters: failed to install default flows",
 		},
 		{
 			name:                   "feature flows replay fails",

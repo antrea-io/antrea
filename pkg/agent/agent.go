@@ -609,7 +609,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 //   - Replay the flows, groups and meters cached by the OpenFlow client.
 //   - Restore the OF port configs, which are lost when OVS resets the bridge.
 //   - Remove the flow-restore-wait config, but only once the flows have been replayed since the
-//     last reconnection (see removeFlowRestoreWait).
+//     last reconnection (see below).
 //
 // A step can fail, e.g. a flow replay can fail part way if OVS is too slow to acknowledge a
 // bundle before it times out. Because ReplayFlows starts by deleting all groups and meters, a
@@ -617,7 +617,35 @@ func (i *Initializer) initOpenFlowPipeline() error {
 // the NetworkPolicy logging groups, which would cause all subsequent installations of flows
 // referencing them to fail. Failed steps are therefore retried with exponential backoff, with
 // no limit on the number of retries, until they succeed. A step which succeeded is not run again
-// until the next reconnection, which runs all the steps again and resets the backoff.
+// until the next reconnection, which runs all the steps again and resets the backoff. No step is
+// retried while the OpenFlow connection is down, as the next reconnection runs all of them.
+//
+// The flow-restore-wait config is set by start_ovs whenever it starts ovs-vswitchd, which then
+// has empty flow tables. After a reconnection to an ovs-vswitchd which did not restart, there is
+// nothing to remove. While the config is set, ovs-vswitchd neither flushes nor expires the
+// existing datapath flows, but it does not handle the packets which miss them either. Packets
+// which match an existing datapath flow, as most packets of established connections do, are
+// still forwarded. Other packets are dropped, which blocks new connections, and can also cause
+// brief drops for established ones.
+//
+// The config is only removed once a replay has succeeded since the last reconnection, as on
+// Agent startup, where the config is removed after the initial flows have been installed. If the
+// config was removed while flows are still missing, ovs-vswitchd would handle packets with an
+// incomplete pipeline. That can leave existing connections with a conntrack state that outlives
+// the replay (see #625), and lets through traffic which a missing NetworkPolicy flow should deny.
+//
+// This favors correctness over availability. Replay retries are unbounded, so if the replay keeps
+// failing after ovs-vswitchd restarts, the config stays set, and new connections through this
+// Node fail until a retry succeeds. Giving up after some time and removing the config would
+// restore some connectivity, but through a pipeline which may lack default flows, in which case
+// most packets would be dropped anyway, or NetworkPolicy flows, in which case traffic would
+// bypass these policies. The replayed entries were all accepted by OVS when first installed, so a
+// replay which keeps failing points to an OVS issue that needs fixing. The error logged on every
+// retry surfaces it.
+//
+// FlowRestoreComplete waits for the OVSDB connection, which the OVSDB client restores on its own,
+// so it only fails on other errors, e.g. a failed transaction. These are retried like the other
+// failed steps.
 func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}) {
 	// Whether each step has yet to succeed since the last reconnection.
 	var replayPending, portConfigsPending, flowRestoreWaitPending bool
@@ -633,6 +661,13 @@ func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}) {
 			replayPending, portConfigsPending, flowRestoreWaitPending = true, true, true
 			retryDelay = ovsRestoreInitialRetryDelay
 		case <-retryCh:
+			if !i.ofClient.IsConnected() {
+				// The steps would fail again, e.g. because ovs-vswitchd went away again.
+				// The next reconnection runs all of them.
+				klog.Info("Not connected to OVS, OVS state will be restored after reconnection")
+				retryCh = nil
+				continue
+			}
 			// Retry the steps which are still pending.
 		case <-i.stopCh:
 			return
@@ -659,10 +694,13 @@ func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}) {
 		}
 		// Removing flow-restore-wait depends on the flow replay: the config must be kept until
 		// the flows have been replayed.
-		if flowRestoreWaitPending {
-			if replayPending {
-				klog.Info("Keeping flow-restore-wait config, if set, until OF flows are replayed")
-			} else if err := i.removeFlowRestoreWait(); err != nil {
+		switch {
+		case !flowRestoreWaitPending:
+			// Already removed since the last reconnection.
+		case replayPending:
+			klog.Info("Keeping flow-restore-wait config, if set, until OF flows are replayed")
+		default:
+			if err := i.FlowRestoreComplete(); err != nil {
 				klog.ErrorS(err, "Failed to remove flow-restore-wait config, will retry", "retryDelay", retryDelay)
 			} else {
 				flowRestoreWaitPending = false
@@ -676,55 +714,6 @@ func (i *Initializer) restoreOVSOnReconnection(ofConnCh <-chan struct{}) {
 		retryCh = time.After(retryDelay)
 		retryDelay = min(2*retryDelay, ovsRestoreMaxRetryDelay)
 	}
-}
-
-// removeFlowRestoreWait removes the flow-restore-wait config after the flows have been replayed
-// to OVS. It returns an error if the config could not be removed.
-//
-// The config is set by start_ovs whenever it starts ovs-vswitchd, which then has empty flow
-// tables. After a reconnection to an ovs-vswitchd which did not restart, there is nothing to
-// remove. While the config is set, ovs-vswitchd neither flushes nor expires the existing
-// datapath flows, but it does not handle the packets which miss them either. Packets which match
-// an existing datapath flow, as most packets of established connections do, are still forwarded.
-// Other packets are dropped, which blocks new connections, and can also cause brief drops for
-// established ones.
-//
-// The caller must only call it once a replay has succeeded since the last reconnection, as on
-// Agent startup, where the config is removed after the initial flows have been installed. If the
-// config was removed while flows are still missing, ovs-vswitchd would handle packets with an
-// incomplete pipeline. That can leave existing connections with a conntrack state that outlives
-// the replay (see #625), and lets through traffic which a missing NetworkPolicy flow should deny.
-//
-// This favors correctness over availability. Replay retries are unbounded, so if the replay keeps
-// failing after ovs-vswitchd restarts, the config stays set, and new connections through this
-// Node fail until a retry succeeds. Giving up after some time and removing the config would
-// restore some connectivity, but through a pipeline which may lack default flows, in which case
-// most packets would be dropped anyway, or NetworkPolicy flows, in which case traffic would
-// bypass these policies. The replayed entries were all accepted by OVS when first installed, so a
-// replay which keeps failing points to an OVS issue that needs fixing. The error logged on every
-// retry surfaces it.
-func (i *Initializer) removeFlowRestoreWait() error {
-	// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
-	// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
-	// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
-	// to ensure the flag can be removed successfully.
-	var lastErr error
-	err := wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 10*time.Second, true,
-		func(ctx context.Context) (done bool, err error) {
-			if lastErr = i.FlowRestoreComplete(); lastErr != nil {
-				return false, nil
-			}
-			return true, nil
-		})
-	// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, the
-	// caller will try to clean up the config again.
-	if err != nil {
-		if lastErr != nil {
-			err = lastErr
-		}
-		return fmt.Errorf("failed to clean up flow-restore-wait config: %w", err)
-	}
-	return nil
 }
 
 func (i *Initializer) FlowRestoreComplete() error {

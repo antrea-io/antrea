@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -39,30 +38,6 @@ import (
 // replayRetryTimeout is the maximum delay between two flow replay attempts in the Agent
 // (ovsRestoreMaxRetryDelay).
 const replayRetryTimeout = 30 * time.Second
-
-// klogHeaderRegex matches the header which starts every klog entry, e.g.
-// "E1117 18:50:43.070068      15 agent.go:654] ".
-var klogHeaderRegex = regexp.MustCompile(`^[IWEF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6}\s`)
-
-// splitKlogEntries splits logs written by klog into entries. An entry can span multiple lines, as
-// klog writes a value containing line breaks, e.g. an error joining several errors, on separate
-// lines, followed by the remaining key/value pairs of the entry.
-func splitKlogEntries(logs string) []string {
-	var entries []string
-	for line := range strings.Lines(logs) {
-		if len(entries) == 0 || klogHeaderRegex.MatchString(line) {
-			entries = append(entries, line)
-		} else {
-			entries[len(entries)-1] += line
-		}
-	}
-	return entries
-}
-
-// containsAll tells whether s contains all of the given substrings.
-func containsAll(s string, substrings ...string) bool {
-	return !slices.ContainsFunc(substrings, func(substring string) bool { return !strings.Contains(s, substring) })
-}
 
 // TestFlowReplayRetry verifies that the Agent recovers when replaying flows after a reconnection
 // to OVS fails. Every replay starts by deleting all OVS groups, so a replay that fails before
@@ -164,28 +139,19 @@ func TestFlowReplayRetry(t *testing.T) {
 			return dropped == expectedDropped, nil
 		})
 	}
-	getAgentLogEntries := func(ctx context.Context) ([]string, error) {
+	getAgentLogs := func(ctx context.Context) (string, error) {
 		logs, err := data.clientset.CoreV1().Pods(antreaNamespace).GetLogs(antreaPodName, &corev1.PodLogOptions{
 			Container: agentContainerName,
 		}).DoRaw(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return splitKlogEntries(string(logs)), nil
+		return string(logs), err
 	}
-	// countAgentLogEntries counts the entries of the Agent log containing all of the given strings.
-	countAgentLogEntries := func(ctx context.Context, substrings ...string) (int, error) {
-		entries, err := getAgentLogEntries(ctx)
+	// countAgentLogEntries counts the occurrences of the given message in the Agent log.
+	countAgentLogEntries := func(ctx context.Context, message string) (int, error) {
+		logs, err := getAgentLogs(ctx)
 		if err != nil {
 			return 0, err
 		}
-		count := 0
-		for _, entry := range entries {
-			if containsAll(entry, substrings...) {
-				count++
-			}
-		}
-		return count, nil
+		return strings.Count(logs, message), nil
 	}
 	newDropRuleWithLogging := func(name string, port int32) *crdv1beta1.NetworkPolicy {
 		return &crdv1beta1.NetworkPolicy{
@@ -232,16 +198,16 @@ func TestFlowReplayRetry(t *testing.T) {
 	// numReconnections times, and has replayed flows successfully after the last reconnection.
 	waitForReplayAfterReconnection := func(numReconnections int) error {
 		return wait.PollUntilContextTimeout(context.Background(), time.Second, 2*replayRetryTimeout, true, func(ctx context.Context) (bool, error) {
-			entries, err := getAgentLogEntries(ctx)
+			logs, err := getAgentLogs(ctx)
 			if err != nil {
 				return false, err
 			}
 			reconnections, replayed := 0, false
-			for _, entry := range entries {
-				if containsAll(entry, reconnectedLog) {
+			for line := range strings.Lines(logs) {
+				if strings.Contains(line, reconnectedLog) {
 					reconnections++
 					replayed = false
-				} else if containsAll(entry, replayCompletedLog) {
+				} else if strings.Contains(line, replayCompletedLog) {
 					replayed = true
 				}
 			}
@@ -311,8 +277,7 @@ func TestFlowReplayRetry(t *testing.T) {
 	t.Logf("Waiting for the flow replay to fail and leave OVS without NetworkPolicy logging groups")
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		// Groups disappear during every replay. Wait for the attempt to fail before
-		// removing the fault, so recovery must come from a subsequent retry. The failure
-		// is logged as a multi-line entry when several errors are joined.
+		// removing the fault, so recovery must come from a subsequent retry.
 		count, err := countAgentLogEntries(ctx, replayFailedLog)
 		return count > numReplayFailures, err
 	})

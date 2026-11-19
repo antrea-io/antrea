@@ -198,8 +198,9 @@ type Client interface {
 	// to replay as many flows as possible, and returns an error if any entry cannot be
 	// installed. In that case, the OVS bridge may be missing flows, groups or meters, and the
 	// caller should call ReplayFlows again: every call starts by deleting all groups and meters,
-	// so it is safe to retry. A retry briefly disrupts again the flows which reference groups
-	// or meters, until they are replayed.
+	// so it is safe to retry. A retry removes again, until they are replayed, the flows which
+	// reference groups or meters, including flows which enforce NetworkPolicy rules (see the
+	// implementation for the trade-off).
 	ReplayFlows() error
 
 	// DeleteStaleFlows deletes all flows from the previous round which are no longer needed. It
@@ -1206,23 +1207,38 @@ func (c *client) ReplayFlows() error {
 	// initial groups of each feature (e.g. the NetworkPolicy logging groups). If it fails
 	// part way, some of these groups will be missing from OVS, and the feature flows which
 	// reference them cannot be installed. Keep replaying the remaining entries, so that as
-	// much as possible is restored, but report the failure so that the caller retries.
+	// much as possible is restored, but report the failure so that the caller retries. The
+	// caller logs the returned error, which names the failed operations.
 	//
 	// Every call replays everything from scratch, including a retry on the same connection, so
 	// a retry does not depend on what a failed attempt left in OVS. Retrying only the failed
 	// part would require knowing which entries OVS has: a group or meter cannot be added again
 	// while it exists, and when a bundle reply times out, whether OVS committed the bundle is
-	// unknown. The cost is that a retry disrupts again the entries which a failed attempt had
-	// already restored. OVS removes the flows which reference a deleted group or meter (e.g.
-	// the Service load balancing flows, and the flows which send packets to the Agent), until
-	// they are replayed later in the same call. Flows which reference neither are replaced in
-	// place, without disruption. Any replay on a connection to an ovs-vswitchd which did not
-	// restart already causes this disruption, and it only lasts as long as the replay. A retry
-	// repeats it, but only happens after a failed replay, which has already left some entries
-	// missing from OVS for longer than that.
+	// unknown.
+	//
+	// The trade-off is that every call, including a retry, starts by deleting all groups and
+	// meters, and OVS deletes with them the flows which reference them, including those which
+	// a failed attempt had already restored. Until these flows are replayed later in the same
+	// call:
+	//   - The Reject rules, the Drop rules with logging enabled and, when deny tracking is
+	//     enabled (with FlowExporter), all the Drop rules of Antrea-native policies are not
+	//     enforced, as their action flows reference a logging group (see
+	//     conjunctionActionDenyFlow).
+	//   - Service traffic is disrupted, as the Service load balancing flows reference groups.
+	//   - The flows which send packets to the Agent through a packet-in meter are missing, e.g.
+	//     for NetworkPolicy logging and Reject, DNS interception for FQDN policies, Traceflow
+	//     and IGMP, and so are the Egress QoS flows.
+	// Flows which reference neither a group nor a meter are replaced in place, without
+	// disruption.
+	//
+	// This only affects traffic after a reconnection to an ovs-vswitchd which did not restart.
+	// After a restart, flow-restore-wait stays set until a replay succeeds, and ovs-vswitchd
+	// does not use its flow tables to handle packets in the meantime. Otherwise, the
+	// disruption lasts as long as the replay, and happens again on every retry until one
+	// succeeds. The caller retries with exponential backoff, which bounds how often a replay
+	// which keeps failing disrupts traffic.
 	if err := c.initialize(); err != nil {
-		klog.ErrorS(err, "Error during flow replay")
-		errs = append(errs, err)
+		errs = append(errs, fmt.Errorf("failed to replay initial flows, groups and meters: %w", err))
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
@@ -1231,16 +1247,13 @@ func (c *client) ReplayFlows() error {
 			// Openflow bundle message doesn't support meter. Add meter individually instead of
 			// calling AddOFEntries function.
 			if err := meter.Add(); err != nil {
-				klog.ErrorS(err, "Error when replaying feature meters", "feature", featureName)
 				errs = append(errs, fmt.Errorf("failed to replay feature %s meters: %w", featureName, err))
 			}
 		}
 		if err := c.ofEntryOperations.AddOFEntries(activeFeature.replayGroups()); err != nil {
-			klog.ErrorS(err, "Error when replaying feature groups", "feature", featureName)
 			errs = append(errs, fmt.Errorf("failed to replay feature %s groups: %w", featureName, err))
 		}
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
-			klog.ErrorS(err, "Error when replaying feature flows", "feature", featureName)
 			errs = append(errs, fmt.Errorf("failed to replay feature %s flows: %w", featureName, err))
 		}
 	}

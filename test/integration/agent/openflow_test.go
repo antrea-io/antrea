@@ -21,7 +21,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os/exec"
+	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -280,7 +283,9 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
+	// Enable AntreaPolicy, so that the replay covers the action flows of Antrea-native policy
+	// rules which reference a logging group.
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -331,6 +336,41 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil, false, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
+	// The action flows of an Antrea-native Drop rule with logging enabled, and of a Reject rule,
+	// reference a logging group. Deleting the group deletes them, and the rules are not
+	// enforced until they are replayed.
+	dropAction := crdv1beta1.RuleActionDrop
+	rejectAction := crdv1beta1.RuleActionReject
+	for i, action := range []*crdv1beta1.RuleAction{&dropAction, &rejectAction} {
+		priority := uint16(30000 + i)
+		require.NoError(t, c.InstallPolicyRuleFlows(&types.PolicyRule{
+			Direction:     v1beta2.DirectionIn,
+			From:          prepareIPAddresses([]string{fmt.Sprintf("192.168.6.%d", i+1)}),
+			To:            []types.Address{ofClient.NewOFPortAddress(ofport)},
+			Service:       []v1beta2.Service{npPort1},
+			Action:        action,
+			Priority:      &priority,
+			FlowID:        ruleID + uint32(i) + 1,
+			TableID:       ofClient.AntreaPolicyIngressRuleTable.GetID(),
+			EnableLogging: *action == crdv1beta1.RuleActionDrop,
+			PolicyRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.AntreaNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "annp1",
+				UID:       "uid2",
+			},
+		}), "Failed to InstallPolicyRuleFlows for %s rule", *action)
+	}
+	flows, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ofClient.AntreaPolicyIngressRuleTable.GetName())
+	require.NoError(t, err)
+	numGroupFlows := 0
+	for _, flow := range flows {
+		if strings.Contains(flow, "group:") {
+			numGroupFlows++
+		}
+	}
+	require.Equal(t, 2, numGroupFlows, "The action flows of the Drop and Reject rules should reference a logging group: %v", flows)
+
 	testReplayFlows(t)
 }
 
@@ -348,39 +388,110 @@ func testExternalFlows(t *testing.T, config *testConfig) {
 	}
 }
 
+// ovsState is the state of the OVS bridge which a flow replay restores.
+type ovsState struct {
+	// flows are the flows, without their cookie and statistics. Every replay installs the
+	// default flows with new cookies.
+	flows, groups, meters []string
+}
+
+// flowCookieRegex matches the cookie at the start of a flow dumped by ovs-ofctl.
+var flowCookieRegex = regexp.MustCompile(`^cookie=0x[0-9a-f]+, `)
+
+// dumpOVSState dumps the flows, groups and meters of the bridge, each sorted.
+func dumpOVSState(t *testing.T) ovsState {
+	dump := func(cmd string, args ...string) []string {
+		out, err := ovsCtlClient.RunOfctlCmd(cmd, args...)
+		require.NoError(t, err, "Error when running ovs-ofctl %s", cmd)
+		var entries []string
+		for line := range strings.Lines(string(out)) {
+			line = strings.TrimSpace(line)
+			// Skip the header, e.g. "OFPST_FLOW reply (OF1.5) (xid=0x2):".
+			if line == "" || strings.Contains(line, " reply (") {
+				continue
+			}
+			if cmd == "dump-flows" {
+				line = flowCookieRegex.ReplaceAllString(line, "")
+			}
+			// The bands of a meter are printed on the lines following the meter.
+			if cmd == "dump-meters" && !strings.HasPrefix(line, "meter=") && len(entries) > 0 {
+				entries[len(entries)-1] += " " + line
+				continue
+			}
+			entries = append(entries, line)
+		}
+		slices.Sort(entries)
+		return entries
+	}
+	return ovsState{
+		flows:  dump("dump-flows", "--no-stats", "--no-names"),
+		groups: dump("dump-groups"),
+		meters: dump("dump-meters"),
+	}
+}
+
+func runOVSCommand(t *testing.T, name string, args ...string) {
+	out, err := exec.Command(name, args...).CombinedOutput()
+	require.NoError(t, err, "Error when running %s %v: %s", name, args, out)
+}
+
 func testReplayFlows(t *testing.T) {
 	var err error
 
-	countFlows := func() int {
-		flowList, err := ofTestUtils.OfctlDumpFlows(ovsCtlClient)
-		require.Nil(t, err, "Error when dumping flows from OVS bridge")
-		return len(flowList)
+	state := dumpOVSState(t)
+	t.Logf("Dumped %d flows, %d groups and %d meters before deletion & reconciliation", len(state.flows), len(state.groups), len(state.meters))
+	if ofClient.OVSMetersAreSupported() {
+		// The PacketIn meters are deleted and restored by every replay, with the flows which
+		// reference them.
+		require.NotEmpty(t, state.meters, "Expected OVS meters")
+		require.True(t, slices.ContainsFunc(state.flows, func(flow string) bool { return strings.Contains(flow, "meter:") }), "Expected flows referencing a meter")
 	}
-
-	count1 := countFlows()
-	t.Logf("Counted %d flows before deletion & reconciliation", count1)
 	err = ofTestUtils.OfctlDeleteFlows(ovsCtlClient)
 	require.Nil(t, err, "Error when deleting flows from OVS bridge")
 	err = ofTestUtils.OfctlDeleteGroups(ovsCtlClient)
 	require.Nil(t, err, "Error when deleting groups from OVS bridge")
-	count2 := countFlows()
-	assert.Zero(t, count2, "Expected no flows after deletion")
+	assert.Empty(t, dumpOVSState(t).flows, "Expected no flows after deletion")
 	require.NoError(t, c.ReplayFlows())
-	count3 := countFlows()
-	t.Logf("Counted %d flows after reconciliation", count3)
-	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")
+	assert.Equal(t, state, dumpOVSState(t), "Expected the same flows, groups and meters after reconciliation")
 
-	// Replaying again on the same connection must not count existing flows twice.
 	flowCounts := make(map[uint]uint)
 	for _, table := range c.GetFlowTableStatus() {
 		flowCounts[table.ID] = table.FlowCount
 	}
-	require.NoError(t, c.ReplayFlows())
-	assert.Equal(t, count3, countFlows(), "Expected same number of flows after another replay")
-	for _, table := range c.GetFlowTableStatus() {
-		assert.Equal(t, flowCounts[table.ID], table.FlowCount, "Flow count changed for table %s", table.Name)
+	checkReplayOnSameConnection := func() {
+		t.Helper()
+		// Every replay deletes all groups and meters, and OVS deletes the flows which reference
+		// them, so all of these must be restored. Existing flows must not be counted twice.
+		assert.Equal(t, state, dumpOVSState(t), "Expected the same flows, groups and meters after another replay")
+		for _, table := range c.GetFlowTableStatus() {
+			assert.Equal(t, flowCounts[table.ID], table.FlowCount, "Flow count changed for table %s", table.Name)
+		}
+		checkOVSFlowMetrics(t, c)
 	}
-	checkOVSFlowMetrics(t, c)
+
+	// Replaying again on the same connection, as the Agent does when it retries a failed replay.
+	require.NoError(t, c.ReplayFlows())
+	checkReplayOnSameConnection()
+
+	// Make a replay fail part way: limit the number of flows in table 0 so that OVS rejects the
+	// bundle of default flows, after deleting one of them, as OVS replaces existing flows instead
+	// of adding new ones. initialize then returns before installing the PacketIn meters and the
+	// initial groups of features, e.g. the NetworkPolicy logging groups, and the flows which
+	// reference these cannot be installed either.
+	removeFlowLimit := func() {
+		runOVSCommand(t, "ovs-vsctl", "--if-exists", "remove", "Bridge", br, "flow_tables", "0")
+	}
+	defer removeFlowLimit()
+	runOVSCommand(t, "ovs-ofctl", "-O", "OpenFlow15", "--strict", "del-flows", br, "table=0,priority=0")
+	runOVSCommand(t, "ovs-vsctl", "--", "--id=@ft", "create", "Flow_Table", "flow_limit=0", "overflow_policy=refuse",
+		"--", "set", "Bridge", br, "flow_tables:0=@ft")
+	err = c.ReplayFlows()
+	removeFlowLimit()
+	require.ErrorContains(t, err, "failed to install default flows")
+	assert.NotEqual(t, state, dumpOVSState(t), "Expected the failed replay to leave entries missing")
+	// The retry deletes again the entries which the failed replay restored.
+	require.NoError(t, c.ReplayFlows())
+	checkReplayOnSameConnection()
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
