@@ -712,12 +712,52 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 	}
 
 	t.Run("nil k8s field, selector matching empty labels", func(t *testing.T) {
-		// "!app" matches a Pod without labels, so only the missing Kubernetes metadata can make
-		// this record fail it.
+		// An explicitly empty Labels message matches !app, but missing Kubernetes
+		// metadata does not.
 		filters := mustParseFilters(&flowpb.FlowFilter{PodLabelSelector: "!app"})
-		assert.True(t, matchFlow(newFlow("f", &flowpb.Kubernetes{}), filters, time.Time{}))
+		assert.True(t, matchFlow(newFlow("f", &flowpb.Kubernetes{
+			SourcePodLabels: &flowpb.Labels{},
+		}), filters, time.Time{}))
 		assert.False(t, matchFlow(newFlow("f", nil), filters, time.Time{}))
 	})
+}
+
+func TestMatchFilter_LabelSelectorAvailability(t *testing.T) {
+	web := &flowpb.Labels{Labels: map[string]string{"app": "web"}}
+	api := &flowpb.Labels{Labels: map[string]string{"app": "api"}}
+	empty := &flowpb.Labels{}
+
+	tests := []struct {
+		name      string
+		srcLabels *flowpb.Labels
+		dstLabels *flowpb.Labels
+		selector  string
+		direction flowpb.FlowFilterDirection
+		wantMatch bool
+	}{
+		{"BOTH: non-Pod destination", web, nil, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, false},
+		{"BOTH: unlabeled Pod source", empty, nil, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, true},
+		{"BOTH: unlabeled Pod destination", web, empty, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, true},
+		{"BOTH: withheld destination labels", web, nil, "app!=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, false},
+		{"FROM: withheld source labels", nil, web, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM, false},
+		{"TO: withheld destination labels", web, nil, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO, false},
+		{"FROM: unlabeled Pod", empty, web, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM, true},
+		{"TO: unlabeled Pod", web, empty, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO, true},
+		{"TO: non-Pod Service backend", web, nil, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO, false},
+		{"BOTH: labels not exported", nil, nil, "app!=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, false},
+		{"FROM: positive selector with labels", web, nil, "app=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM, true},
+		{"FROM: positive selector without labels", nil, api, "app=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM, false},
+		{"TO: negative selector with different app", web, api, "app!=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO, true},
+		{"TO: negative selector with same app", api, web, "app!=web", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO, false},
+		{"BOTH: explicit empty map", &flowpb.Labels{Labels: map[string]string{}}, nil, "!app", flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			k8s := &flowpb.Kubernetes{SourcePodLabels: tc.srcLabels, DestinationPodLabels: tc.dstLabels}
+			filters := mustParseFilters(&flowpb.FlowFilter{PodLabelSelector: tc.selector, Direction: tc.direction})
+			assert.Equal(t, tc.wantMatch, matchFlow(newFlow("f", k8s), filters, time.Time{}))
+		})
+	}
 }
 
 // The directional criteria of one filter describe a single endpoint: a flow matches only if the

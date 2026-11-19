@@ -828,8 +828,11 @@ func matchEndpoint(f *flowpb.Flow, pf *flowFilter, source bool) bool {
 	if len(filter.GetPodNames()) > 0 && !slices.Contains(filter.GetPodNames(), podName) {
 		return false
 	}
-	if pf.podLabelSelector != nil && !pf.podLabelSelector.Matches(labelsFromProto(podLabels)) {
-		return false
+	if pf.podLabelSelector != nil {
+		// Missing Pod labels are not equivalent to an explicitly empty label set.
+		if podLabels == nil || !pf.podLabelSelector.Matches(labelsFromProto(podLabels)) {
+			return false
+		}
 	}
 	if len(pf.parsedAddrs) > 0 || len(pf.parsedPrefixes) > 0 {
 		addr, ok := netip.AddrFromSlice(ip)

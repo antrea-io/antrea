@@ -84,6 +84,7 @@ message FlowFilter {
   // to a specific namespace, combine this filter with the namespaces field.
   repeated string pod_names = 2;
   // Match flows where source or destination Pod labels match this selector.
+  // Only endpoints carrying Pod labels match, including explicitly empty labels.
   // Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
   string pod_label_selector = 3;
   // Match flows where the destination Service is in this list. An entry is
