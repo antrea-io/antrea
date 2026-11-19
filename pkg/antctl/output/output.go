@@ -24,7 +24,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
