@@ -116,6 +116,14 @@ version skew.
 * **Antctl**: must not be newer than the **Antrea Controller**, and may be up to
   4 minor versions older
 
+Dual-stack Egress requires all Agents to support the dual-stack datapath. Upgrade
+both the Controller and every Agent before creating dual-stack Egresses or
+converting existing Egresses to dual-stack. Older Agents may interpret only one
+IP or clear the assignment status, resulting in conflicting assignments and BGP
+advertisements. The supported version skew does not enable new datapath features
+on older Agents. Before rolling back to Agents without dual-stack Egress support,
+remove dual-stack Egresses or convert them to single-stack through v1beta2.
+
 The supported version skew means that we only recommend Antrea upgrades to a new
 release up to 4 minor versions newer. For example, a cluster using 0.10 can be
 upgraded to one of 0.11, 0.12, 0.13 or 0.14, but we discourage direct upgrades
@@ -250,6 +258,12 @@ webhook. Agents also publish single-IP Egress status through v1beta1 to avoid
 blocking BGP failover on conversion. Agents suppress these two expected
 deprecation warnings in their logs; API server metrics and audit annotations
 still record this deprecated API usage.
+
+Dual-stack Egress status uses v1beta2 to preserve both addresses and therefore
+requires the conversion webhook while v1beta1 remains the storage version.
+Existing datapath configuration continues to operate during a Controller outage,
+but publishing a new dual-stack assignment, including the status consumed by BGP,
+waits for the conversion webhook to become available again.
 
 The storage-switch release and final migration and removal schedule will be
 determined in a follow-up PR. In the release that switches storage to v1beta2,

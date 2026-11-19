@@ -118,15 +118,15 @@ func TestSchedule(t *testing.T) {
 			expectedResults: map[string]*scheduleResult{
 				"egressA": {
 					node: "node1",
-					ip:   "1.1.1.1",
+					ips:  []string{"1.1.1.1"},
 				},
 				"egressB": {
 					node: "node3",
-					ip:   "1.1.1.11",
+					ips:  []string{"1.1.1.11"},
 				},
 				"egressC": {
 					node: "node1",
-					ip:   "1.1.1.21",
+					ips:  []string{"1.1.1.21"},
 				},
 			},
 		},
@@ -142,11 +142,11 @@ func TestSchedule(t *testing.T) {
 			expectedResults: map[string]*scheduleResult{
 				"egressA": {
 					node: "node2",
-					ip:   "1.1.1.1",
+					ips:  []string{"1.1.1.1"},
 				},
 				"egressB": {
 					node: "node2",
-					ip:   "1.1.1.11",
+					ips:  []string{"1.1.1.11"},
 				},
 				"egressC": {
 					err: memberlist.ErrNoNodeAvailable,
@@ -161,15 +161,15 @@ func TestSchedule(t *testing.T) {
 			expectedResults: map[string]*scheduleResult{
 				"egressA": {
 					node: "node1",
-					ip:   "1.1.1.1",
+					ips:  []string{"1.1.1.1"},
 				},
 				"egressB": {
 					node: "node3",
-					ip:   "1.1.1.11",
+					ips:  []string{"1.1.1.11"},
 				},
 				"egressC": {
 					node: "node2",
-					ip:   "1.1.1.21",
+					ips:  []string{"1.1.1.21"},
 				},
 			},
 		},
@@ -181,11 +181,11 @@ func TestSchedule(t *testing.T) {
 			expectedResults: map[string]*scheduleResult{
 				"egressA": {
 					node: "node1",
-					ip:   "1.1.1.1",
+					ips:  []string{"1.1.1.1"},
 				},
 				"egressB": {
 					node: "node3",
-					ip:   "1.1.1.11",
+					ips:  []string{"1.1.1.11"},
 				},
 				"egressC": {
 					err: memberlist.ErrNoNodeAvailable,
@@ -216,6 +216,114 @@ func TestSchedule(t *testing.T) {
 			assert.Equal(t, tt.expectedResults, s.scheduleResults)
 		})
 	}
+}
+
+func TestScheduleDualStack(t *testing.T) {
+	egresses := []*crdv1b2.Egress{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+			Spec:       crdv1b2.EgressSpec{EgressIPs: []string{"1.1.1.1", "2001:db8::1"}, ExternalIPPool: "pool1"},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
+			Spec:       crdv1b2.EgressSpec{EgressIPs: []string{"2001:0db8:0000:0000:0000:0000:0000:0001", "1.1.1.1"}, ExternalIPPool: "pool1"},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressC", CreationTimestamp: metav1.NewTime(time.Unix(3, 0))},
+			Spec:       crdv1b2.EgressSpec{EgressIPs: []string{"1.1.1.11"}, ExternalIPPool: "pool1"},
+		},
+	}
+	tests := []struct {
+		name             string
+		capacity         int
+		expectedAssigned []bool
+	}{
+		{
+			name:             "sufficient capacity",
+			capacity:         3,
+			expectedAssigned: []bool{true, true, true},
+		},
+		{
+			name:             "shared pair counts only once",
+			capacity:         2,
+			expectedAssigned: []bool{true, true, false},
+		},
+		{
+			name:             "unscheduled pair consumes no capacity",
+			capacity:         1,
+			expectedAssigned: []bool{false, false, true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crdInformerFactory := crdinformers.NewSharedInformerFactory(fakeversioned.NewSimpleClientset(), 0)
+			egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
+			nodeInformer := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0).Core().V1().Nodes()
+			s := NewEgressIPScheduler(newFakeMemberlistCluster([]string{"node1"}), egressInformer, nodeInformer, tt.capacity)
+			for _, egress := range egresses {
+				assert.NoError(t, egressInformer.Informer().GetIndexer().Add(egress))
+			}
+
+			s.schedule()
+			for i, egress := range egresses {
+				ips, node, err, assigned := s.GetEgressIPsAndNode(egress.Name)
+				assert.Equal(t, tt.expectedAssigned[i], assigned, "Egress %s", egress.Name)
+				if assigned {
+					assert.NoError(t, err)
+					assert.Equal(t, egress.Spec.EgressIPs, ips)
+					assert.Equal(t, "node1", node)
+				} else {
+					assert.ErrorIs(t, err, memberlist.ErrNoNodeAvailable)
+					assert.Empty(t, ips)
+					assert.Empty(t, node)
+				}
+			}
+		})
+	}
+}
+
+func TestScheduleDualStackNodeSelection(t *testing.T) {
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(fakeversioned.NewSimpleClientset(), 0)
+	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
+	nodeInformer := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0).Core().V1().Nodes()
+	s := NewEgressIPScheduler(newFakeMemberlistCluster([]string{"node1", "node2", "node3"}), egressInformer, nodeInformer, 2)
+	for _, egress := range []*crdv1b2.Egress{
+		{ObjectMeta: metav1.ObjectMeta{Name: "egressA"}, Spec: crdv1b2.EgressSpec{EgressIPs: []string{"1.1.1.1", "2001:db8::1"}, ExternalIPPool: "pool1"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "egressB"}, Spec: crdv1b2.EgressSpec{EgressIPs: []string{"2001:db8::1", "1.1.1.1"}, ExternalIPPool: "pool1"}},
+	} {
+		assert.NoError(t, egressInformer.Informer().GetIndexer().Add(egress))
+	}
+
+	s.schedule()
+	assert.Equal(t, "node1", s.scheduleResults["egressA"].node)
+	assert.Equal(t, "node1", s.scheduleResults["egressB"].node)
+
+	// The pair cannot be split across Nodes even when the cluster has sufficient total capacity.
+	s.maxEgressIPsPerNode = 1
+	s.schedule()
+	for _, name := range []string{"egressA", "egressB"} {
+		assert.ErrorIs(t, s.scheduleResults[name].err, memberlist.ErrNoNodeAvailable)
+		assert.Empty(t, s.scheduleResults[name].node)
+	}
+}
+
+func TestScheduleEquivalentIPs(t *testing.T) {
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(fakeversioned.NewSimpleClientset(), 0)
+	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
+	nodeInformer := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0).Core().V1().Nodes()
+	s := NewEgressIPScheduler(newFakeMemberlistCluster([]string{"node1", "node2", "node3"}), egressInformer, nodeInformer, 1)
+	for _, egress := range []*crdv1b2.Egress{
+		{ObjectMeta: metav1.ObjectMeta{Name: "egressA"}, Spec: crdv1b2.EgressSpec{EgressIPs: []string{"2001:db8::1"}, ExternalIPPool: "pool1"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "egressB"}, Spec: crdv1b2.EgressSpec{EgressIPs: []string{"2001:0db8:0000:0000:0000:0000:0000:0001"}, ExternalIPPool: "pool1"}},
+	} {
+		assert.NoError(t, egressInformer.Informer().GetIndexer().Add(egress))
+	}
+
+	s.schedule()
+	assert.NoError(t, s.scheduleResults["egressA"].err)
+	assert.NoError(t, s.scheduleResults["egressB"].err)
+	assert.NotEmpty(t, s.scheduleResults["egressA"].node)
+	assert.Equal(t, s.scheduleResults["egressA"].node, s.scheduleResults["egressB"].node)
 }
 
 func BenchmarkSchedule(b *testing.B) {
@@ -368,6 +476,73 @@ func TestRun(t *testing.T) {
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 }
 
+func TestRunDualStack(t *testing.T) {
+	ctx := context.Background()
+	crdClient := fakeversioned.NewSimpleClientset()
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
+	informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	s := NewEgressIPScheduler(newFakeMemberlistCluster([]string{"node1"}), egressInformer, informerFactory.Core().V1().Nodes(), 2)
+	egressUpdates := make(chan string, 10)
+	s.AddEventHandler(func(egress string) { egressUpdates <- egress })
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	crdInformerFactory.Start(stopCh)
+	informerFactory.Start(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+	go s.Run(stopCh)
+
+	egress, err := crdClient.CrdV1beta2().Egresses().Create(ctx, &crdv1b2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+		Spec:       crdv1b2.EgressSpec{EgressIPs: []string{"1.1.1.1", "2001:db8::1"}, ExternalIPPool: "pool1"},
+	}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New("egressA"))
+	ips, node, err, assigned := s.GetEgressIPsAndNode("egressA")
+	assert.NoError(t, err)
+	assert.True(t, assigned)
+	assert.Equal(t, egress.Spec.EgressIPs, ips)
+	assert.Equal(t, "node1", node)
+
+	_, err = crdClient.CrdV1beta2().Egresses().Create(ctx, &crdv1b2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
+		Spec:       crdv1b2.EgressSpec{EgressIPs: []string{"1.1.1.11"}, ExternalIPPool: "pool1"},
+	}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New("egressB"))
+	assertScheduleResult(t, s, "egressB", "", "", false)
+
+	// Changing only the second IP must trigger scheduling and notify the controller even if the Node is unchanged.
+	egress.Spec.EgressIPs[1] = "2001:db8::2"
+	egress, err = crdClient.CrdV1beta2().Egresses().Update(ctx, egress, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New("egressA"))
+	ips, node, err, assigned = s.GetEgressIPsAndNode("egressA")
+	assert.NoError(t, err)
+	assert.True(t, assigned)
+	assert.Equal(t, egress.Spec.EgressIPs, ips)
+	assert.Equal(t, "node1", node)
+
+	// Removing the pool releases both IPs and reschedules Egresses waiting for capacity.
+	egress.Spec.ExternalIPPool = ""
+	_, err = crdClient.CrdV1beta2().Egresses().Update(ctx, egress, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB"))
+	assertScheduleResult(t, s, "egressA", "", "", false)
+	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
+
+	// Restoring the pool schedules the pair again, and deleting it releases capacity.
+	egress.Spec.ExternalIPPool = "pool1"
+	_, err = crdClient.CrdV1beta2().Egresses().Update(ctx, egress, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB"))
+	assert.NoError(t, crdClient.CrdV1beta2().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{}))
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB"))
+	assertScheduleResult(t, s, "egressA", "", "", false)
+	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
+}
+
 func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[string]) {
 	t.Helper()
 	receivedItems := sets.New[string]()
@@ -390,8 +565,12 @@ func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[
 
 func assertScheduleResult(t *testing.T, s *egressIPScheduler, egress, egressIP, egressNode string, scheduled bool) {
 	t.Helper()
-	gotEgressIP, gotEgressNode, _, gotScheduled := s.GetEgressIPAndNode(egress)
-	assert.Equal(t, egressIP, gotEgressIP)
+	gotEgressIPs, gotEgressNode, _, gotScheduled := s.GetEgressIPsAndNode(egress)
+	var expectedIPs []string
+	if egressIP != "" {
+		expectedIPs = []string{egressIP}
+	}
+	assert.Equal(t, expectedIPs, gotEgressIPs)
 	assert.Equal(t, egressNode, gotEgressNode)
 	assert.Equal(t, scheduled, gotScheduled)
 }
