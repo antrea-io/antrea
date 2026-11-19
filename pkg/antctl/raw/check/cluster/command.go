@@ -41,6 +41,7 @@ func Command() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the cluster checker")
+	command.Flags().StringVar(&o.cniConfDir, "cni-conf-dir", o.cniConfDir, "Host CNI configuration path override")
 	return command
 }
 
@@ -53,11 +54,14 @@ const (
 type options struct {
 	// Container image for the cluster checker.
 	testImage string
+	// CNI conf path on hosts (defaults to /etc/cni/net.d)
+	cniConfDir string
 }
 
 func newOptions() *options {
 	return &options{
-		testImage: check.DefaultTestImage,
+		testImage:  check.DefaultTestImage,
+		cniConfDir: check.DefaultCNIDir,
 	}
 }
 
@@ -92,6 +96,8 @@ type testContext struct {
 	testPod     *corev1.Pod
 	// Container image for the cluster checker.
 	testImage string
+	// CNI configuration directory on the host, mounted inside the container at /etc/cni/net.d.
+	cniConfDir string
 }
 
 func Run(o *options) error {
@@ -100,7 +106,7 @@ func Run(o *options) error {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o.testImage)
+	testContext := NewTestContext(client, config, clusterName, o.testImage, o.cniConfDir)
 	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
@@ -168,7 +174,7 @@ func (t *testContext) setup(ctx context.Context) error {
 				Name: "cni-conf",
 				VolumeSource: corev1.VolumeSource{
 					HostPath: &corev1.HostPathVolumeSource{
-						Path: "/etc/cni/net.d",
+						Path: t.cniConfDir,
 					},
 				},
 			},
@@ -211,7 +217,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	return nil
 }
 
-func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName, testImage string) *testContext {
+func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName, testImage, cniConfDir string) *testContext {
 	return &testContext{
 		Logger:      check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:      client,
@@ -219,6 +225,7 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		clusterName: clusterName,
 		namespace:   check.GenerateRandomNamespace(testNamespacePrefix),
 		testImage:   testImage,
+		cniConfDir:  cniConfDir,
 	}
 }
 
