@@ -35,7 +35,7 @@ Modifies:
 - Replace import utilfeature "k8s.io/apiserver/pkg/util/feature" with "antrea.io/antrea/v2/pkg/features".
 - Remove import "k8s.io/kubernetes/pkg/features".
 - Remove import "sort".
-- Infer locality from the local PodCIDR when an Endpoint has no nodeName.
+- Infer locality from the local PodCIDR or local Flexible IPAM Pod IPs when an Endpoint has no nodeName.
 - Change type of "EndpointsMap" from "map[ServicePortName][]Endpoint" to "map[ServicePortName]map[string]Endpoint".
 
 */
@@ -73,6 +73,7 @@ type EndpointSliceCache struct {
 	makeEndpointInfo makeEndpointFunc
 	nodeName         string
 	localPodCIDR     *net.IPNet
+	localPodIPs      sets.Set[string]
 }
 
 // endpointSliceTracker keeps track of EndpointSlices as they have been applied
@@ -89,8 +90,9 @@ type endpointSliceDataByName map[string]*endpointSliceData
 
 // endpointSliceData contains information about a single EndpointSlice update or removal.
 type endpointSliceData struct {
-	endpointSlice *discovery.EndpointSlice
-	remove        bool
+	endpointSlice    *discovery.EndpointSlice
+	localEndpointIPs sets.Set[string]
+	remove           bool
 }
 
 // NewEndpointSliceCache initializes an EndpointSliceCache.
@@ -102,6 +104,7 @@ func NewEndpointSliceCache(nodeName string, localPodCIDR *net.IPNet, makeEndpoin
 		trackerByServiceMap: map[types.NamespacedName]*endpointSliceTracker{},
 		nodeName:            nodeName,
 		localPodCIDR:        localPodCIDR,
+		localPodIPs:         sets.New[string](),
 		makeEndpointInfo:    makeEndpointInfo,
 	}
 }
@@ -127,7 +130,7 @@ func (cache *EndpointSliceCache) updatePending(endpointSlice *discovery.Endpoint
 		return false
 	}
 
-	esData := &endpointSliceData{endpointSlice, remove}
+	esData := &endpointSliceData{endpointSlice: endpointSlice, remove: remove}
 
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
@@ -143,6 +146,30 @@ func (cache *EndpointSliceCache) updatePending(endpointSlice *discovery.Endpoint
 	}
 
 	return changed
+}
+
+// UpdateLocalPodIPs updates the local Pod IPs used to infer Endpoint locality and queues all
+// applied EndpointSlices for reprocessing when the set changes.
+func (cache *EndpointSliceCache) UpdateLocalPodIPs(localPodIPs sets.Set[string]) bool {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+
+	if cache.localPodIPs.Equal(localPodIPs) {
+		return false
+	}
+	cache.localPodIPs = localPodIPs.Clone()
+
+	updated := false
+	for _, tracker := range cache.trackerByServiceMap {
+		for sliceName, sliceData := range tracker.applied {
+			if _, pending := tracker.pending[sliceName]; pending {
+				continue
+			}
+			tracker.pending[sliceName] = &endpointSliceData{endpointSlice: sliceData.endpointSlice}
+			updated = true
+		}
+	}
+	return updated
 }
 
 // checkoutChanges returns a map of all endpointsChanges that are
@@ -166,6 +193,7 @@ func (cache *EndpointSliceCache) checkoutChanges() map[types.NamespacedName]*end
 			if sliceData.remove {
 				delete(esTracker.applied, name)
 			} else {
+				sliceData.localEndpointIPs = cache.localEndpointIPsForSlice(sliceData.endpointSlice)
 				esTracker.applied[name] = sliceData
 			}
 
@@ -214,15 +242,29 @@ func (cache *EndpointSliceCache) endpointInfoByServicePort(serviceNN types.Names
 				Protocol:       *port.Protocol,
 			}
 
-			endpointInfoBySP[svcPortName] = cache.addEndpoints(&svcPortName, int(*port.Port), endpointInfoBySP[svcPortName], sliceData.endpointSlice.Endpoints)
+			endpointInfoBySP[svcPortName] = cache.addEndpoints(&svcPortName, int(*port.Port), endpointInfoBySP[svcPortName], sliceData.endpointSlice.Endpoints, sliceData.localEndpointIPs)
 		}
 	}
 
 	return endpointInfoBySP
 }
 
+func (cache *EndpointSliceCache) localEndpointIPsForSlice(endpointSlice *discovery.EndpointSlice) sets.Set[string] {
+	localIPs := sets.New[string]()
+	for _, endpoint := range endpointSlice.Endpoints {
+		if endpoint.NodeName != nil || len(endpoint.Addresses) == 0 {
+			continue
+		}
+		ip := utilnet.ParseIPSloppy(endpoint.Addresses[0])
+		if ip != nil && cache.localPodIPs.Has(ip.String()) {
+			localIPs.Insert(ip.String())
+		}
+	}
+	return localIPs
+}
+
 // addEndpoints adds an Endpoint for each unique endpoint.
-func (cache *EndpointSliceCache) addEndpoints(svcPortName *ServicePortName, portNum int, endpointSet map[string]Endpoint, endpoints []discovery.Endpoint) map[string]Endpoint {
+func (cache *EndpointSliceCache) addEndpoints(svcPortName *ServicePortName, portNum int, endpointSet map[string]Endpoint, endpoints []discovery.Endpoint, localEndpointIPs sets.Set[string]) map[string]Endpoint {
 	if endpointSet == nil {
 		endpointSet = map[string]Endpoint{}
 	}
@@ -240,6 +282,10 @@ func (cache *EndpointSliceCache) addEndpoints(svcPortName *ServicePortName, port
 		// including unallocated IPs. Treat these Endpoints as local.
 		if endpoint.NodeName == nil && cache.localPodCIDR != nil {
 			isLocal = cache.localPodCIDR.Contains(endpointIP)
+		}
+		// Flexible IPAM allocations can assign a local Pod an address outside the local PodCIDR.
+		if endpoint.NodeName == nil && !isLocal && localEndpointIPs != nil {
+			isLocal = localEndpointIPs.Has(endpointIP.String())
 		}
 
 		ready := endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready
