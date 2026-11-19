@@ -340,17 +340,17 @@ func (mr *MockInterfaceMockRecorder) DeleteRoutes(podCIDR any) *gomock.Call {
 }
 
 // DeleteSNATRule mocks base method.
-func (m *MockInterface) DeleteSNATRule(mark uint32) error {
+func (m *MockInterface) DeleteSNATRule(mark uint32, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSNATRule", mark)
+	ret := m.ctrl.Call(m, "DeleteSNATRule", mark, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSNATRule indicates an expected call of DeleteSNATRule.
-func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark, isIPv6)
 }
 
 // Initialize mocks base method.

@@ -524,16 +524,16 @@ func TestIpTablesSync(t *testing.T) {
 		routeClientOptions{})
 	require.NoError(t, err)
 
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
+	// Include the desired SNAT rule in initialization before testing periodic repair.
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 	inited := make(chan struct{})
 	err = routeClient.Initialize(nodeConfig, func() {
 		close(inited)
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
-
-	snatIP := net.ParseIP("1.1.1.1")
-	mark := uint32(1)
-	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
@@ -647,6 +647,9 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go routeClient.Run(ctx)
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
@@ -655,15 +658,17 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
 	// #nosec G204: ignore in test code
-	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
-	assert.Contains(t, string(actualData), expectedRule)
+	assert.Eventually(t, func() bool {
+		actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+		return err == nil && strings.Contains(string(actualData), expectedRule)
+	}, 5*time.Second, 50*time.Millisecond)
 
-	assert.NoError(t, routeClient.DeleteSNATRule(mark))
+	assert.NoError(t, routeClient.DeleteSNATRule(mark, false))
 	// #nosec G204: ignore in test code
-	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
-	assert.NotContains(t, string(actualData), expectedRule)
+	assert.Eventually(t, func() bool {
+		actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+		return err == nil && !strings.Contains(string(actualData), expectedRule)
+	}, 5*time.Second, 50*time.Millisecond)
 }
 
 func TestAddAndDeleteRoutes(t *testing.T) {

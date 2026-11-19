@@ -56,11 +56,11 @@ type Interface interface {
 	// if linkName is nil, it should remove the routes.
 	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
 
-	// AddSNATRule should add rule to SNAT outgoing traffic with the mark, using the provided SNAT IP.
+	// AddSNATRule schedules a rule to SNAT outgoing traffic with the mark, using the provided SNAT IP.
 	AddSNATRule(snatIP net.IP, mark uint32) error
 
-	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
-	DeleteSNATRule(mark uint32) error
+	// DeleteSNATRule schedules removal of the SNAT rule for the mark and IP family.
+	DeleteSNATRule(mark uint32, isIPv6 bool) error
 
 	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egresses to the cache.
 	RestoreEgressRoutesAndRules(minTableID, maxTableID int) error
