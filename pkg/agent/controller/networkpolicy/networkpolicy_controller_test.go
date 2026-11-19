@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,8 +41,10 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/networkpolicy/l7engine"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
@@ -178,6 +182,99 @@ func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {
 }
 
 var _ Reconciler = &mockReconciler{}
+
+func TestSyncRuleAddressUpdateFailure(t *testing.T) {
+	prepareMockTables()
+	tests := []struct {
+		name          string
+		policyType    v1beta2.NetworkPolicyType
+		statusEnabled bool
+	}{
+		{"Antrea NetworkPolicy", v1beta2.AntreaNetworkPolicy, true},
+		{"Antrea ClusterNetworkPolicy", v1beta2.AntreaClusterNetworkPolicy, true},
+		{"Kubernetes NetworkPolicy", v1beta2.K8sNetworkPolicy, true},
+		{"status disabled", v1beta2.AntreaNetworkPolicy, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _, _ := newTestController()
+			t.Cleanup(c.queue.ShutDown)
+			c.fqdnController = nil
+			c.statusManagerEnabled = tt.statusEnabled
+			sc := c.statusManager.(*StatusController)
+			t.Cleanup(sc.queue.ShutDown)
+			statusControl := &fakeNetworkPolicyControl{}
+			sc.statusControlInterface = statusControl
+			mockCtrl := gomock.NewController(t)
+			ofClient := openflowtest.NewMockClient(mockCtrl)
+			ifaceStore := interfacestore.NewInterfaceStore()
+			ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+				InterfaceName:            "pod1",
+				ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
+				OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+			})
+			c.podReconciler = newTestReconciler(t, mockCtrl, ifaceStore, ofClient, true, false)
+			policy := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, nil, []string{"appliedToGroup1"}, nil)
+			policy.SourceRef.Type = tt.policyType
+			policy.Generation = 1
+			policy.Priority = &policyPriority
+			policy.TierPriority = &tierPriority
+			action := v1beta1.RuleActionAllow
+			policy.Rules[0].Action = &action
+			c.ruleCache.AddNetworkPolicy(policy)
+			require.NoError(t, c.ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{
+				*newAppliedToGroupMemberPod("pod1", "ns1"),
+			})))
+			require.NoError(t, c.ruleCache.AddAddressGroup(newAddressGroup("addressGroup1", []v1beta2.GroupMember{
+				*newAddressGroupMember("1.1.1.1"),
+			})))
+			rules := c.ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
+			require.Len(t, rules, 1)
+			ruleID := rules[0].ID
+			expectStatus := tt.statusEnabled && tt.policyType != v1beta2.K8sNetworkPolicy
+			checkStatus := func(realizationErr error) {
+				t.Helper()
+				if !expectStatus {
+					assert.Zero(t, sc.queue.Len())
+					assert.Nil(t, statusControl.getNetworkPolicyStatus())
+					return
+				}
+				require.Equal(t, 1, sc.queue.Len())
+				require.True(t, sc.processNextWorkItem())
+				status := statusControl.getNetworkPolicyStatus()
+				require.NotNil(t, status)
+				assert.Equal(t, policy.Generation, status.Nodes[0].Generation)
+				assert.Equal(t, realizationErr != nil, status.Nodes[0].RealizationFailure)
+				if realizationErr == nil {
+					assert.Empty(t, status.Nodes[0].Message)
+				} else {
+					assert.Contains(t, status.Nodes[0].Message, realizationErr.Error())
+				}
+			}
+			ofClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).Return(nil)
+			require.NoError(t, c.syncRule(ruleID))
+			checkStatus(nil)
+
+			// A label change adds an address without changing the policy generation or rule ID.
+			_, err := c.ruleCache.PatchAddressGroup(&v1beta2.AddressGroupPatch{
+				ObjectMeta:        v1.ObjectMeta{Name: "addressGroup1"},
+				AddedGroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.2")},
+			})
+			require.NoError(t, err)
+			updateErr := errors.New("conjunctive match flow action limit exceeded")
+			addedAddresses := []agenttypes.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))}
+			ofClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), agenttypes.SrcAddress, addedAddresses, gomock.Any(), false, false).Return(updateErr)
+			err = c.syncRule(ruleID)
+			require.ErrorContains(t, err, updateErr.Error())
+			checkStatus(err)
+
+			// The normal retry must restore realization status after the address update succeeds.
+			ofClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), agenttypes.SrcAddress, addedAddresses, gomock.Any(), false, false).Return(nil)
+			require.NoError(t, c.syncRule(ruleID))
+			checkStatus(nil)
+		})
+	}
+}
 
 func newAddressGroup(name string, addresses []v1beta2.GroupMember) *v1beta2.AddressGroup {
 	return &v1beta2.AddressGroup{
