@@ -328,7 +328,7 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 				store := NewConntrackConnectionStore(nil, podStore, proxier, cfg)
 
 				dumper := &scriptedConntrack{entries: sc.entries(n, snat, step)}
-				p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil), 0, true, true, false)
+				p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil, nil), 0, true, true, false)
 				seen := false
 				for i := range numPolls {
 					conns, _, err := p.Poll()

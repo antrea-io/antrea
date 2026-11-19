@@ -890,7 +890,7 @@ read while `--follow` is running:
 |-------|---------|
 | `endTime`, `startTime` | When the flow ended and started, as RFC3339 timestamps (UTC) |
 | `sourceIP`, `destinationIP`, `sourcePort`, `destinationPort`, `protocol` | The addresses and transport ports of the endpoints, and the IP protocol number |
-| `sourcePodNamespace`, `sourcePodName`, `destinationPodNamespace`, `destinationPodName`, `sourceNodeName`, `destinationNodeName` | The Pods at the endpoints and their Nodes, empty for an endpoint that is not a Pod |
+| `sourcePodNamespace`, `sourcePodName`, `destinationPodNamespace`, `destinationPodName`, `sourceNodeName`, `destinationNodeName` | The Pods at the endpoints and their Nodes, empty for an endpoint that is not a Pod, except for `sourceNodeName` when the source is the host network of that Node |
 | `destinationServiceName`, `destinationServiceIP`, `destinationServicePort` | The destination Service, as `<namespace>/<name>:<port>`, its address and its port, empty without a Service |
 | `octetTotalCount`, `packetTotalCount`, `reverse...` | Cumulative bytes and packets in the direction of the flow, and in the reverse one |
 | `octetDeltaCount`, `packetDeltaCount`, `throughput`, `reverse...` | Bytes and packets, and average rate in bits per second, since the previous report |

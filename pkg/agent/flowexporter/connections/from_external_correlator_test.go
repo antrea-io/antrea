@@ -33,7 +33,7 @@ func contains(c *FromExternalCorrelator, conn *connection.Connection) bool {
 
 func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
-		store := NewFromExternalCorrelator(nil, nil)
+		store := NewFromExternalCorrelator(nil, nil, nil)
 		refTime := time.Now()
 		defaultZoneConn := &connection.Connection{
 			StartTime: refTime,
@@ -48,12 +48,12 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		store.add(defaultZoneConn, "")
+		store.add(defaultZoneConn, "", false)
 		assert.True(t, contains(store, defaultZoneConn), "Expected store to contain newly added connection")
 	})
 	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
-			store := NewFromExternalCorrelator(nil, nil)
+			store := NewFromExternalCorrelator(nil, nil, nil)
 			refTime := time.Now()
 			defaultZoneConn := &connection.Connection{
 				StartTime: refTime,
@@ -81,13 +81,13 @@ func TestFromExternalCorrelator(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
-			store.add(defaultZoneConn, "")
+			store.add(defaultZoneConn, "", false)
 			match, ok := store.popMatching(keyFromAntreaZoneConn(antreaZeroConn))
 			assert.True(t, ok, "Expected a matching default-zone connection to have been stored")
 			assert.Equal(t, defaultZoneSnapshotFromConn(defaultZoneConn), match)
 		})
 		t.Run("Does Not Have Match", func(t *testing.T) {
-			store := NewFromExternalCorrelator(nil, nil)
+			store := NewFromExternalCorrelator(nil, nil, nil)
 			refTime := time.Now()
 			defaultZoneConn := &connection.Connection{
 				StartTime: refTime,
@@ -116,13 +116,13 @@ func TestFromExternalCorrelator(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
-			store.add(defaultZoneConn, "")
+			store.add(defaultZoneConn, "", false)
 			_, ok := store.popMatching(keyFromAntreaZoneConn(antreaZeroConn))
 			assert.False(t, ok, "Expected store to return no match")
 		})
 	})
 	t.Run("Drops unmatched records at the end of the poll", func(t *testing.T) {
-		store := NewFromExternalCorrelator(nil, nil)
+		store := NewFromExternalCorrelator(nil, nil, nil)
 		refTime := time.Now()
 		defaultZoneConn := &connection.Connection{
 			StartTime: refTime,
@@ -250,7 +250,7 @@ func TestFromExternalCorrelator_CarryOver(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			correlator := NewFromExternalCorrelator(nil, nil)
+			correlator := NewFromExternalCorrelator(nil, nil, nil)
 			for i, p := range tc.polls {
 				var antreaZoneConns []*connection.Connection
 				if p.antreaZoneConn != nil {
@@ -371,9 +371,9 @@ func TestFromExternalCorrelator_ingestDefaultZoneFlow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var correlator *FromExternalCorrelator
 			if tc.name == "Nil Proxier" {
-				correlator = NewFromExternalCorrelator(nil, nil)
+				correlator = NewFromExternalCorrelator(nil, nil, nil)
 			} else {
-				correlator = NewFromExternalCorrelator(testProxier, nil)
+				correlator = NewFromExternalCorrelator(testProxier, nil, nil)
 			}
 			correlator.ingestDefaultZoneFlow(tc.conn)
 
@@ -415,7 +415,7 @@ func TestFromExternalCorrelator_NodePortLocal(t *testing.T) {
 	podIP := netip.MustParseAddr("10.244.2.2")
 	// The proxier does not know about NPL node ports, so GetServiceByIP always fails here.
 	npl := mockNPLQuerier{nodeIP: nodeIP.String(), nodePort: nplNodePort, protocol: "TCP", service: "default/npl-svc"}
-	correlator := NewFromExternalCorrelator(testProxier, npl)
+	correlator := NewFromExternalCorrelator(testProxier, npl, nil)
 
 	// Default-zone (pre-DNAT) NPL flow: client -> nodeIP:nplPort, DNAT'd to podIP:podPort, no SNAT.
 	defaultZoneConn := &connection.Connection{
@@ -467,7 +467,7 @@ func TestFromExternalCorrelator_NodePortLocal_NilProxier(t *testing.T) {
 	nodeIP := netip.MustParseAddr("172.18.0.5")
 	podIP := netip.MustParseAddr("10.244.2.2")
 	npl := mockNPLQuerier{nodeIP: nodeIP.String(), nodePort: nplNodePort, protocol: "TCP", service: "default/npl-svc"}
-	correlator := NewFromExternalCorrelator(nil, npl)
+	correlator := NewFromExternalCorrelator(nil, npl, nil)
 
 	defaultZoneConn := &connection.Connection{
 		Zone:                       DefaultZone,
@@ -514,7 +514,7 @@ func TestFromExternalCorrelator_NodePortLocal_WrongDstIP(t *testing.T) {
 	otherIP := netip.MustParseAddr("172.18.0.6")
 	podIP := netip.MustParseAddr("10.244.2.2")
 	npl := mockNPLQuerier{nodeIP: nodeIP.String(), nodePort: nplNodePort, protocol: "TCP", service: "default/npl-svc"}
-	correlator := NewFromExternalCorrelator(testProxier, npl)
+	correlator := NewFromExternalCorrelator(testProxier, npl, nil)
 
 	// Same node port and protocol as a real NPL mapping, but the destination IP is not this Node's IP.
 	unrelatedConn := &connection.Connection{
@@ -577,7 +577,7 @@ func TestFromExternalCorrelator_correlateIfExternal(t *testing.T) {
 		DestinationPodNamespace: "ns1",
 	}
 
-	correlator := NewFromExternalCorrelator(testProxier, nil)
+	correlator := NewFromExternalCorrelator(testProxier, nil, nil)
 
 	got := correlator.correlateIfExternal(nil)
 	assert.False(t, got, "Expected invalid connections to not get correlated")
@@ -665,7 +665,7 @@ func TestFromExternalCorrelator_DefaultZoneKeyWithoutProxySNAT(t *testing.T) {
 		ProxySnatPort:              0,
 		Mark:                       openflow.ServiceCTMark.GetValue(),
 	}
-	correlator := NewFromExternalCorrelator(testProxier, nil)
+	correlator := NewFromExternalCorrelator(testProxier, nil, nil)
 	correlator.ingestDefaultZoneFlow(conn)
 	key := keyFromDefaultZoneConn(conn)
 	_, exists := correlator.connections[key]
@@ -719,7 +719,7 @@ func TestFromExternalCorrelator_SingleNodeCorrelation(t *testing.T) {
 		OriginalDestinationPort:    80,
 	}
 
-	correlator := NewFromExternalCorrelator(testProxier, nil)
+	correlator := NewFromExternalCorrelator(testProxier, nil, nil)
 	correlator.ingestDefaultZoneFlow(defaultZoneConn)
 
 	correlated := correlator.correlateIfExternal(antreaZoneConn)
@@ -778,9 +778,9 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 		Mark:                       openflow.ServiceCTMark.GetValue(),
 	}
 
-	correlator := NewFromExternalCorrelator(nil, nil)
-	correlator.add(defaultZoneA, "")
-	correlator.add(defaultZoneB, "")
+	correlator := NewFromExternalCorrelator(nil, nil, nil)
+	correlator.add(defaultZoneA, "", false)
+	correlator.add(defaultZoneB, "", false)
 	assert.Len(t, correlator.connections, 2, "flows with different dstPorts must occupy separate map entries")
 
 	snatIP := netip.MustParseAddr("172.18.0.2")
@@ -866,9 +866,9 @@ func TestFromExternalCorrelator_NoCollisionNonSNATDifferentClients(t *testing.T)
 		Mark:                       openflow.ServiceCTMark.GetValue(),
 	}
 
-	correlator := NewFromExternalCorrelator(nil, nil)
-	correlator.add(defaultZoneA, "")
-	correlator.add(defaultZoneB, "")
+	correlator := NewFromExternalCorrelator(nil, nil, nil)
+	correlator.add(defaultZoneA, "", false)
+	correlator.add(defaultZoneB, "", false)
 	assert.Len(t, correlator.connections, 2, "non-SNAT flows from different clients must occupy separate map entries")
 
 	// Antrea-zone counterpart for flow A: no SNAT, so FlowKey.SourceAddress is the real external

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/netip"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
@@ -51,11 +52,24 @@ type ExternalCorrelator interface {
 // timestamps are available, the snapshot is never applied to a different conntrack entry that
 // reuses the same 5-tuple, such as a later host-to-Pod connection whose source is the gateway IP
 // and whose source port happens to match a past masquerade port (see antreaZoneConnIdentity).
+//
+// It also identifies the Antrea-zone connections initiated by the host network stack of this Node
+// (e.g., by kubelet, or by a hostNetwork Pod), when the IPs of this Node are provided (see
+// Correlate). This requires the default zone to be the host's conntrack table, which is only the
+// case on Linux.
 type FromExternalCorrelator struct {
 	proxier    proxy.ProxyQuerier
 	nplQuerier portcache.NPLQuerier
+	// nodeIPs holds the IPs of this Node known to the agent: its Node IPs, its transport IPs and
+	// its gateway IPs. As local addresses, they cannot be the original source address of a
+	// connection received by this Node, so a default-zone connection whose original source
+	// address is one of them was initiated by the host network stack of this Node.
+	nodeIPs sets.Set[netip.Addr]
 	// connections holds the default-zone snapshots ingested during the current poll.
 	connections map[correlatorKey]defaultZoneSnapshot
+	// hostNetworkConns holds the keys of the default-zone connections initiated by the host
+	// network of this Node ingested during the current poll (see hostNetworkKeyFromAntreaZoneConn).
+	hostNetworkConns map[correlatorKey]struct{}
 	// matched holds the snapshots used to correlate Antrea-zone connections during the previous
 	// poll, keyed by the identity of the Antrea-zone conntrack entry they were applied to.
 	matched map[antreaZoneConnIdentity]defaultZoneSnapshot
@@ -114,6 +128,13 @@ type defaultZoneSnapshot struct {
 	// string retained for NPL flows, so it does not meaningfully affect the compact-snapshot goal
 	// described above.
 	nplServicePortName string
+	// serviceUnresolved is true if the original destination was looked up at ingest time, and is
+	// neither a Service known to the proxier nor a NodePortLocal port (see
+	// connection.Connection.IsServiceUnresolved).
+	serviceUnresolved bool
+	// isFromHostNetworkTranslatedByHost is true if the connection was initiated by the host network
+	// of this Node, and translated by the host (see isTranslatedByHost).
+	isFromHostNetworkTranslatedByHost bool
 }
 
 func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapshot {
@@ -159,26 +180,60 @@ func antreaZoneConnIdentityFromConn(conn *connection.Connection, key correlatorK
 
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal maps initialized.
 // proxier is used for GetServiceByIP when ingesting default-zone flows; if nil, every default-zone
-// flow is retained without Service lookup.
+// flow is retained without Service lookup, except the flows initiated by the host network of this
+// Node which the host did not translate (see ingestDefaultZoneFlow).
 // nplQuerier is used to retain default-zone flows whose original destination is a NodePortLocal
 // node port (these are not registered in the proxier's Service map); it may be nil.
-func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier) *FromExternalCorrelator {
+// nodeIPs holds the IPs of this Node, used to identify the connections initiated by the host
+// network of this Node; if empty, these connections are not identified.
+func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier, nodeIPs sets.Set[netip.Addr]) *FromExternalCorrelator {
 	return &FromExternalCorrelator{
-		proxier:     proxier,
-		nplQuerier:  nplQuerier,
-		connections: map[correlatorKey]defaultZoneSnapshot{},
-		matched:     map[antreaZoneConnIdentity]defaultZoneSnapshot{},
-		nextMatched: map[antreaZoneConnIdentity]defaultZoneSnapshot{},
+		proxier:          proxier,
+		nplQuerier:       nplQuerier,
+		nodeIPs:          nodeIPs,
+		connections:      map[correlatorKey]defaultZoneSnapshot{},
+		hostNetworkConns: map[correlatorKey]struct{}{},
+		matched:          map[antreaZoneConnIdentity]defaultZoneSnapshot{},
+		nextMatched:      map[antreaZoneConnIdentity]defaultZoneSnapshot{},
 	}
 }
 
 // Correlate implements ExternalCorrelator.
+//
+// A default-zone connection was initiated by the host network of this Node if its original source
+// address is an IP of this Node (see isFromHostNetwork). Only the connections that the host sends
+// through antrea-gw0 have an Antrea-zone entry on this Node: the connections to local Pods, to
+// Services handled by AntreaProxy, and, when the traffic to the other Node is tunneled, to Pods
+// running on other Nodes. The host routes the other connections to Pods running on other Nodes
+// through the uplink (in noEncap mode, and in hybrid mode for Nodes in the same subnet) or through
+// antrea-wg0 (with WireGuard). For the traffic sent through antrea-gw0, the host selects the
+// gateway IP as the source address, unless the client is bound to another IP of this Node (e.g.,
+// a hostNetwork Pod using its Node IP), in which case the connection is masqueraded with the
+// gateway IP by the host (Antrea's "masquerade LOCAL traffic" rule, or kube-proxy for a Service).
+//
+// An Antrea-zone connection which is not correlated with a default-zone connection is marked as
+// initiated by the host network of this Node (IsFromHostNetwork) if the default zone has such an
+// entry for it. A connection initiated by the host is never identified from its Antrea-zone entry
+// alone, as an external connection masqueraded with the gateway IP has the same source address,
+// and its default-zone half may not have been retained (e.g., for a Service that AntreaProxy
+// ignores), or may already be gone (e.g., after an agent restart). Such a connection is not marked
+// at all.
+//
+// A connection correlated with a default-zone connection is also marked as initiated by the host
+// network of this Node if the default-zone connection is such an entry: the connection was
+// translated by the host (e.g., by kube-proxy for a Service, or by Antrea's masquerade rule). It
+// is still treated as a from-external connection, which reports the original source address and,
+// for a Service, the original destination. When OVS also translates the destination of such a
+// connection (i.e., for a Service handled by AntreaProxy with proxyAll), the default-zone entry is
+// keyed on the destination before that translation (see popMatchingTranslatedByHost).
 func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) {
 	for _, conn := range defaultZoneConns {
 		c.ingestDefaultZoneFlow(conn)
 	}
 	for _, conn := range antreaZoneConns {
-		c.correlateIfExternal(conn)
+		if !c.correlateIfExternal(conn) {
+			c.markIfFromHostNetwork(conn)
+		}
 	}
 	c.finishPoll()
 }
@@ -190,6 +245,7 @@ func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*
 // the poll are carried over to the next poll.
 func (c *FromExternalCorrelator) finishPoll() {
 	clear(c.connections)
+	clear(c.hostNetworkConns)
 	c.matched, c.nextMatched = c.nextMatched, c.matched
 	clear(c.nextMatched)
 }
@@ -231,12 +287,51 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 	}
 }
 
+// hostNetworkKeyFromAntreaZoneConn builds the key used to match an Antrea-zone connection with the
+// default-zone connection initiated by the host network of this Node, which is keyed with
+// keyFromDefaultZoneConn: the 5-tuple of the packets sent by the host to antrea-gw0, after any NAT
+// applied by the host. It is the 5-tuple of the packets received by OVS, before any NAT applied by
+// OVS (e.g., when AntreaProxy handles the traffic from the host to a ClusterIP), hence the use of
+// the original destination of the Antrea-zone connection. It is used both to identify these
+// connections (see markIfFromHostNetwork), and to correlate the ones also translated by the host
+// (see popMatchingTranslatedByHost).
+func hostNetworkKeyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
+	return correlatorKey{
+		srcIP:    conn.FlowKey.SourceAddress,
+		dstIP:    conn.OriginalDestinationAddress,
+		dstPort:  conn.OriginalDestinationPort,
+		protocol: conn.FlowKey.Protocol,
+		port:     conn.FlowKey.SourcePort,
+	}
+}
+
+// isFromHostNetwork returns whether a default-zone connection whose original source address is
+// srcIP was initiated by the host network stack of this Node.
+func (c *FromExternalCorrelator) isFromHostNetwork(srcIP netip.Addr) bool {
+	return c.nodeIPs.Has(srcIP)
+}
+
+// isTranslatedByHost returns whether the host applied SNAT or DNAT to the given default-zone
+// connection, e.g., when kube-proxy translates a connection to a ClusterIP.
+func isTranslatedByHost(conn *connection.Connection) bool {
+	return conn.ProxySnatIP.IsValid() ||
+		conn.OriginalDestinationAddress != conn.FlowKey.DestinationAddress ||
+		conn.OriginalDestinationPort != conn.FlowKey.DestinationPort
+}
+
 // ingestDefaultZoneFlow stores default-zone connections that may pair with Antrea-zone connections
-// during the current poll. Only connections that map to a Service (when proxier is non-nil) are
-// retained.
+// during the current poll. Only connections that map to a Service (when proxier is non-nil), and
+// connections initiated by the host network of this Node and translated by the host, are retained
+// for correlation. All the connections initiated by the host network of this Node are also
+// retained to be identified (see markIfFromHostNetwork).
 func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connection) {
 	if conn == nil || conn.Zone != DefaultZone {
 		return
+	}
+	// This is checked first, as these connections are not limited to the Service protocols.
+	isFromHostNetwork := c.isFromHostNetwork(conn.FlowKey.SourceAddress)
+	if isFromHostNetwork {
+		c.hostNetworkConns[keyFromDefaultZoneConn(conn)] = struct{}{}
 	}
 	// Original destination may be ClusterIP, NodePort, LoadBalancer IP, or ExternalIP.
 	// GetServiceByIP looks up the proxier's ipToServiceMap built from watched Kubernetes Service
@@ -275,17 +370,51 @@ func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connecti
 	if !serviceResolved && c.nplQuerier != nil {
 		nplServicePortName = c.nplQuerier.GetServiceForNPLPort(svcIP, int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6())
 	}
-	shouldStore := c.proxier == nil || serviceResolved || nplServicePortName != ""
-	if shouldStore {
-		c.add(conn, nplServicePortName)
+	// A flow resolved to a Service is always retained. Without a proxier, there is no way to tell
+	// whether a default-zone flow is a connection to a Service translated by the host (e.g., by
+	// kube-proxy), so every other default-zone flow is retained too, except the ones initiated by
+	// the host network of this Node. These are retained if and only if the host translated them,
+	// regardless of the proxier, so that the source address used by the host before SNAT (e.g., the
+	// Node IP of a hostNetwork Pod masqueraded by Antrea's "masquerade LOCAL traffic" rule) and the
+	// original destination (e.g., the ClusterIP of a Service that AntreaProxy ignores, or the Node
+	// IP and NodePort of a Service handled by AntreaProxy with proxyAll) are reported whether
+	// AntreaProxy is enabled or not, and whether it handles the Service or not (see
+	// popMatchingTranslatedByHost). Correlating the ones that the host did not translate
+	// would not change the 5-tuple, the original destination, or the source address of their
+	// Antrea-zone half, but would only treat them as from-external connections, while
+	// markIfFromHostNetwork identifies them anyway.
+	retainUnresolved := c.proxier == nil
+	if isFromHostNetwork {
+		retainUnresolved = isTranslatedByHost(conn)
+	}
+	isService := serviceResolved || nplServicePortName != ""
+	if isService || retainUnresolved {
+		// With a proxier, the original destination of a flow retained without being resolved
+		// to a Service is not one that the proxier knows about, so the connection store does
+		// not look it up again.
+		c.add(conn, nplServicePortName, c.proxier != nil && !isService)
+	}
+}
+
+// markIfFromHostNetwork sets IsFromHostNetwork on the given Antrea-zone connection if a
+// default-zone connection initiated by the host network of this Node and matching it was ingested
+// during the current poll. Unlike correlation with a from-external default-zone connection, this
+// does not change the 5-tuple of the connection, so if the default-zone connection disappears
+// first, the connection store keeps the classification made when it first stored the connection.
+func (c *FromExternalCorrelator) markIfFromHostNetwork(conn *connection.Connection) {
+	if conn == nil || conn.IsFromExternal || len(c.hostNetworkConns) == 0 {
+		return
+	}
+	if _, ok := c.hostNetworkConns[hostNetworkKeyFromAntreaZoneConn(conn)]; ok {
+		conn.IsFromHostNetwork = true
 	}
 }
 
 // correlateIfExternal returns true if it correlates the connection to its default-zone counterpart
 // to preserve the SNAT'd source IP. The default-zone snapshot is either one ingested during the
-// current poll (which only keeps Service flows), or, if the default-zone half of the connection is
-// no longer present, the snapshot used for this same Antrea-zone conntrack entry during the
-// previous poll.
+// current poll (see ingestDefaultZoneFlow for the flows that are retained), or, if the default-zone
+// half of the connection is no longer present, the snapshot used for this same Antrea-zone
+// conntrack entry during the previous poll.
 func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
 	if conn == nil || conn.IsFromExternal {
 		return false
@@ -293,6 +422,9 @@ func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 	key := keyFromAntreaZoneConn(conn)
 	identity := antreaZoneConnIdentityFromConn(conn, key)
 	snapshot, ok := c.popMatching(key)
+	if !ok {
+		snapshot, ok = c.popMatchingTranslatedByHost(conn)
+	}
 	if !ok {
 		// The default-zone conntrack entry is gone, typically because it expired right before the
 		// Antrea-zone entry, between the Antrea-zone dump and the default-zone dump of this poll.
@@ -305,14 +437,22 @@ func (c *FromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 	}
 	c.nextMatched[identity] = snapshot
 	correlateExternal(snapshot, conn)
+	// The connection may have been initiated by the host network of this Node, and translated by
+	// the host: see Correlate.
+	if c.isFromHostNetwork(snapshot.sourceIP) {
+		conn.IsFromHostNetwork = true
+	}
 	return true
 }
 
 // add stores the given default-zone connection along with the NPL Service name resolved for it (if
-// any; empty for non-NPL flows).
-func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string) {
+// any; empty for non-NPL flows), and whether its original destination was looked up and could not
+// be resolved to a Service.
+func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string, serviceUnresolved bool) {
 	snapshot := defaultZoneSnapshotFromConn(conn)
 	snapshot.nplServicePortName = nplServicePortName
+	snapshot.serviceUnresolved = serviceUnresolved
+	snapshot.isFromHostNetworkTranslatedByHost = c.isFromHostNetwork(conn.FlowKey.SourceAddress) && isTranslatedByHost(conn)
 	c.connections[keyFromDefaultZoneConn(conn)] = snapshot
 }
 
@@ -321,6 +461,32 @@ func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePort
 func (c *FromExternalCorrelator) popMatching(key correlatorKey) (defaultZoneSnapshot, bool) {
 	snapshot, exists := c.connections[key]
 	if !exists {
+		return defaultZoneSnapshot{}, false
+	}
+	delete(c.connections, key)
+	return snapshot, true
+}
+
+// popMatchingTranslatedByHost removes and returns the default-zone snapshot ingested during the
+// current poll for the given Antrea-zone connection, if the connection was initiated by the host
+// network of this Node and translated by both the host and OVS. This happens with proxyAll, when
+// the host masquerades a connection to a Service handled by AntreaProxy: e.g., a client bound to
+// the Node IP which connects to a ClusterIP, or any client which connects to <NodeIP>:<NodePort>,
+// whose destination the host also translates to the virtual NodePort DNAT IP. The default-zone
+// entry is then keyed on the destination before the translation applied by OVS, i.e., the original
+// destination of the Antrea-zone connection, rather than on the Endpoint (see
+// hostNetworkKeyFromAntreaZoneConn). The other default-zone entries matching this key are not
+// correlated:
+//   - The entries of connections from external clients to a NodePort with proxyAll, which are not
+//     initiated by the host network of this Node.
+//   - The entries of connections from the host network of this Node to a Service handled by
+//     AntreaProxy, that the host did not translate (e.g., from the gateway IP to a ClusterIP). As
+//     for the ones to a Pod (see ingestDefaultZoneFlow), they are identified by
+//     markIfFromHostNetwork instead.
+func (c *FromExternalCorrelator) popMatchingTranslatedByHost(conn *connection.Connection) (defaultZoneSnapshot, bool) {
+	key := hostNetworkKeyFromAntreaZoneConn(conn)
+	snapshot, exists := c.connections[key]
+	if !exists || !snapshot.isFromHostNetworkTranslatedByHost {
 		return defaultZoneSnapshot{}, false
 	}
 	delete(c.connections, key)
@@ -341,6 +507,7 @@ func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connecti
 	antreaZone.OriginalDestinationAddress = snap.originalDestinationIP
 	antreaZone.OriginalDestinationPort = snap.originalDestinationPort
 	antreaZone.IsFromExternal = true
+	antreaZone.IsServiceUnresolved = snap.serviceUnresolved
 	if snap.nplServicePortName != "" {
 		antreaZone.DestinationServicePortName = snap.nplServicePortName
 	}

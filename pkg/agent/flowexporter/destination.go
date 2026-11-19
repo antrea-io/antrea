@@ -23,6 +23,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -60,7 +61,12 @@ type DestinationConfig struct {
 	staleConnectionTimeout time.Duration
 
 	isNetworkPolicyOnly bool
-	tlsConfig           *api.FlowExporterTLSConfig
+	// localGatewayIPs holds the gateway IPs of this Node. The connections from one of them to a
+	// local Pod which are not identified as initiated by the host network of this Node are
+	// exported as FROM_EXTERNAL (see findFlowType). It is empty on Windows, where the connections
+	// initiated by the host network are never identified, and are not supported.
+	localGatewayIPs sets.Set[netip.Addr]
+	tlsConfig       *api.FlowExporterTLSConfig
 
 	// allowProtocolFilter specifies whether the incoming connections will be accepted
 	allowProtocolFilter []string
@@ -82,7 +88,10 @@ type Destination struct {
 	denyPriorityQueue *priorityqueue.ExpirePriorityQueue
 
 	nodeRouteController podSubnetChecker
-	egressQuerier       querier.EgressQuerier
+	// remotePodQuerier is nil when the connections initiated by the host network of this Node
+	// towards the Pods running on other Nodes are not reported.
+	remotePodQuerier connections.RemotePodQuerier
+	egressQuerier    querier.EgressQuerier
 
 	exp       exporter.Interface
 	connected bool
@@ -97,6 +106,7 @@ func NewDestination(
 	exporter exporter.Interface,
 	k8sClient kubernetes.Interface,
 	nodeRouteController podSubnetChecker,
+	remotePodQuerier connections.RemotePodQuerier,
 	podStore objectstore.PodStore,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
@@ -110,6 +120,7 @@ func NewDestination(
 		StaleConnectionTimeout: destinationConfig.staleConnectionTimeout,
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
+		RemotePodQuerier:       remotePodQuerier,
 	}
 	// External correlation is now done in the poller before connections are delivered to each
 	// destination's connection store, so no ExternalCorrelator is needed here.
@@ -127,6 +138,7 @@ func NewDestination(
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 
 		nodeRouteController: nodeRouteController,
+		remotePodQuerier:    remotePodQuerier,
 		egressQuerier:       egressQuerier,
 
 		exp:         exporter,
@@ -315,6 +327,9 @@ func (d *Destination) exportConn(conn *connection.Connection) error {
 }
 
 func (d *Destination) findFlowType(conn connection.Connection) uint8 {
+	if conn.IsFromHostNetwork {
+		return d.findHostNetworkFlowType(conn)
+	}
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if d.isNetworkPolicyOnly {
 		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
@@ -337,10 +352,23 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		if conn.DestinationPodNamespace == "" {
 			return utils.FlowTypeUnsupported
 		}
-		// The source IP is the remote node's gateway: this is the destination-node half of an
-		// inter-node FROM_EXTERNAL connection. Export it as INTER_NODE so the FlowAggregator can
-		// use the standard inter-node correlation path. The FlowAggregator will merge it with the
-		// FROM_EXTERNAL source-node record and restore the final flow type to FROM_EXTERNAL.
+		if d.localGatewayIPs.Has(conn.FlowKey.SourceAddress) {
+			// The source IP is the gateway IP of this Node, and the destination Pod runs on this
+			// Node: the connection came from outside the Pod network through antrea-gw0, but
+			// was neither correlated with a connection from an external client nor identified
+			// as initiated by the host network of this Node. For example, the host does not
+			// track its connections to LoadBalancer IPs and external IPs with proxyAll, the
+			// default-zone entry may already be gone when the connection is first polled, and
+			// the host may masquerade connections from external clients to a Service that
+			// AntreaProxy ignores. No other Node exports a record for the connection, so it is
+			// exported as FROM_EXTERNAL, without the source Node name.
+			return utils.FlowTypeFromExternal
+		}
+		// The source IP is the gateway IP of another Node: this is the destination-Node half of
+		// either an inter-Node FROM_EXTERNAL connection, or of a connection initiated by the host
+		// network of the other Node. Export it as INTER_NODE so the FlowAggregator can use the
+		// standard inter-Node correlation path. The FlowAggregator will merge it with the
+		// FROM_EXTERNAL source-Node record and restore the final flow type to FROM_EXTERNAL.
 		return utils.FlowTypeInterNode
 	}
 	if !srcIsPod {
@@ -359,6 +387,28 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		return utils.FlowTypeInterNode
 	}
 	return utils.FlowTypeIntraNode
+}
+
+// findHostNetworkFlowType returns the flow type of a connection initiated by the host network of
+// this Node, e.g., by kubelet or by a hostNetwork Pod (see connections.FromExternalCorrelator). The
+// source is not a Pod, so the connection is exported as FROM_EXTERNAL. If the destination Pod runs
+// on this Node, this is the only record for the flow. Otherwise, this is the source-Node half of
+// the flow, and the exporter sets the source Node name: the FlowAggregator correlates it with the
+// INTER_NODE record exported by the destination Node (see findFlowType). This is only possible if
+// the destination Node reports the connection with the same 5-tuple (see
+// connections.RemotePodQuerier), which also decides which of these connections the connection
+// store keeps.
+func (d *Destination) findHostNetworkFlowType(conn connection.Connection) uint8 {
+	// A local Pod is identified by name, as its IP may not belong to a Pod subnet.
+	if conn.DestinationPodName != "" {
+		return utils.FlowTypeFromExternal
+	}
+	// remotePodQuerier is nil in networkPolicyOnly mode, as the Pod subnets of the other Nodes are
+	// unknown, and when there is no NodeRouteController.
+	if d.remotePodQuerier != nil && d.remotePodQuerier.IsRemotePodIP(conn.FlowKey.DestinationAddress) {
+		return utils.FlowTypeFromExternal
+	}
+	return utils.FlowTypeUnsupported
 }
 
 func (d *Destination) fillEgressInfo(conn *connection.Connection) {

@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -332,28 +333,55 @@ func (f *fakePodSubnetChecker) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) 
 	return false, false
 }
 
+// fakeRemotePodQuerier is a test implementation of connections.RemotePodQuerier for a fixed set of
+// IPs of Pods running on other Nodes.
+type fakeRemotePodQuerier struct {
+	remotePodIPs sets.Set[netip.Addr]
+}
+
+func (f *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
+	return f.remotePodIPs.Has(ip)
+}
+
 func TestDestination_findFlowType(t *testing.T) {
 	podIP := netip.MustParseAddr("10.10.0.2")
 	podIP2 := netip.MustParseAddr("10.10.0.3")
+	podIPv6 := netip.MustParseAddr("fd00:10:10::2")
+	// The gateway IPs of this Node.
 	gwIP := netip.MustParseAddr("10.10.0.1")
+	gwIPv6 := netip.MustParseAddr("fd00:10:10::1")
+	// The gateway IP of another Node.
+	remoteGwIP := netip.MustParseAddr("10.10.1.1")
 	externalIP := netip.MustParseAddr("8.8.8.8")
 	// Not in fakePodSubnetChecker: simulates a Node host IP or other non-Pod, non-gateway address.
 	nodeHostIP := netip.MustParseAddr("192.168.1.10")
 
 	checker := &fakePodSubnetChecker{
 		results: map[netip.Addr]struct{ isPod, isGw bool }{
-			podIP:  {isPod: true, isGw: false},
-			podIP2: {isPod: true, isGw: false},
-			gwIP:   {isPod: true, isGw: true},
+			podIP:      {isPod: true, isGw: false},
+			podIP2:     {isPod: true, isGw: false},
+			podIPv6:    {isPod: true, isGw: false},
+			gwIP:       {isPod: true, isGw: true},
+			gwIPv6:     {isPod: true, isGw: true},
+			remoteGwIP: {isPod: true, isGw: true},
 		},
 	}
+	// podIP2 is the IP of a Pod running on another Node.
+	remotePods := &fakeRemotePodQuerier{remotePodIPs: sets.New(podIP2)}
+	// The other Node does not see the gateway IP of this Node as the source of the connections
+	// initiated by its host network, e.g., in noEncap mode.
+	untunneledRemotePods := &fakeRemotePodQuerier{}
 
 	tests := []struct {
 		name                string
 		isNetworkPolicyOnly bool
 		checker             podSubnetChecker
-		conn                connection.Connection
-		expectedFlowType    uint8
+		remotePodQuerier    connections.RemotePodQuerier
+		// noLocalGatewayIPs is true if the gateway IPs of this Node are not provided, as on
+		// Windows.
+		noLocalGatewayIPs bool
+		conn              connection.Connection
+		expectedFlowType  uint8
 	}{
 		{
 			name:                "NetworkPolicyOnly mode - IntraNode",
@@ -366,6 +394,44 @@ func TestDestination_findFlowType(t *testing.T) {
 			isNetworkPolicyOnly: true,
 			conn:                connection.Connection{SourcePodName: "podA", DestinationPodName: ""},
 			expectedFlowType:    utils.FlowTypeInterNode,
+		},
+		{
+			name:                "NetworkPolicyOnly mode - local host network to local Pod - FromExternal",
+			isNetworkPolicyOnly: true,
+			conn:                connection.Connection{DestinationPodName: "podB", IsFromHostNetwork: true},
+			expectedFlowType:    utils.FlowTypeFromExternal,
+		},
+		{
+			name:                "NetworkPolicyOnly mode - non-Pod source to local Pod - InterNode",
+			isNetworkPolicyOnly: true,
+			conn:                connection.Connection{DestinationPodName: "podB"},
+			expectedFlowType:    utils.FlowTypeInterNode,
+		},
+		{
+			// The Pod subnets of the other Nodes are unknown.
+			name:                "NetworkPolicyOnly mode - local host network to non-local IP - Unsupported",
+			isNetworkPolicyOnly: true,
+			checker:             checker,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP2},
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:             "Nil nodeRouteController - local host network to local Pod - FromExternal",
+			checker:          nil,
+			conn:             connection.Connection{DestinationPodName: "podB", IsFromHostNetwork: true},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:    "Nil nodeRouteController - local host network to non-local IP - Unsupported",
+			checker: nil,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP2},
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
 		},
 		{
 			name:             "Nil nodeRouteController - Unspecified",
@@ -412,23 +478,171 @@ func TestDestination_findFlowType(t *testing.T) {
 			expectedFlowType: utils.FlowTypeUnsupported,
 		},
 		{
-			name:    "Source is gateway with destination Pod namespace - InterNode (destination-node from-external)",
+			name:    "Source is remote gateway with destination Pod namespace - InterNode (destination-node from-external)",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: remoteGwIP, DestinationAddress: podIP},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+			},
+			// When the source is the gateway IP of another Node and the destination Pod is
+			// local, the agent exports FlowTypeInterNode so that the FlowAggregator can
+			// correlate it with the FROM_EXTERNAL source-node record without needing gateway IP
+			// knowledge.
+			expectedFlowType: utils.FlowTypeInterNode,
+		},
+		{
+			name:    "Source is remote gateway without destination Pod namespace - Unsupported",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey: connection.Tuple{SourceAddress: remoteGwIP, DestinationAddress: podIP},
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			// For example, a connection from the host network of this Node to a LoadBalancer
+			// IP with proxyAll, which the host does not track, or whose default-zone entry was
+			// already gone. No other Node exports a record for it.
+			name:    "Source is local gateway with destination Pod namespace - FromExternal",
 			checker: checker,
 			conn: connection.Connection{
 				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
 				DestinationPodNamespace: "default",
 				DestinationPodName:      "podB",
 			},
-			// When srcIsGw=true and the destination pod is local, the agent exports FlowTypeInterNode
-			// so that the FlowAggregator can correlate it with the FROM_EXTERNAL source-node record
-			// without needing gateway IP knowledge.
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:    "Source is local IPv6 gateway with destination Pod namespace - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: gwIPv6, DestinationAddress: podIPv6},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:              "Source is local gateway with destination Pod namespace without local gateway IPs - InterNode",
+			checker:           checker,
+			noLocalGatewayIPs: true,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+			},
 			expectedFlowType: utils.FlowTypeInterNode,
 		},
 		{
-			name:    "Source is gateway without destination Pod namespace - Unsupported",
+			name:    "Source is local gateway without destination Pod namespace - Unsupported",
 			checker: checker,
 			conn: connection.Connection{
 				FlowKey: connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:    "Source is local host network with local destination Pod - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+				IsFromHostNetwork:       true,
+			},
+			// Single-Node flow: the record needs no correlation in the FlowAggregator.
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:             "Source is local host network with remote destination Pod - FromExternal",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP2},
+				IsFromHostNetwork: true,
+			},
+			// Source-Node half of an inter-Node flow, correlated in the FlowAggregator with the
+			// INTER_NODE record exported by the destination Node.
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			// For example, a connection to a Service handled by AntreaProxy in noEncap mode,
+			// which the destination Node reports on its own.
+			name:             "Source is local host network with untunneled remote destination Pod - Unsupported",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP2},
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:             "Source is local host network with non-Pod destination - Unsupported",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: externalIP},
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			// For example, a local Pod whose IP is not allocated from the Pod subnet.
+			name:    "Source is local host network with local destination Pod outside Pod subnets - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: externalIP},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+				IsFromHostNetwork:       true,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:             "Source is local host network with gateway destination - Unsupported",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: gwIP},
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			// The connection was translated by the host (e.g., by kube-proxy), and correlated
+			// with its default-zone entry, which reports the IP used by the host before SNAT.
+			name:             "Source is local host network IP with remote destination Pod - FromExternal",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP2},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			// The connection store keeps the correlated connections, but they are only
+			// exported if the destination Node reports them with the same 5-tuple.
+			name:             "Source is local host network IP with untunneled remote destination Pod - Unsupported",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP2},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:             "Source is local host network IP with gateway destination - Unsupported",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: gwIP},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
 			},
 			expectedFlowType: utils.FlowTypeUnsupported,
 		},
@@ -462,11 +676,17 @@ func TestDestination_findFlowType(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			localGatewayIPs := sets.New(gwIP, gwIPv6)
+			if tc.noLocalGatewayIPs {
+				localGatewayIPs = nil
+			}
 			dest := &Destination{
 				DestinationConfig: DestinationConfig{
 					isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
+					localGatewayIPs:     localGatewayIPs,
 				},
 				nodeRouteController: tc.checker,
+				remotePodQuerier:    tc.remotePodQuerier,
 			}
 			flowType := dest.findFlowType(tc.conn)
 			assert.Equal(t, tc.expectedFlowType, flowType)

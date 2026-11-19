@@ -313,6 +313,58 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	}
 }
 
+func TestIPFIXExporter_sourceNodeName(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		sourcePodName      string
+		isFromHostNetwork  bool
+		expectedSourceNode string
+	}{
+		{
+			name:               "local source Pod",
+			sourcePodName:      "pod",
+			expectedSourceNode: "this-node",
+		},
+		{
+			name:               "host network of this Node",
+			isFromHostNetwork:  true,
+			expectedSourceNode: "this-node",
+		},
+		{
+			name: "source is neither a local Pod nor this Node",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
+			flowExp := &ipfixExporter{
+				elementsListv4: getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4),
+				templateIDv4:   testTemplateIDv4,
+				ipfixSet:       mockIPFIXSet,
+				nodeName:       "this-node",
+			}
+			conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+			conn.SourcePodName = tc.sourcePodName
+			conn.IsFromHostNetwork = tc.isFromHostNetwork
+
+			mockIPFIXSet.EXPECT().ResetSet()
+			mockIPFIXSet.EXPECT().PrepareSet(ipfixentities.Data, testTemplateIDv4).Return(nil)
+			mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
+			require.NoError(t, flowExp.addConnToSet(conn))
+
+			// addConnToSet updates elementsListv4 in place before sending it.
+			found := false
+			for _, ie := range flowExp.elementsListv4 {
+				if ie.GetInfoElement().Name == "sourceNodeName" {
+					found = true
+					assert.Equal(t, tc.expectedSourceNode, ie.GetStringValue())
+				}
+			}
+			assert.True(t, found, "sourceNodeName should be part of the exported elements")
+		})
+	}
+}
+
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other fields are set to dummy values

@@ -671,7 +671,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 		IsPresent:                  true,
 	}
 
-	fe := NewFromExternalCorrelator(nil, nil)
+	fe := NewFromExternalCorrelator(nil, nil, nil)
 	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 	// Default-zone snapshots live in the correlator (the poller calls Correlate in production).

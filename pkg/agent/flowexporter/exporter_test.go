@@ -16,6 +16,8 @@ package flowexporter
 
 import (
 	"context"
+	"net"
+	"net/netip"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -25,10 +27,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
@@ -255,13 +259,14 @@ func TestFlowExporter_createDestinationFromResource(t *testing.T) {
 						ClientSecret: &api.NamespacedName{Name: "client1", Namespace: "client2"},
 					},
 					allowProtocolFilter: []string{"udp"},
+					localGatewayIPs:     sets.New(netip.MustParseAddr("10.244.1.1")),
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fe := &FlowExporter{}
+			fe := &FlowExporter{localGatewayIPs: sets.New(netip.MustParseAddr("10.244.1.1"))}
 			got, err := fe.createDestinationFromResource(tt.res)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want.DestinationConfig, got.DestinationConfig)
@@ -633,4 +638,68 @@ func TestFlowExporter_pollerLifecycle(t *testing.T) {
 		synctest.Wait()
 		assert.False(t, fe.pollerRunning, "poller should stop after last destination is deleted")
 	})
+}
+
+// TestGetNodeIPs validates getNodeIPs and getGatewayIPs.
+func TestGetNodeIPs(t *testing.T) {
+	ipNet := func(ip string, prefixLen int) *net.IPNet {
+		parsed := net.ParseIP(ip)
+		return &net.IPNet{IP: parsed, Mask: net.CIDRMask(prefixLen, len(parsed)*8)}
+	}
+	tests := []struct {
+		name               string
+		nodeConfig         *config.NodeConfig
+		expected           sets.Set[netip.Addr]
+		expectedGatewayIPs sets.Set[netip.Addr]
+	}{
+		{
+			name: "dual-stack",
+			nodeConfig: &config.NodeConfig{
+				NodeIPv4Addr: ipNet("172.18.0.2", 16),
+				NodeIPv6Addr: ipNet("fd91:8054:ef1f::2", 64),
+				// The transport IPv6 address is also the Node IPv6 address.
+				NodeTransportIPv4Addr: ipNet("192.168.77.2", 24),
+				NodeTransportIPv6Addr: ipNet("fd91:8054:ef1f::2", 64),
+				GatewayConfig: &config.GatewayConfig{
+					// net.ParseIP returns the 16-byte representation of an IPv4 address.
+					IPv4: net.ParseIP("10.244.1.1"),
+					IPv6: net.ParseIP("fd00:10:244:1::1"),
+				},
+			},
+			expected: sets.New(
+				netip.MustParseAddr("172.18.0.2"),
+				netip.MustParseAddr("fd91:8054:ef1f::2"),
+				netip.MustParseAddr("192.168.77.2"),
+				netip.MustParseAddr("10.244.1.1"),
+				netip.MustParseAddr("fd00:10:244:1::1"),
+			),
+			expectedGatewayIPs: sets.New(
+				netip.MustParseAddr("10.244.1.1"),
+				netip.MustParseAddr("fd00:10:244:1::1"),
+			),
+		},
+		{
+			// In networkPolicyOnly mode, the gateway IP is the transport IP of the Node.
+			name: "networkPolicyOnly",
+			nodeConfig: &config.NodeConfig{
+				NodeIPv4Addr:          ipNet("172.18.0.2", 16),
+				NodeTransportIPv4Addr: ipNet("172.18.0.2", 16),
+				GatewayConfig:         &config.GatewayConfig{IPv4: net.ParseIP("172.18.0.2")},
+			},
+			expected:           sets.New(netip.MustParseAddr("172.18.0.2")),
+			expectedGatewayIPs: sets.New(netip.MustParseAddr("172.18.0.2")),
+		},
+		{
+			name:               "no IP",
+			nodeConfig:         &config.NodeConfig{},
+			expected:           sets.New[netip.Addr](),
+			expectedGatewayIPs: sets.New[netip.Addr](),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, getNodeIPs(tc.nodeConfig))
+			assert.Equal(t, tc.expectedGatewayIPs, getGatewayIPs(tc.nodeConfig))
+		})
+	}
 }

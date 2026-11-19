@@ -226,6 +226,36 @@ func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	return destinationNodeRecord, destinationNodeFlowKey
 }
 
+// generateHostNetworkSourceNodeFlowAndFlowKey returns the source-Node half of an inter-Node flow
+// initiated by the host network of the source Node (e.g., a hostNetwork Pod) towards a Pod running
+// on the destination Node. The host uses the IP of its gateway as the source address, and no SNAT
+// is applied, so the destination Node exports the same 5-tuple (see
+// generateDestinationNodeFlowAndFlowKey).
+func generateHostNetworkSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
+	sourceNodeRecord := &flowpb.Flow{
+		K8S: &flowpb.Kubernetes{
+			FlowType:       flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+			SourceNodeName: "source-node",
+			SourceNodeUid:  "source-node-uid",
+		},
+		Ip: &flowpb.IP{
+			Source:      gatewayIP,
+			Destination: podIP,
+		},
+		Transport: &flowpb.Transport{
+			ProtocolNumber:  6,
+			SourcePort:      52391,
+			DestinationPort: 80,
+		},
+		Stats:        &flowpb.Stats{},
+		ReverseStats: &flowpb.Stats{},
+		StartTs:      timestamppb.New(currTime),
+		EndTs:        timestamppb.New(currTime.Add(time.Minute)),
+	}
+	sourceNodeFlowKey, _ := getFlowKeyFromRecord(sourceNodeRecord)
+	return sourceNodeRecord, sourceNodeFlowKey
+}
+
 func newAggregationProcess() *aggregationProcess {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -1125,6 +1155,7 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 
 func TestIsSourceNodeFromExternalFlow(t *testing.T) {
 	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+	hostNetworkSourceNodeFlow, _ := generateHostNetworkSourceNodeFlowAndFlowKey()
 	destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
 	testCases := []struct {
 		name     string
@@ -1148,6 +1179,39 @@ func TestIsSourceNodeFromExternalFlow(t *testing.T) {
 		},
 		{"destination-node INTER_NODE flow", destinationNodeFlow, false},
 		{"source-node FROM_EXTERNAL flow", sourceNodeFlow, true},
+		{"source-node FROM_EXTERNAL flow from host network", hostNetworkSourceNodeFlow, true},
+		{
+			"FROM_EXTERNAL without destination Pod, ProxySnat IP or source Node",
+			&flowpb.Flow{K8S: &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL}},
+			false,
+		},
+		{
+			"FROM_EXTERNAL from host network with destination Pod (single-node)",
+			&flowpb.Flow{
+				K8S: &flowpb.Kubernetes{
+					FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+					SourceNodeName:          "node",
+					DestinationPodName:      "pod",
+					DestinationPodNamespace: "ns",
+					DestinationNodeName:     "node",
+				},
+			},
+			false,
+		},
+		{
+			// The source Node name is only a marker of the host network when there is no
+			// source Pod.
+			"FROM_EXTERNAL with source Pod and source Node",
+			&flowpb.Flow{
+				K8S: &flowpb.Kubernetes{
+					FlowType:           flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+					SourcePodName:      "pod",
+					SourcePodNamespace: "ns",
+					SourceNodeName:     "node",
+				},
+			},
+			false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1164,6 +1228,82 @@ func TestGetFlowKeyForSourceNodeFromExternalFlow(t *testing.T) {
 	// same map entry.
 	correlationKey, _ := getFlowKeyFromRecord(sourceNodeFlow)
 	assert.Equal(t, destFlowKey, correlationKey, "Correlation key for source-node flow should match destination-node FlowKey")
+
+	// When the source is the host network of the source Node, there is no SNAT: the record is
+	// keyed on its own 5-tuple, which is also the one of the destination-Node record.
+	hostNetworkSourceNodeFlow, _ := generateHostNetworkSourceNodeFlowAndFlowKey()
+	correlationKey, _ = getFlowKeyFromRecord(hostNetworkSourceNodeFlow)
+	assert.Equal(t, destFlowKey, correlationKey, "Correlation key for host network source-node flow should match destination-node FlowKey")
+}
+
+// TestAddOrUpdateRecordInMap_HostNetworkMerge validates the correlation of the two halves of an
+// inter-Node flow initiated by the host network of the source Node, regardless of the order in
+// which they are received.
+func TestAddOrUpdateRecordInMap_HostNetworkMerge(t *testing.T) {
+	for _, sourceFirst := range []bool{true, false} {
+		name := "destination node arrives first"
+		if sourceFirst {
+			name = "source node arrives first"
+		}
+		t.Run(name, func(t *testing.T) {
+			ap := newAggregationProcess()
+			sourceNodeRecord, sourceNodeFlowKey := generateHostNetworkSourceNodeFlowAndFlowKey()
+			destinationNodeRecord, destNodeFlowKey := generateDestinationNodeFlowAndFlowKey()
+			require.Equal(t, destNodeFlowKey, sourceNodeFlowKey, "Both halves must share the same correlation key")
+
+			first, firstKey, second, secondKey := sourceNodeRecord, sourceNodeFlowKey, destinationNodeRecord, destNodeFlowKey
+			if !sourceFirst {
+				first, firstKey, second, secondKey = destinationNodeRecord, destNodeFlowKey, sourceNodeRecord, sourceNodeFlowKey
+			}
+			ap.addOrUpdateRecordInMap(firstKey, first, true)
+			require.Equal(t, 1, len(ap.flowKeyRecordMap))
+			assert.False(t, ap.flowKeyRecordMap[*firstKey].ReadyToSend, "First half should wait for its peer")
+
+			ap.addOrUpdateRecordInMap(secondKey, second, true)
+			require.Equal(t, 1, len(ap.flowKeyRecordMap), "Should still have 1 entry after merge")
+			record, exists := ap.flowKeyRecordMap[*destNodeFlowKey]
+			require.True(t, exists, "Expected merged record under the correlation FlowKey")
+			assert.True(t, record.ReadyToSend, "Merged record should be ReadyToSend")
+			assert.True(t, record.areCorrelatedFieldsFilled, "Merged record should have its correlated fields filled")
+
+			merged := record.Record
+			assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, merged.K8S.FlowType)
+			assert.Equal(t, gatewayIP, merged.Ip.Source)
+			assert.Equal(t, uint32(52391), merged.Transport.SourcePort)
+			assert.Empty(t, merged.ProxySnatIp)
+			assert.Zero(t, merged.ProxySnatPort)
+			assert.Empty(t, merged.K8S.SourcePodName)
+			assert.Equal(t, "source-node", merged.K8S.SourceNodeName)
+			assert.Equal(t, "source-node-uid", merged.K8S.SourceNodeUid)
+			assert.Equal(t, "nginx-deployment-HASH", merged.K8S.DestinationPodName)
+			assert.Equal(t, "some-namespace", merged.K8S.DestinationPodNamespace)
+		})
+	}
+
+	t.Run("single-node flow from host network (no merge needed)", func(t *testing.T) {
+		ap := newAggregationProcess()
+		singleNodeRecord := &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				SourceNodeName:          "node",
+				DestinationPodName:      "nginx",
+				DestinationPodNamespace: "default",
+				DestinationNodeName:     "node",
+			},
+			Ip:           &flowpb.IP{Source: gatewayIP, Destination: podIP},
+			Transport:    &flowpb.Transport{ProtocolNumber: 6, SourcePort: 12345, DestinationPort: 80},
+			Stats:        &flowpb.Stats{},
+			ReverseStats: &flowpb.Stats{},
+			StartTs:      timestamppb.New(currTime),
+			EndTs:        timestamppb.New(currTime.Add(time.Minute)),
+		}
+		flowKey, isIPv4 := getFlowKeyFromRecord(singleNodeRecord)
+		ap.addOrUpdateRecordInMap(flowKey, singleNodeRecord, isIPv4)
+		require.Equal(t, 1, len(ap.flowKeyRecordMap))
+		record := ap.flowKeyRecordMap[*flowKey]
+		assert.True(t, record.ReadyToSend, "Single-node FROM_EXTERNAL should be ReadyToSend immediately")
+		assert.True(t, record.areCorrelatedFieldsFilled)
+	})
 }
 
 func TestAddOrUpdateRecordInMap_FromExternalMerge(t *testing.T) {
@@ -1212,6 +1352,45 @@ func TestAddOrUpdateRecordInMap_FromExternalMerge(t *testing.T) {
 		assert.Equal(t, nodeIP, record.Record.K8S.DestinationServiceIp)
 		assert.Equal(t, destinationServicePortName, record.Record.K8S.DestinationServicePortName)
 	})
+
+	// The host network of the source Node connects to a Service using one of its IPs (externalIP
+	// here) as the source address, and kube-proxy masquerades the connection with the gateway IP.
+	// The source-Node record also carries the source Node name, and must still be keyed on its
+	// ProxySnat address/port.
+	for _, sourceFirst := range []bool{true, false} {
+		name := "host network of the source Node with SNAT, destination node arrives first"
+		if sourceFirst {
+			name = "host network of the source Node with SNAT, source node arrives first"
+		}
+		t.Run(name, func(t *testing.T) {
+			ap := newAggregationProcess()
+			sourceNodeRecord, _ := generateSourceNodeFlowAndFlowKey()
+			sourceNodeRecord.K8S.SourceNodeName = "source-node"
+			sourceNodeRecord.K8S.SourceNodeUid = "source-node-uid"
+			sourceNodeFlowKey, _ := getFlowKeyFromRecord(sourceNodeRecord)
+			destinationNodeRecord, destNodeFlowKey := generateDestinationNodeFlowAndFlowKey()
+			require.Equal(t, destNodeFlowKey, sourceNodeFlowKey, "Both halves must share the same correlation key")
+
+			first, firstKey, second, secondKey := sourceNodeRecord, sourceNodeFlowKey, destinationNodeRecord, destNodeFlowKey
+			if !sourceFirst {
+				first, firstKey, second, secondKey = destinationNodeRecord, destNodeFlowKey, sourceNodeRecord, sourceNodeFlowKey
+			}
+			ap.addOrUpdateRecordInMap(firstKey, first, true)
+			ap.addOrUpdateRecordInMap(secondKey, second, true)
+			require.Equal(t, 1, len(ap.flowKeyRecordMap), "Should still have 1 entry after merge")
+			record, exists := ap.flowKeyRecordMap[*destNodeFlowKey]
+			require.True(t, exists, "Expected merged record under the correlation FlowKey")
+			assert.True(t, record.ReadyToSend, "Merged record should be ReadyToSend")
+			merged := record.Record
+			assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, merged.K8S.FlowType)
+			assert.Equal(t, externalIP, merged.Ip.Source)
+			assert.Equal(t, sourceNodeRecord.Transport.SourcePort, merged.Transport.SourcePort)
+			assert.Equal(t, "source-node", merged.K8S.SourceNodeName)
+			assert.Equal(t, "source-node-uid", merged.K8S.SourceNodeUid)
+			assert.Equal(t, "nginx-deployment-HASH", merged.K8S.DestinationPodName)
+			assert.Equal(t, destinationServicePortName, merged.K8S.DestinationServicePortName)
+		})
+	}
 
 	t.Run("single-node FROM_EXTERNAL (no merge needed)", func(t *testing.T) {
 		ap := newAggregationProcess()

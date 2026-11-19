@@ -17,6 +17,7 @@ package connections
 import (
 	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -43,6 +44,25 @@ type ConnectionStoreConfig struct {
 
 	NetworkPolicyReadyTime time.Time
 	AllowedProtocols       []string
+
+	// RemotePodQuerier is used by the conntrack connection store to identify the Pods running on
+	// other Nodes, so that it keeps the connections initiated by the host network stack of this
+	// Node towards them (these connections are identified by the FromExternalCorrelator). It may
+	// be nil, in which case these connections are ignored.
+	RemotePodQuerier RemotePodQuerier
+}
+
+// RemotePodQuerier identifies the Pods running on other Nodes, towards which this Node reports the
+// connections initiated by its host network.
+type RemotePodQuerier interface {
+	// IsRemotePodIP returns whether ip is the IP of a Pod running on another Node which receives
+	// the connections initiated by the host network of this Node with the gateway IP of this Node
+	// as the source address, i.e., when the traffic to that Node is tunneled, or encrypted with
+	// WireGuard. That Node then exports such a connection, with the same 5-tuple as this Node
+	// after any SNAT applied by this Node, as an Inter-Node flow, which the FlowAggregator
+	// correlates with the record exported by this Node. It returns false for the gateway IP of
+	// another Node.
+	IsRemotePodIP(ip netip.Addr) bool
 }
 
 type connectionStore struct {

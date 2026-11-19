@@ -156,8 +156,11 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 	} else {
 		flow.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_IDLE_TIMEOUT
 	}
-	// Add nodeName / nodeUID only for local Pods whose Pod names are resolved.
-	if conn.SourcePodName != "" {
+	// Add nodeName / nodeUID only for local Pods whose Pod names are resolved, and for the source
+	// of connections initiated by the host network of this Node. In the latter case, the source
+	// Node name is also what lets the FlowAggregator correlate the record with the one exported by
+	// the destination Node, when the destination Pod runs on another Node.
+	if conn.SourcePodName != "" || conn.IsFromHostNetwork {
 		flow.K8S.SourceNodeName = e.nodeName
 		flow.K8S.SourceNodeUid = e.nodeUID
 	}

@@ -828,7 +828,7 @@ func run(o *Options) error {
 			proxyQuerier,
 			k8sClient,
 			nodeRouteController,
-			networkConfig.TrafficEncapMode,
+			networkConfig,
 			nodeConfig,
 			v4Enabled,
 			v6Enabled,
