@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/endpointslice"
 	"antrea.io/antrea/v2/pkg/querier"
 )
 
@@ -464,19 +465,7 @@ func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *co
 			if ep.NodeName == nil {
 				continue
 			}
-			// Check the ready condition first to respect the Service's publishNotReadyAddresses setting.
-			// The ready condition is true when:
-			// - publishNotReadyAddresses is true (all endpoints are considered ready), OR
-			// - the endpoint is serving AND not terminating
-			// If ready is true (or nil, which means true), we can use this endpoint.
-			if ep.Conditions.Ready == nil || *ep.Conditions.Ready {
-				nodes.Insert(*ep.NodeName)
-				continue
-			}
-			// If ready is false, fall back to checking the serving condition directly.
-			// This handles cases where the endpoint might still be serving but is marked not ready
-			// (e.g., during termination but still draining connections).
-			if ep.Conditions.Serving == nil || *ep.Conditions.Serving {
+			if endpointslice.CanServe(ep) {
 				nodes.Insert(*ep.NodeName)
 			}
 		}
