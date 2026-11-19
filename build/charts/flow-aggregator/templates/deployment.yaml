@@ -158,6 +158,11 @@ spec:
         - name: certs
           mountPath: /etc/flow-aggregator/certs
           readOnly: true
+        {{- if eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true" }}
+        # The Unix socket on which the FlowStreamService is served to "antctl observe" run in this container.
+        - name: flowstream-socket
+          mountPath: /var/run/antrea/flow-aggregator
+        {{- end }}
         {{- if .Values.flowAggregator.securityContext }}
         securityContext:
           {{- toYaml .Values.flowAggregator.securityContext | nindent 10 }}
@@ -210,3 +215,7 @@ spec:
         hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
+      {{- if eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true" }}
+      - name: flowstream-socket
+        emptyDir: {}
+      {{- end }}

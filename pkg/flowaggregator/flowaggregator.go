@@ -77,6 +77,13 @@ type flowStreamProvider interface {
 	Run(lis net.Listener, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error
 }
 
+// localFlowStreamProvider is the interface used by flowAggregator to serve the FlowStreamService
+// to the processes of its own container, on a Unix socket.
+type localFlowStreamProvider interface {
+	ListenLocal(path string) (net.Listener, error)
+	RunLocal(lis net.Listener, stopCh <-chan struct{}) error
+}
+
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
 type exporterHandle struct {
 	exporter exporter.Runner
@@ -130,6 +137,9 @@ type flowAggregator struct {
 
 	recordBuffer      ringbuffer.BroadcastBuffer[*flowpb.Flow]
 	flowStreamService flowStreamProvider
+	// localFlowStreamService serves the same records to "antctl observe" run inside the Flow
+	// Aggregator's container, without the authentication and authorization of flowStreamService.
+	localFlowStreamService localFlowStreamProvider
 	// flowStreamAuthenticator authenticates FlowStreamService clients.
 	flowStreamAuthenticator *flowstreamservice.StreamServerAuthenticator
 	// flowStreamLimits are the concurrent stream caps the authenticator was built with.
@@ -233,6 +243,7 @@ func NewFlowAggregator(
 			return nil, fmt.Errorf("error when creating FlowStreamService: %w", err)
 		}
 		fa.flowStreamService = flowStreamService
+		fa.localFlowStreamService = flowstreamservice.NewLocalFlowStreamService(fa.recordBuffer)
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
@@ -394,6 +405,21 @@ func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 	}
 }
 
+// runLocalFlowStreamService serves the FlowStreamService to the Flow Aggregator's own container on a
+// Unix socket. Unlike the server of runFlowStreamService, it is not what the readiness and liveness
+// probes report on: it is a convenience for "antctl observe" run in the Pod, so a failure to start
+// it is logged, and the Flow Aggregator keeps running without it.
+func (fa *flowAggregator) runLocalFlowStreamService(stopCh <-chan struct{}) {
+	lis, err := fa.localFlowStreamService.ListenLocal(flowstreamservice.LocalSocketPath)
+	if err != nil {
+		klog.ErrorS(err, "The FlowStreamService could not be served to the Flow Aggregator container, \"antctl observe\" will not work inside the Pod")
+		return
+	}
+	if err := fa.localFlowStreamService.RunLocal(lis, stopCh); err != nil {
+		klog.ErrorS(err, "The FlowStreamService could not be served to the Flow Aggregator container, \"antctl observe\" will not work inside the Pod")
+	}
+}
+
 // updateFlowStreamServiceCertificate sets the FlowStreamService server certificate to the one held
 // by the certificate provider, and returns whether it succeeded. A failure is reported as
 // StateFailed: on a rotation, the server would otherwise keep presenting a certificate that the
@@ -450,6 +476,13 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		go func() {
 			defer wg.Done()
 			fa.runFlowStreamService(stopCh)
+		}()
+	}
+	if fa.localFlowStreamService != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fa.runLocalFlowStreamService(stopCh)
 		}()
 	}
 

@@ -102,14 +102,16 @@ const (
 //
 // The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not
 // authenticate, or with codes.Unavailable if its only credential is a client certificate and the
-// client CA bundle has not loaded yet. Only this package's own tests can build a service that skips authentication.
+// client CA bundle has not loaded yet. The only service that skips it is the one of
+// NewLocalFlowStreamService, which is served on a Unix socket of the Flow Aggregator's own
+// container, and this package's tests.
 //
 // The identity authenticated then decides what the client receives: every stream is authorized
 // with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
 // each Namespace the request names, and each endpoint of each record is disclosed only as far as
 // the client's permissions in that endpoint's Namespace reach (see authorization.go and
-// redaction.go). As with authentication, only this package's own tests can build a service that
-// skips it.
+// redaction.go). As with authentication, only the local service, and this package's tests,
+// skip it.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
 	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
@@ -148,7 +150,7 @@ type FlowStreamService struct {
 // connection.
 func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator, authorizer *Authorizer) (*FlowStreamService, error) {
 	if authenticator == nil {
-		return nil, fmt.Errorf("authenticator is required; only this package's tests may serve clients without authentication, via newFlowStreamServiceWithoutAuthentication")
+		return nil, fmt.Errorf("authenticator is required; only NewLocalFlowStreamService serves clients without authentication, and only on a Unix socket")
 	}
 	if authorizer == nil {
 		return nil, fmt.Errorf("authorizer is required; without one every authenticated client would receive every record unredacted")
@@ -165,7 +167,8 @@ func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authe
 // newFlowStreamServiceWithoutAuthentication creates a FlowStreamService that accepts every client
 // without authenticating it, and authorizes the streams it serves with authorizer, or does not
 // authorize them at all when that is nil. It exists for this package's tests, which have no API
-// server to validate credentials against. It is deliberately unexported.
+// server to validate credentials against, and for NewLocalFlowStreamService. It is deliberately
+// unexported.
 func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authorizer *Authorizer) *FlowStreamService {
 	return &FlowStreamService{
 		buffer:            buffer,
@@ -308,14 +311,20 @@ func (s *FlowStreamService) Run(lis net.Listener, stopCh <-chan struct{}, setSta
 	// trailers are queued behind data the client has not accepted. A connection still in its
 	// handshake holds the stop as well, for up to connectionTimeout. So once gracefulStopTimeout has
 	// passed, Stop closes every connection left, and their clients get Unavailable.
+	gracefulStop(server)
+	wg.Wait()
+	return nil
+}
+
+// gracefulStop stops server once its streams have ended, or closes them once gracefulStopTimeout has
+// passed. See Run for why it has to give up on them.
+func gracefulStop(server *grpc.Server) {
 	timer := time.AfterFunc(gracefulStopTimeout, func() {
 		klog.InfoS("Timed out waiting for FlowStreamService streams to end, closing them", "timeout", gracefulStopTimeout)
 		server.Stop()
 	})
 	defer timer.Stop()
 	server.GracefulStop()
-	wg.Wait()
-	return nil
 }
 
 // rejectUnaryRPC refuses every unary RPC. FlowStreamService is server-streaming only, so the

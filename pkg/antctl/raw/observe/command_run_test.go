@@ -29,6 +29,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -80,7 +81,7 @@ func setOptions(t *testing.T, opts options) {
 }
 
 // discoveryFlags are the flags that runE rejects in the Flow Aggregator Pod.
-var discoveryFlags = []string{"flow-aggregator-address", "flow-aggregator", "flow-aggregator-namespace", "connection-mode"}
+var discoveryFlags = []string{"flow-aggregator-address", "flow-aggregator", "flow-aggregator-namespace", "connection-mode", "insecure-skip-tls-verify"}
 
 // newRunCommand returns a command to run runE with. It has the flags that runE, and the code it calls,
 // read from the command itself rather than from options. Its standard output goes to stdout, and what
@@ -165,6 +166,26 @@ func startFlowStreamService(t *testing.T, handle flowStreamHandler) (string, []b
 	go func() { _ = server.Serve(lis) }()
 	t.Cleanup(server.Stop)
 	return lis.Addr().String(), certPEM
+}
+
+// startLocalFlowStreamService serves handle without TLS on a Unix socket, as the Flow Aggregator does for
+// the processes of its own container, and makes observe look for it there.
+func startLocalFlowStreamService(t *testing.T, handle flowStreamHandler) {
+	t.Helper()
+	// Unix socket paths are limited to about 100 characters, which the directory of t.TempDir can exceed.
+	dir, err := os.MkdirTemp("", "fs")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "flowstream.sock")
+	lis, err := net.Listen("unix", path)
+	require.NoError(t, err)
+	server := grpc.NewServer()
+	flowpb.RegisterFlowStreamServiceServer(server, &fakeFlowStreamService{handle: handle})
+	go func() { _ = server.Serve(lis) }()
+	t.Cleanup(server.Stop)
+	saved := flowStreamSocketPath
+	flowStreamSocketPath = path
+	t.Cleanup(func() { flowStreamSocketPath = saved })
 }
 
 // writeKubeconfig writes a kubeconfig for a cluster whose API server serves caPEM as the CA ConfigMap of
@@ -327,14 +348,6 @@ func TestRunE_RefusesWhatCannotWork(t *testing.T) {
 		}
 	})
 
-	t.Run("the Flow Aggregator Pod without the credentials of its Pod", func(t *testing.T) {
-		withRuntimeMode(t, runtime.ModeFlowAggregator, true)
-		t.Setenv("KUBERNETES_SERVICE_HOST", "")
-		t.Setenv("KUBERNETES_SERVICE_PORT", "")
-		err := run(t, remoteOptions(), "", nil)
-		assert.ErrorContains(t, err, "failed to load in-cluster config")
-	})
-
 	t.Run("an address and a Service that name the same thing twice", func(t *testing.T) {
 		withRuntimeMode(t, runtime.ModeController, false)
 		opts := remoteOptions()
@@ -470,6 +483,54 @@ func TestRunE_Stream(t *testing.T) {
 				assert.Empty(t, received, "the server must not receive credentials without an explicit trust decision")
 			})
 		}
+	})
+
+	t.Run("in the Flow Aggregator Pod, it connects to the socket of its own container with no credentials", func(t *testing.T) {
+		if goruntime.GOOS == "windows" {
+			t.Skip("gRPC cannot dial a Unix socket path of Windows")
+		}
+		received := make(chan receivedRequest, 1)
+		startLocalFlowStreamService(t, serveFlows(received, []*flowpb.Flow{testFlow()}))
+		withRuntimeMode(t, runtime.ModeFlowAggregator, true)
+		// Neither a kubeconfig, nor an API server to reach, nor a ServiceAccount token is needed.
+		t.Setenv("KUBERNETES_SERVICE_HOST", "")
+		t.Setenv("KUBERNETES_SERVICE_PORT", "")
+		setOptions(t, options{direction: "both", output: "json"})
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var stdout bytes.Buffer
+		cmd, stderr := newRunCommand(ctx, "", &stdout)
+
+		require.NoError(t, runE(cmd, nil))
+
+		records := decodeRecords(t, stdout.String())
+		require.Len(t, records, 1)
+		assert.Equal(t, "perftest-a", records[0].SourcePodName)
+		assert.Contains(t, stderr.String(), "connecting to its own FlowStreamService at "+flowStreamSocketPath)
+		assert.Empty(t, receive(t, received).authorization, "there is no identity to forward")
+	})
+
+	t.Run("in the Flow Aggregator Pod, a missing socket is explained", func(t *testing.T) {
+		if goruntime.GOOS == "windows" {
+			t.Skip("gRPC cannot dial a Unix socket path of Windows")
+		}
+		withRuntimeMode(t, runtime.ModeFlowAggregator, true)
+		// A short path: Unix socket paths are limited to about 100 characters.
+		dir, err := os.MkdirTemp("", "fs")
+		require.NoError(t, err)
+		t.Cleanup(func() { os.RemoveAll(dir) })
+		saved := flowStreamSocketPath
+		flowStreamSocketPath = filepath.Join(dir, "missing.sock")
+		t.Cleanup(func() { flowStreamSocketPath = saved })
+		setOptions(t, options{direction: "both", output: "json"})
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd, _ := newRunCommand(ctx, "", io.Discard)
+
+		err = runE(cmd, nil)
+
+		assert.ErrorContains(t, err, "cannot be reached at "+flowStreamSocketPath)
+		assert.ErrorContains(t, err, "flowStreamService.enable")
 	})
 
 	t.Run("impersonation is rejected before fetching the CA or contacting the Flow Aggregator", func(t *testing.T) {

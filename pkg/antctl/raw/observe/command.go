@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -37,7 +38,6 @@ import (
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/v2/pkg/util/env"
 )
 
 // Command is the observe command implementation.
@@ -227,7 +227,7 @@ func runObserve(ctx context.Context, cmd *cobra.Command) error {
 	if inPod {
 		// None of these mean anything once there is nothing to discover and nowhere to tunnel
 		// to: silently ignoring them would be more surprising than rejecting them outright.
-		for _, flag := range []string{"flow-aggregator-address", "flow-aggregator", "flow-aggregator-namespace", "connection-mode"} {
+		for _, flag := range []string{"flow-aggregator-address", "flow-aggregator", "flow-aggregator-namespace", "connection-mode", "insecure-skip-tls-verify"} {
 			if cmd.Flags().Changed(flag) {
 				return fmt.Errorf("--%s cannot be used when running inside the Flow Aggregator Pod: "+
 					"there is nothing to discover or connect to but this instance's own FlowStreamService", flag)
@@ -267,41 +267,36 @@ func runObserve(ctx context.Context, cmd *cobra.Command) error {
 		return err
 	}
 
-	// In-Pod, use the Pod's own ServiceAccount identity directly rather than resolving a
-	// kubeconfig (there is no kubeconfig file to find, and none should be looked for): this is
-	// also what makes credentialForFlowAggregator forward this Pod's own ServiceAccount token
-	// as-is below (the in-cluster config sets BearerToken), rather than laundering any other
-	// credential through it.
+	// In-Pod, observe talks to the FlowStreamService that the Flow Aggregator serves to its own
+	// container on a Unix socket, which neither needs a credential nor a connection to the API
+	// server. Only a remote observe has a kubeconfig to resolve, and an identity to forward.
+	var cred *flowAggregatorCredential
 	var kubeconfig *rest.Config
-	if inPod {
-		kubeconfig, err = rest.InClusterConfig()
-		if err != nil {
-			return fmt.Errorf("failed to load in-cluster config: %w", err)
-		}
-	} else {
+	var k8sClientset kubernetes.Interface
+	if !inPod {
 		kubeconfig, err = raw.ResolveKubeconfig(cmd)
 		if err != nil {
 			return err
 		}
-	}
-	// --server takes precedence over the endpoint of the kubeconfig, as for supportbundle: it is the
-	// API server that the Flow Aggregator is discovered through, and the tunnel goes through.
-	if server, _ := cmd.Flags().GetString("server"); server != "" {
-		kubeconfig.Host = server
-	}
-	if kubeconfig.Impersonate.UserName != "" || kubeconfig.Impersonate.UID != "" ||
-		len(kubeconfig.Impersonate.Groups) > 0 || len(kubeconfig.Impersonate.Extra) > 0 {
-		return fmt.Errorf("observe does not support kubeconfig impersonation: the Flow Aggregator would authenticate the underlying credentials instead of the impersonated identity")
-	}
-	// Only the kubeconfig is needed to tell whether its credential can be forwarded, so a credential
-	// that cannot, such as an exec plugin or OIDC, is refused before discovery and connecting.
-	cred, err := credentialForFlowAggregator(kubeconfig)
-	if err != nil {
-		return err
-	}
-	k8sClientset, _, err := raw.SetupClients(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+		// --server takes precedence over the endpoint of the kubeconfig, as for supportbundle: it is the
+		// API server that the Flow Aggregator is discovered through, and the tunnel goes through.
+		if server, _ := cmd.Flags().GetString("server"); server != "" {
+			kubeconfig.Host = server
+		}
+		if kubeconfig.Impersonate.UserName != "" || kubeconfig.Impersonate.UID != "" ||
+			len(kubeconfig.Impersonate.Groups) > 0 || len(kubeconfig.Impersonate.Extra) > 0 {
+			return fmt.Errorf("observe does not support kubeconfig impersonation: the Flow Aggregator would authenticate the underlying credentials instead of the impersonated identity")
+		}
+		// Only the kubeconfig is needed to tell whether its credential can be forwarded, so a credential
+		// that cannot, such as an exec plugin or OIDC, is refused before discovery and connecting.
+		cred, err = credentialForFlowAggregator(kubeconfig)
+		if err != nil {
+			return err
+		}
+		k8sClientset, _, err = raw.SetupClients(kubeconfig)
+		if err != nil {
+			return fmt.Errorf("failed to create Kubernetes client: %w", err)
+		}
 	}
 
 	req, err := buildRequest(o)
@@ -312,49 +307,46 @@ func runObserve(ctx context.Context, cmd *cobra.Command) error {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
 	}
 
-	if o.insecureSkipTLSVerify {
-		fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: --insecure-skip-tls-verify is set: the identity of the Flow Aggregator is not "+
-			"verified, so whoever answers at the address used receives your credentials, including a bearer token")
-	}
-	// The TLS configuration is needed before connecting, because a direct connection is only
-	// accepted once the peer has passed TLS verification (see tlsDirectDialer). It depends on the
-	// Flow Aggregator's Namespace, which discovery may be what finds out.
-	buildTLS := func(namespace string) (*tls.Config, error) {
-		return buildTLSConfig(ctx, configMapCAReader{client: k8sClientset}, namespace,
-			flowAggregatorServerName(namespace), o.insecureSkipTLSVerify)
-	}
-
 	var ep *endpoint
-	var tlsConfig *tls.Config
+	// What the connection is secured with, and what is sent over it to authenticate. In-Pod, the
+	// socket is what restricts access, and there is nothing to authenticate with.
+	var transportCreds credentials.TransportCredentials
+	callCtx := ctx
 	if inPod {
-		ep = directEndpoint(net.JoinHostPort("127.0.0.1", fmt.Sprint(flowStreamPort)))
-		// The CA ConfigMap and the server certificate's SAN both live in/name this Pod's own
-		// Namespace (see getFlowAggregatorServerNames in pkg/flowaggregator/certificate/provider.go,
-		// which reads the same POD_NAMESPACE env var env.GetPodNamespace does) — there is no
-		// discovery step here to have found it another way.
-		tlsConfig, err = buildTLS(env.GetPodNamespace())
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Running inside the Flow Aggregator Pod; connecting to its own FlowStreamService at %s\n", ep.addr)
+		ep = directEndpoint("unix://" + flowStreamSocketPath)
+		transportCreds = insecure.NewCredentials()
+		fmt.Fprintf(cmd.ErrOrStderr(), "Running inside the Flow Aggregator Pod; connecting to its own FlowStreamService at %s\n", flowStreamSocketPath)
 	} else {
+		if o.insecureSkipTLSVerify {
+			fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: --insecure-skip-tls-verify is set: the identity of the Flow Aggregator is not "+
+				"verified, so whoever answers at the address used receives your credentials, including a bearer token")
+		}
+		// The TLS configuration is needed before connecting, because a direct connection is only
+		// accepted once the peer has passed TLS verification (see tlsDirectDialer). It depends on the
+		// Flow Aggregator's Namespace, which discovery may be what finds out.
+		buildTLS := func(namespace string) (*tls.Config, error) {
+			return buildTLSConfig(ctx, configMapCAReader{client: k8sClientset}, namespace,
+				flowAggregatorServerName(namespace), o.insecureSkipTLSVerify)
+		}
+		var tlsConfig *tls.Config
 		ep, tlsConfig, err = connect(ctx, o, k8sClientset, kubeconfig, mode, buildTLS, cmd.ErrOrStderr())
 		if err != nil {
 			return fmt.Errorf("failed to connect to the Flow Aggregator: %w", err)
 		}
+		// A client certificate is presented during the TLS handshake. It is end to end between observe
+		// and the Flow Aggregator, so it works unchanged through the tunnel.
+		tlsConfig.GetClientCertificate = cred.getClientCertificate
+		transportCreds = credentials.NewTLS(tlsConfig)
+		callCtx = metadata.NewOutgoingContext(ctx, cred.metadata)
 	}
 	defer ep.release()
-
-	// A client certificate is presented during the TLS handshake. It is end to end between observe
-	// and the Flow Aggregator, so it works unchanged through the tunnel.
-	tlsConfig.GetClientCertificate = cred.getClientCertificate
 
 	// Keepalives matter here specifically because observe must exit promptly on disconnect.
 	// Without them, a peer that disappears without a clean TCP close (e.g. its Pod is deleted outright, rather
 	// than given time to send a FIN) can leave this connection looking alive indefinitely: with
 	// no data flowing and no keepalive probes, nothing tells the client the peer is gone.
 	conn, err := grpc.NewClient(ep.addr,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithTransportCredentials(transportCreds),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:    flowStreamKeepaliveTime,
 			Timeout: 5 * time.Second,
@@ -366,12 +358,16 @@ func runObserve(ctx context.Context, cmd *cobra.Command) error {
 	defer conn.Close()
 
 	client := flowpb.NewFlowStreamServiceClient(conn)
-	stream, err := client.GetFlows(metadata.NewOutgoingContext(ctx, cred.metadata), req)
+	stream, err := client.GetFlows(callCtx, req)
 	if err != nil {
 		// The stream can fail to start because of the tunnel as well, for instance with a
 		// handshake that fails because the connection was closed under it.
 		if tunnelErr := tunnelLostError(err, ep.lost); tunnelErr != nil {
 			return tunnelErr
+		}
+		if inPod {
+			// Nothing listens on the socket if the Flow Aggregator does not serve it.
+			return rejectedRequestError(err, o, inPod)
 		}
 		return fmt.Errorf("failed to start flow stream: %w", err)
 	}
@@ -453,10 +449,13 @@ func tunnelLostError(err error, tunnelLost <-chan error) error {
 // message is always kept; what is added is what the user can do about it.
 func rejectedRequestError(err error, o *options, inPod bool) error {
 	switch status.Code(err) {
-	case codes.Unauthenticated:
+	case codes.Unavailable:
 		if inPod {
-			return fmt.Errorf("the Flow Aggregator did not accept the ServiceAccount token of this Pod: %w", err)
+			return fmt.Errorf("the FlowStreamService of this Flow Aggregator cannot be reached at %s: %w\n"+
+				"It may be disabled (flowStreamService.enable), or its socket could not be created: see the logs of the Flow Aggregator", flowStreamSocketPath, err)
 		}
+		return fmt.Errorf("failed to start flow stream: %w", err)
+	case codes.Unauthenticated:
 		return fmt.Errorf("the Flow Aggregator did not accept the credentials in your kubeconfig: %w\n"+
 			"It accepts a bearer token, or a client certificate signed by the cluster's client CA", err)
 	case codes.PermissionDenied:
