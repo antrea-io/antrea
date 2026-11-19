@@ -34,6 +34,7 @@ func GenerateTableElementWithSummary(list []string, maxColumnLength int) string 
 			element += summary
 			if len(element) > maxColumnLength {
 				newEle := ""
+				shown := 0
 				for i, ele := range list {
 					val := ele
 					if i != 0 {
@@ -43,8 +44,11 @@ func GenerateTableElementWithSummary(list []string, maxColumnLength int) string 
 						break
 					}
 					newEle += val
+					shown++
 				}
-				newEle += summary
+				// Fewer elements may fit once the summary is accounted for, so count the
+				// remaining elements again.
+				newEle += fmt.Sprintf(" + %d more...", len(list)-shown)
 				return newEle
 			}
 			break

@@ -214,7 +214,7 @@ foo2
 				},
 			},
 			expected: `NAME       POD-IPS                                            NODE-IPS
-GroupName1 10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more... <NONE>  
+GroupName1 10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 3 more... <NONE>  
 GroupName2 <NONE>                                             <NONE>  
 `,
 		},
@@ -241,7 +241,7 @@ GroupName2 <NONE>                                             <NONE>
 			},
 			expected: `NAME                    POD-IPS                                            NODE-IPS                                     
 AddressGroupNameHasNode <NONE>                                             10.176.27.105,127.0.0.1,127.0.0.3,192.168.0.1
-AddressGroupNameHasPod  10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more... <NONE>                                       
+AddressGroupNameHasPod  10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 3 more... <NONE>                                       
 AddressGroupNameNone    <NONE>                                             <NONE>                                       
 `,
 		},
