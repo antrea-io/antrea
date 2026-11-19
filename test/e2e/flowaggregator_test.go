@@ -2386,6 +2386,17 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 				assert.Contains(record, nodePortService, "Aggregated Record does not have service information")
 				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
 				assertIPFIXRecordProxySnatSet(t, record, isIPv6)
+				if tc.node == destinationNodeIndex {
+					continue
+				}
+				// The source Node forwarded the connection to the destination Node, which
+				// does not see the external client: both Nodes reported the connection,
+				// whether the traffic is tunneled or not.
+				for _, field := range []string{"octetTotalCountFromSourceNode", "octetTotalCountFromDestinationNode"} {
+					value, ok := ipfixRecordFieldValue(record, field)
+					assert.Truef(ok, "Record has no %s field", field)
+					assert.NotEqualf("0", value, "Record should have stats from both Nodes, but %s is 0", field)
+				}
 			}
 		})
 	}
@@ -2488,7 +2499,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 // than assumed: in encap mode, the host uses the IP of its Antrea gateway to connect to any Pod,
 // while in noEncap mode, it uses its transport IP to connect to a Pod running on another Node.
 // The source is not a Pod, so the flows are reported as FROM_EXTERNAL flows, and the source Node is
-// reported when the source address is its gateway IP.
+// reported, whether the traffic to the destination Node goes through OVS on the source Node or not.
 func testHostNetworkToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	const destinationNodeIndex = 1
 	dstNodeName := nodeName(destinationNodeIndex)
@@ -2547,32 +2558,9 @@ func testHostNetworkToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		checkRecords(t, records, dstNodeName)
 	})
 
-	t.Run("DifferentNode", func(t *testing.T) {
-		const sourceNodeIndex = 0
-		srcNodeName := nodeName(sourceNodeIndex)
-		encapMode, err := data.GetEncapMode()
-		require.NoError(t, err)
-		encryptionMode, err := data.GetEncryptionnMode()
-		require.NoError(t, err)
-		if encryptionMode == config.TrafficEncryptionModeWireGuard {
-			// The connection goes through the WireGuard device rather than through OVS on
-			// the source Node, so the source Node cannot report it.
-			t.Skip("Skipping test as connections from the host network to Pods running on other Nodes are not supported with WireGuard encryption")
-		}
-		sourceIP, sourcePort := connectFromHostNetwork(t, sourceNodeIndex, url)
-		fromGateway := sourceIP == gatewayIP(sourceNodeIndex)
-		if encapMode == config.TrafficEncapModeEncap {
-			require.True(t, fromGateway, "In encap mode, the host should use its gateway IP to connect to a remote Pod, but used %s", sourceIP)
-		}
-		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
-		if !fromGateway {
-			// The source address is the transport IP of the source Node, and the connection
-			// does not go through OVS on the source Node: only the destination Node reports
-			// it, as a connection from an external client.
-			checkRecords(t, records, "")
-			return
-		}
-		// Both Nodes report the connection, and the FlowAggregator correlates the records.
+	// checkCorrelatedRecords checks that both Nodes reported the connection, and that the
+	// FlowAggregator correlated the records.
+	checkCorrelatedRecords := func(t *testing.T, records []string, srcNodeName string) {
 		checkRecords(t, records, srcNodeName)
 		for _, record := range records {
 			for _, field := range []string{"octetTotalCountFromSourceNode", "octetTotalCountFromDestinationNode"} {
@@ -2581,6 +2569,101 @@ func testHostNetworkToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 				assert.NotZerof(t, value, "Record should have stats from both Nodes, but %s is 0, record: %s", field, record)
 			}
 		}
+	}
+
+	t.Run("DifferentNode", func(t *testing.T) {
+		const sourceNodeIndex = 0
+		srcNodeName := nodeName(sourceNodeIndex)
+		encapMode, err := data.GetEncapMode()
+		require.NoError(t, err)
+		encryptionMode, err := data.GetEncryptionnMode()
+		require.NoError(t, err)
+		sourceIP, sourcePort := connectFromHostNetwork(t, sourceNodeIndex, url)
+		t.Logf("Source address selected by the host: %s:%s (encap mode: %s, encryption mode: %s)", sourceIP, sourcePort, encapMode, encryptionMode)
+		fromGateway := sourceIP == gatewayIP(sourceNodeIndex)
+		if encapMode == config.TrafficEncapModeEncap {
+			require.True(t, fromGateway, "In encap mode, the host should use its gateway IP to connect to a remote Pod, but used %s", sourceIP)
+		}
+		records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		// Whether the connection goes through OVS on the source Node (encap mode) or not
+		// (noEncap mode, WireGuard), both Nodes report it.
+		checkCorrelatedRecords(t, records, srcNodeName)
+	})
+
+	// The connections to a Service whose Endpoint is on another Node may be translated by the
+	// host (kube-proxy), or by OVS (AntreaProxy with proxyAll), which may send them back to the
+	// host to route them to the other Node. In all cases, both Nodes report the connection, with
+	// the source address used by the host before any SNAT.
+	for _, svcType := range []corev1.ServiceType{corev1.ServiceTypeClusterIP, corev1.ServiceTypeNodePort} {
+		t.Run("DifferentNode"+string(svcType), func(t *testing.T) {
+			const sourceNodeIndex = 0
+			srcNodeName := nodeName(sourceNodeIndex)
+			svcName := "host-net-to-remote-pod-" + strings.ToLower(string(svcType))
+			ipFamily := corev1.IPv4Protocol
+			srcNodeIP := nodeIPv4(sourceNodeIndex)
+			if isIPv6 {
+				svcName += "v6"
+				ipFamily = corev1.IPv6Protocol
+				srcNodeIP = nodeIPv6(sourceNodeIndex)
+			}
+			svc, err := data.CreateServiceWithAnnotations(svcName, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"antrea-e2e": nginxPodName}, false, false, svcType, &ipFamily, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcName, metav1.DeleteOptions{})
+			})
+			svcURL := "http://" + net.JoinHostPort(svc.Spec.ClusterIP, "80")
+			if svcType == corev1.ServiceTypeNodePort {
+				// The NodePort of the source Node.
+				svcURL = "http://" + net.JoinHostPort(srcNodeIP, strconv.Itoa(int(svc.Spec.Ports[0].NodePort)))
+			}
+			sourceIP, sourcePort := connectFromHostNetwork(t, sourceNodeIndex, svcURL)
+			t.Logf("Source address selected by the host: %s:%s", sourceIP, sourcePort)
+			records := getCollectorOutput(t, sourceIP, dstIP, "sourceTransportPort: "+sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			checkCorrelatedRecords(t, records, srcNodeName)
+			for _, record := range records {
+				assert.Contains(t, recordField(t, record, "destinationServicePortName"), svcName, "Record does not have the expected Service")
+			}
+		})
+	}
+
+	// ICMP connections are not limited to the Service protocols.
+	t.Run("DifferentNodeICMP", func(t *testing.T) {
+		const sourceNodeIndex = 0
+		srcNodeName := nodeName(sourceNodeIndex)
+		clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "host-net-client", nodeName(sourceNodeIndex), data.testNamespace, true)
+		t.Cleanup(cleanupFunc)
+		// The source address selected by the host depends on the traffic mode, as for TCP.
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, []string{"ip", "route", "get", dstIP})
+		require.NoErrorf(t, err, "Failed to get the route to %s; stdout: %s, stderr: %s", dstIP, stdout, stderr)
+		fields := strings.Fields(stdout)
+		srcIndex := slices.Index(fields, "src")
+		require.Truef(t, srcIndex >= 0 && srcIndex+1 < len(fields), "Unexpected route: %s", stdout)
+		sourceIP := fields[srcIndex+1]
+		t.Logf("Source address selected by the host: %s", sourceIP)
+		stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, []string{"ping", "-c", "3", "-i", "0.2", "-W", "2", dstIP})
+		require.NoErrorf(t, err, "ping from hostNetwork Pod %s failed; stdout: %s, stderr: %s", clientPodName, stdout, stderr)
+		protocol := "1"
+		if isIPv6 {
+			protocol = "58"
+		}
+		// The protocol is matched exactly, as a filter on the record text would also match
+		// other protocols (e.g., 17 for "1").
+		src, dst := matchSrcAndDstAddress(sourceIP, dstIP, false, isIPv6)
+		var records []string
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			allRecords, err := getAllCollectorRecords(data, "ipfix-collector", isIPv6)
+			if !assert.NoError(c, err) {
+				return
+			}
+			records = nil
+			for _, record := range filterCollectorRecords(allRecords, src, dst) {
+				if value, _ := ipfixRecordFieldValue(record, "protocolIdentifier"); value == protocol {
+					records = append(records, record)
+				}
+			}
+			assert.NotEmpty(c, records, "IPFIX collector did not receive the expected ICMP records from %s to %s", sourceIP, dstIP)
+		}, getCollectorOutputDefaultTimeout, 500*time.Millisecond)
+		checkCorrelatedRecords(t, records, srcNodeName)
 	})
 
 	t.Run("ClusterIP", func(t *testing.T) {

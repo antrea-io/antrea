@@ -56,6 +56,8 @@ type aggregationProcess struct {
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
 	clock    clock.Clock
+	// getNodeNameByIP is AggregationInput.GetNodeNameByIP.
+	getNodeNameByIP func(ip string, startTime time.Time) (string, bool)
 }
 
 type AggregationInput struct {
@@ -63,6 +65,11 @@ type AggregationInput struct {
 	WorkerNum             int
 	ActiveExpiryTimeout   time.Duration
 	InactiveExpiryTimeout time.Duration
+	// GetNodeNameByIP returns the name of the Node which had the given IP (in canonical form) at
+	// the given time. It may be nil, in which case a "from external" record of the destination
+	// Node whose source is an IP of another Node does not wait for the record of that Node (see
+	// mayHaveSourceNodeRecord), and is only correlated with it if it is received first.
+	GetNodeNameByIP func(ip string, startTime time.Time) (string, bool)
 }
 
 func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
@@ -83,6 +90,7 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) 
 		input.InactiveExpiryTimeout,
 		make(chan bool),
 		clock,
+		input.GetNodeNameByIP,
 	}, nil
 }
 
@@ -263,17 +271,28 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 			// Reset the timeouts and add the record to priority queue.
 			// Delete the record after max retries.
 			pqItem.flowRecord.waitForReadyToSendRetries = pqItem.flowRecord.waitForReadyToSendRetries + 1
-			if pqItem.flowRecord.waitForReadyToSendRetries > MaxRetries {
-				klog.V(2).Infof("Deleting the record after waiting for ready to send with key: %v record: %v", pqItem.flowKey, pqItem.flowRecord)
-				if err := a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
-					return fmt.Errorf("error while deleting flow record after max retries: %v", err)
-				}
+			if pqItem.flowRecord.exportIfUncorrelated {
+				// The record is complete on its own: it only waits for a record from
+				// another Node until it expires once, and is then exported as is, as
+				// a single-Node record (see mayHaveSourceNodeRecord).
+				klog.V(4).InfoS("Exporting the record without the record of the source Node", "key", pqItem.flowKey)
+				pqItem.flowRecord.ReadyToSend = true
+				pqItem.flowRecord.areCorrelatedFieldsFilled = true
+				copySourceStatsFromDestination(pqItem.flowRecord.Record)
+				// Fall through to the export below.
 			} else {
-				pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
-				pqItem.inactiveExpireTime = currTime.Add(a.inactiveExpiryTimeout)
-				heap.Push(&a.expirePriorityQueue, pqItem)
+				if pqItem.flowRecord.waitForReadyToSendRetries > MaxRetries {
+					klog.V(2).Infof("Deleting the record after waiting for ready to send with key: %v record: %v", pqItem.flowKey, pqItem.flowRecord)
+					if err := a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
+						return fmt.Errorf("error while deleting flow record after max retries: %v", err)
+					}
+				} else {
+					pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
+					pqItem.inactiveExpireTime = currTime.Add(a.inactiveExpiryTimeout)
+					heap.Push(&a.expirePriorityQueue, pqItem)
+				}
+				continue
 			}
-			continue
 		}
 		// Only export the record if we have received at least one flow record for this flow
 		// since the last export. Otherwise, the aggregated record is identical to the one we
@@ -350,12 +369,27 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	defer a.mutex.Unlock()
 
 	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
+	// A record of the destination Node which may have a source-Node record is complete on its
+	// own, but waits for that record for a bounded time (see exportIfUncorrelated).
+	mayHaveSourceNodeRecord := !correlationRequired && a.mayHaveSourceNodeRecord(record)
 	// An inter-Node record only reports its own Node's stats, even when a deny action
 	// lets it be exported without waiting for the peer Node.
 	perNodeStats := record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)
 
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
+	exportedUncorrelated := exist && aggregationRecord.ReadyToSend && aggregationRecord.exportIfUncorrelated
+	// A record of the destination Node which may have a source-Node record also only reports its
+	// own Node's stats, unless the flow was exported without the source-Node record.
+	if mayHaveSourceNodeRecord && !exportedUncorrelated {
+		perNodeStats = true
+	}
+	if exportedUncorrelated && isSourceNodeFromExternalFlow(record) {
+		// The record of the destination Node was exported without this record, and reports
+		// the stats of both Nodes.
+		klog.V(4).InfoS("Ignoring the record of the source Node received after the flow was exported without it", "key", flowKey)
+		return
+	}
 	if exist {
 		readyToSend := aggregationRecord.ReadyToSend
 		// Records are only correlated while the entry is waiting for its peer. An entry
@@ -368,10 +402,17 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			// A record that needs no correlation can complete a pending flow, even when
 			// the first record required a peer. Merge its metadata too, including any deny
 			// policy information, before making the flow ready to export.
-			if !correlationRequired || !sameNode {
+			if (!correlationRequired && !mayHaveSourceNodeRecord) || !sameNode {
 				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
 				aggregationRecord.areCorrelatedFieldsFilled = !sameNode
+				if !sameNode {
+					aggregationRecord.exportIfUncorrelated = false
+				} else if aggregationRecord.exportIfUncorrelated {
+					// A record of the destination Node which does not wait (e.g., a deny
+					// record) completes the flow first: it is exported as a single-Node flow.
+					copySourceStatsFromDestination(aggregationRecord.Record)
+				}
 			}
 		}
 		if perNodeStats {
@@ -416,9 +457,10 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			waitForReadyToSendRetries: 0,
 			updatedSinceLastExport:    true,
 			isIPv4:                    isIPv4,
+			exportIfUncorrelated:      mayHaveSourceNodeRecord,
 		}
 
-		if !correlationRequired {
+		if !correlationRequired && !mayHaveSourceNodeRecord {
 			aggregationRecord.ReadyToSend = true
 			// If no correlation is required for an Inter-Node record, K8s metadata is
 			// expected to be not completely filled. For Intra-Node flows and ToExternal
@@ -696,12 +738,6 @@ func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, f
 	record.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
 	record.Aggregation.StatsFromDestination = &flowpb.Stats{}
 	record.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
-	copyStats := func(from, to *flowpb.Stats) {
-		to.PacketTotalCount = from.PacketTotalCount
-		to.PacketDeltaCount = from.PacketDeltaCount
-		to.OctetTotalCount = from.OctetTotalCount
-		to.OctetDeltaCount = from.OctetDeltaCount
-	}
 	if fillSrcStats {
 		copyStats(record.Stats, record.Aggregation.StatsFromSource)
 		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromSource)
@@ -710,6 +746,27 @@ func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, f
 		copyStats(record.Stats, record.Aggregation.StatsFromDestination)
 		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromDestination)
 	}
+}
+
+func copyStats(from, to *flowpb.Stats) {
+	to.PacketTotalCount = from.PacketTotalCount
+	to.PacketDeltaCount = from.PacketDeltaCount
+	to.OctetTotalCount = from.OctetTotalCount
+	to.OctetDeltaCount = from.OctetDeltaCount
+}
+
+// copySourceStatsFromDestination sets the stats, end time and throughput of the source Node of the
+// given aggregated record to the ones of the destination Node. It is used when a record of the
+// destination Node which waited for a record of the source Node, and only reported the stats of
+// its own Node so far, is exported without it (see mayHaveSourceNodeRecord): as any single-Node
+// record, it then reports the stats of both Nodes.
+func copySourceStatsFromDestination(record *flowpb.Flow) {
+	aggregation := record.Aggregation
+	copyStats(aggregation.StatsFromDestination, aggregation.StatsFromSource)
+	copyStats(aggregation.ReverseStatsFromDestination, aggregation.ReverseStatsFromSource)
+	aggregation.EndTsFromSource.Seconds = aggregation.EndTsFromDestination.Seconds
+	aggregation.ThroughputFromSource = aggregation.ThroughputFromDestination
+	aggregation.ReverseThroughputFromSource = aggregation.ReverseThroughputFromDestination
 }
 
 func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
@@ -796,6 +853,29 @@ func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
 // source Node, which the FlowExporter reports by setting the source Node name without a source Pod.
 func isFromSourceNodeHostNetwork(record *flowpb.Flow) bool {
 	return record.K8S.SourcePodName == "" && record.K8S.SourceNodeName != ""
+}
+
+// mayHaveSourceNodeRecord returns true for a "from external" record exported by the destination
+// Node of a connection whose source is an IP of another Node. The connection may have been
+// initiated by the host network of that Node, or forwarded by that Node after SNAT for an external
+// client (e.g., to a NodePort Service), without being tunneled (e.g., in noEncap mode): that Node
+// then exports the source-Node half of the flow, which carries the source Node name, or the
+// address of the external client. The record waits for it until it expires once, and is exported
+// as is otherwise, as a single-Node record (e.g., if that Node runs an older version of the Agent,
+// or a different OS). An ingress Drop record does not wait: the connection got no reply, and that
+// Node only exports the connections which got one.
+func (a *aggregationProcess) mayHaveSourceNodeRecord(record *flowpb.Flow) bool {
+	if a.getNodeNameByIP == nil || record.K8S == nil ||
+		record.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL ||
+		record.K8S.DestinationPodName == "" ||
+		record.K8S.SourcePodName != "" ||
+		record.K8S.SourceNodeName != "" ||
+		record.K8S.IngressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP {
+		return false
+	}
+	nodeName, ok := a.getNodeNameByIP(net.IP(record.Ip.Source).String(), record.StartTs.AsTime())
+	// The connections from the host network of the destination Node are reported by that Node.
+	return ok && nodeName != record.K8S.DestinationNodeName
 }
 
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.

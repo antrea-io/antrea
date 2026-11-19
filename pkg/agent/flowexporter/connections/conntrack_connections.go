@@ -154,10 +154,10 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" && !cs.isFromHostNetworkToRemotePod(conn) {
+		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" && !cs.isSourceNodeHalfToRemotePod(conn) {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod except for from external flows, and for flows
-			// initiated by the host network of this Node towards Pods running on other Nodes.
+			// information for both srcPod and dstPod except for from external flows, and for the
+			// source-Node half of some flows towards Pods running on other Nodes.
 
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
@@ -183,18 +183,28 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	}
 }
 
-// isFromHostNetworkToRemotePod returns whether conn was initiated by the host network of this Node
-// (e.g., by a hostNetwork Pod) towards a Pod running on another Node, for which this Node exports
-// the source-Node half of the flow (see RemotePodQuerier). IsFromHostNetwork is set by the
-// FromExternalCorrelator. The FlowAggregator correlates this half with the destination-Node half,
-// so that the flow is reported even though neither endpoint is a Pod running on this Node. The
-// connection is only kept here if it is exported (see Destination.findHostNetworkFlowType), but a
-// connection correlated by the FromExternalCorrelator (IsFromExternal) is kept regardless.
-func (cs *ConntrackConnectionStore) isFromHostNetworkToRemotePod(conn *connection.Connection) bool {
-	if !conn.IsFromHostNetwork || cs.remotePodQuerier == nil {
+// isSourceNodeHalfToRemotePod returns whether conn is the source-Node half of a flow towards a Pod
+// running on another Node, which this Node exports even though neither endpoint is a Pod running
+// on this Node. The FlowAggregator correlates it with the half exported by the destination Node.
+// Besides the connections correlated by the FromExternalCorrelator (IsFromExternal), which are
+// always kept, this is the case of:
+//   - A connection initiated by the host network of this Node (e.g., by a hostNetwork Pod), which
+//     OVS sends to the other Node with the gateway IP of this Node as the source address (see
+//     RemotePodQuerier.IsRemotePodIP). IsFromHostNetwork is set by the FromExternalCorrelator.
+//   - A connection that OVS sent back to the host after the hairpin SNAT, and that the host routes
+//     to the other Node without going through OVS. Its ProxySnat address and port are the ones seen
+//     by the other Node (see FromExternalCorrelator.setHairpinSNAT).
+//
+// The connection is only kept here if it is exported (see Destination.findFlowType).
+func (cs *ConntrackConnectionStore) isSourceNodeHalfToRemotePod(conn *connection.Connection) bool {
+	if cs.remotePodQuerier == nil {
 		return false
 	}
-	return cs.remotePodQuerier.IsRemotePodIP(conn.FlowKey.DestinationAddress)
+	dstIP := conn.FlowKey.DestinationAddress
+	if conn.IsFromHostNetwork && cs.remotePodQuerier.IsRemotePodIP(dstIP) {
+		return true
+	}
+	return conn.ProxySnatIP.IsValid() && cs.remotePodQuerier.IsRemotePodIPRoutedByHost(dstIP)
 }
 
 // resolveDestinationService fills conn.DestinationServicePortName for Service-marked and

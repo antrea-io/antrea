@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	connstesting "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
@@ -328,7 +329,7 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 				store := NewConntrackConnectionStore(nil, podStore, proxier, cfg)
 
 				dumper := &scriptedConntrack{entries: sc.entries(n, snat, step)}
-				p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil, nil), 0, true, true, false)
+				p := NewPoller(dumper, nil, NewFromExternalCorrelator(proxier, nil, nil, nil), 0, true, true, false)
 				seen := false
 				for i := range numPolls {
 					conns, _, err := p.Poll()
@@ -382,4 +383,42 @@ func TestPoller_PollCorrelatesExternalToPodConns(t *testing.T) {
 	// Correlation does not depend on the IP family, and the poller always dumps both the IPv4 and
 	// IPv6 Antrea zones: a single IPv6 scenario is enough to cover the IPv6 addresses and zone.
 	runSubtests(testNetworkIPv6, "IPv6", true, createdDuringPoll)
+}
+
+// TestPoller_Poll_defaultZoneOnlyConns validates that the default-zone connections that the
+// FromExternalCorrelator reports on their own are returned along with the Antrea-zone connections.
+func TestPoller_Poll_defaultZoneOnlyConns(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	nodeIP := netip.MustParseAddr("172.18.0.2")
+	remotePodIP := netip.MustParseAddr("10.244.2.6")
+	hostConn := &connection.Connection{
+		Zone:                       DefaultZone,
+		StatusFlag:                 ipsSeenReply,
+		FlowKey:                    connection.Tuple{SourceAddress: nodeIP, DestinationAddress: remotePodIP, Protocol: 6, SourcePort: 40000, DestinationPort: 80},
+		OriginalDestinationAddress: remotePodIP,
+		OriginalDestinationPort:    80,
+	}
+	otherConn := &connection.Connection{
+		Zone:                       DefaultZone,
+		StatusFlag:                 ipsSeenReply,
+		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("8.8.8.8"), DestinationAddress: remotePodIP, Protocol: 6, SourcePort: 40001, DestinationPort: 80},
+		OriginalDestinationAddress: remotePodIP,
+		OriginalDestinationPort:    80,
+	}
+	antreaConn := &connection.Connection{Zone: openflow.CtZone, FlowKey: connection.Tuple{SourceAddress: netip.MustParseAddr("10.244.1.2"), DestinationAddress: netip.MustParseAddr("10.244.1.3"), Protocol: 6, SourcePort: 3, DestinationPort: 4}}
+
+	mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
+	mockDumper.EXPECT().DumpFlows(uint16(0)).Return([]*connection.Connection{hostConn, otherConn}, 2, nil)
+	mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return([]*connection.Connection{antreaConn}, 1, nil)
+	mockDumper.EXPECT().GetMaxConnections().Return(100000, nil)
+
+	remotePodQuerier := &fakeRemotePodQuerier{remotePodSubnets: []netip.Prefix{netip.MustParsePrefix("10.244.2.0/24")}, routedByHost: true}
+	correlator := NewFromExternalCorrelator(nil, nil, sets.New(nodeIP), remotePodQuerier)
+	p := NewPoller(mockDumper, nil, correlator, 0, true, false, false)
+	out, lens, err := p.Poll()
+	require.NoError(t, err)
+	assert.Equal(t, []int{2, 1}, lens, "per-zone lengths should include the default zone")
+	require.Len(t, out, 2)
+	assert.Same(t, antreaConn, out[0])
+	assert.Same(t, hostConn, out[1], "The connection initiated by the host network should be returned")
 }

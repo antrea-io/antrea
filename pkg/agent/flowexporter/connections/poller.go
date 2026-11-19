@@ -98,8 +98,9 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 	}
 }
 
-// Poll calls into conntrackDumper to dump each configured zone. Default-zone flows are never
-// returned; when externalCorrelator is non-nil they are used to correlate Antrea-zone flows.
+// Poll calls into conntrackDumper to dump each configured zone. Default-zone flows are only
+// returned when externalCorrelator is non-nil and reports them on their own (see
+// FromExternalCorrelator.Correlate); otherwise they are used to correlate Antrea-zone flows.
 // Non-default-zone dumps are returned as Antrea-zone connections (IPv4/IPv6 per configuration).
 // connsLens has one entry per polled zone (default zone first, then IPv4 Antrea zone, then IPv6
 // Antrea zone when enabled), each the length of that zone's filtered dump.
@@ -146,8 +147,11 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 	// Correlate Antrea-zone connections with default-zone state before notifying
 	// subscribers. Doing this here — once, centrally, before fan-out — ensures that
 	// all subscribers see the same already-correlated view of each connection pointer.
+	// The default-zone connections that the correlator reports on their own are returned along
+	// with the Antrea-zone connections.
 	if p.externalCorrelator != nil {
-		p.externalCorrelator.Correlate(defaultZoneConns, antreaConns)
+		defaultZoneOnlyConns := p.externalCorrelator.Correlate(defaultZoneConns, antreaConns)
+		antreaConns = append(antreaConns, defaultZoneOnlyConns...)
 	}
 
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))

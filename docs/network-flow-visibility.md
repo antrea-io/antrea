@@ -255,20 +255,35 @@ Connections initiated by the host network of a Node towards Pods, e.g., kubelet
 probes or connections from `hostNetwork` Pods, are reported as From External
 flows, as their source is not a Pod. `hostNetwork` Pods cannot be told apart
 from the Node itself, so the source Pod information is empty. On Linux Nodes,
-when the connection goes through the Antrea gateway of the source Node, the
-flow is reported by that Node, and `sourceNodeName` is set to its name. This is
-the case for connections to local Pods, and to Pods running on other Nodes when
-the traffic to these Nodes is tunneled (in `encap` mode, and in `hybrid` mode
-for Nodes in other subnets), including connections to Services whose Endpoint
-is such a Pod. With WireGuard encryption, this is only the case for connections
-to Services handled by AntreaProxy with `proxyAll` enabled. When the Node
-masquerades the connection, e.g., when it connects to a ClusterIP handled by
-kube-proxy, when it connects to a NodePort on its own IP, or when a client bound
-to its Node IP connects to a Pod or to a ClusterIP, the reported source is the
-IP that the Node used before masquerading. Only the Node IPs, the transport IPs
-and the gateway IPs of the Node are recognized as its own: the connections from
-its other local addresses (e.g., the address of a secondary network interface)
-are not identified, and are reported without `sourceNodeName`, if at all.
+the flow is reported by the source Node, and `sourceNodeName` is set to its
+name. This includes connections to Services, and connections to Pods running on
+other Nodes, for which the Flow Aggregator correlates the records of both Nodes,
+whether the traffic to the other Node is tunneled (in `encap` mode, and in
+`hybrid` mode for Nodes in other subnets) or not (in `noEncap` mode, in `hybrid`
+mode for Nodes in the same subnet, and with WireGuard encryption). In the latter
+case, the source Node only reports the connections which got a reply. When the
+Node masquerades the connection, e.g., when it connects to a ClusterIP handled
+by kube-proxy, when it connects to a NodePort on its own IP, or when a client
+bound to its Node IP connects to a Pod or to a ClusterIP, the reported source is
+the IP that the Node used before masquerading. Only the Node IPs, the transport
+IPs and the gateway IPs of the Node are recognized as its own: the connections
+from its other local addresses (e.g., the address of a secondary network
+interface) are not identified, and are reported without `sourceNodeName`, if at
+all.
+
+Likewise, when a Linux Node forwards a connection from an external client to a
+Pod running on another Node after masquerading it (e.g., when kube-proxy handles
+a NodePort Service with `externalTrafficPolicy` set to `Cluster`), it reports
+the address of the external client, and the Flow Aggregator correlates its
+record with the one of the destination Node. The destination Node cannot tell such connections apart
+from the ones initiated by the host network of the source Node when the source
+Node routes them through its uplink (in `noEncap` mode, and in `hybrid` mode for
+Nodes in the same subnet), as their source address is then an IP of the source
+Node. The Flow Aggregator therefore waits for the record of the source Node for
+the From External flows whose source is an IP of another Node, until
+`activeFlowRecordTimeout` expires, and exports them as is otherwise (e.g., if
+the source Node runs Windows, or an older version of Antrea). This delays the
+first export of these flows.
 
 The following connections from the host network of a Node are not fully
 supported yet:
@@ -279,21 +294,10 @@ supported yet:
   External flows, without `sourceNodeName`, from the gateway IP of the Node, or
   from the Node IP when the client is bound to it (e.g., a `hostNetwork` Pod
   using `status.hostIP`). The ones to an Endpoint running on another Node are
-  reported as described in the next bullet in `noEncap` mode and in `hybrid`
-  mode for Nodes in the same subnet, and otherwise are exported by the
-  destination Node as Inter-Node flows from the gateway IP of the source Node,
-  which the Flow Aggregator drops.
-* In `noEncap` mode, and in `hybrid` mode for Nodes in the same subnet, the
-  source Node routes the connections to Pods running on other Nodes through its
-  uplink, either directly, or after AntreaProxy translated the Service with
-  `proxyAll` enabled, in which case it masquerades them with its own IP. The
-  destination Node reports them as From External flows from an IP of the source
-  Node, without `sourceNodeName`.
-* With WireGuard encryption, the connections to Pods running on other Nodes
-  bypass OVS on the source Node, unless they are connections to Services
-  handled by AntreaProxy with `proxyAll` enabled. As `antrea-wg0` has the
-  gateway IP of the source Node, the destination Node exports them as
-  Inter-Node flows from that IP, which the Flow Aggregator drops.
+  only reported by the destination Node: as From External flows from an IP of
+  the source Node, without `sourceNodeName`, when the source Node routes them
+  through its uplink, and otherwise as Inter-Node flows from the gateway IP of
+  the source Node, which the Flow Aggregator drops.
 * In `networkPolicyOnly` mode, only the connections to local Pods are reported.
 * On Windows Nodes, the connections initiated by the host network are never
   identified. In particular, the ones to local Pods, whose source is the

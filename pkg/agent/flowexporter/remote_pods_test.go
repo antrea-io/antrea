@@ -17,6 +17,7 @@ package flowexporter
 import (
 	"net"
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,8 +26,9 @@ import (
 )
 
 // fakeRemotePodSubnetQuerier implements remotePodSubnetQuerier for a fixed set of Pod subnets of
-// other Nodes, mapped to the transport IPs of these Nodes.
+// this Node, and of other Nodes, mapped to the transport IPs of these Nodes.
 type fakeRemotePodSubnetQuerier struct {
+	localPodSubnets  []netip.Prefix
 	remotePodSubnets map[netip.Prefix]net.IP
 }
 
@@ -40,7 +42,11 @@ func (f *fakeRemotePodSubnetQuerier) GetNodeIPForPodIP(ip netip.Addr) (net.IP, b
 }
 
 func (f *fakeRemotePodSubnetQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	prefixes := slices.Clone(f.localPodSubnets)
 	for prefix := range f.remotePodSubnets {
+		prefixes = append(prefixes, prefix)
+	}
+	for _, prefix := range prefixes {
 		if prefix.Contains(ip) {
 			return true, ip == prefix.Masked().Addr().Next()
 		}
@@ -48,7 +54,7 @@ func (f *fakeRemotePodSubnetQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, 
 	return false, false
 }
 
-func TestRemotePodQuerier_IsRemotePodIP(t *testing.T) {
+func TestRemotePodQuerier(t *testing.T) {
 	nodeConfig := &config.NodeConfig{
 		NodeTransportIPv4Addr: &net.IPNet{IP: net.ParseIP("192.168.77.2"), Mask: net.CIDRMask(24, 32)},
 		NodeTransportIPv6Addr: &net.IPNet{IP: net.ParseIP("fd77::2"), Mask: net.CIDRMask(64, 128)},
@@ -70,88 +76,128 @@ func TestRemotePodQuerier_IsRemotePodIP(t *testing.T) {
 	unknownIPv4 := netip.MustParseAddr("10.244.1.6")
 
 	tests := []struct {
-		name           string
-		networkConfig  *config.NetworkConfig
-		ip             netip.Addr
-		expectedRemote bool
+		name                 string
+		networkConfig        *config.NetworkConfig
+		ip                   netip.Addr
+		expectedRemote       bool
+		expectedRoutedByHost bool
 	}{
 		{
-			name:           "encap mode",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: true,
+			name:                 "encap mode",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       true,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "encap mode IPv6",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
-			ip:             sameSubnetPodIPv6,
-			expectedRemote: true,
+			name:                 "encap mode IPv6",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			ip:                   sameSubnetPodIPv6,
+			expectedRemote:       true,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "encap mode gateway IP",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
-			ip:             remoteGwIPv4,
-			expectedRemote: false,
+			name:                 "encap mode gateway IP",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			ip:                   remoteGwIPv4,
+			expectedRemote:       false,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "encap mode unknown IP",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
-			ip:             unknownIPv4,
-			expectedRemote: false,
+			name:                 "encap mode unknown IP",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			ip:                   unknownIPv4,
+			expectedRemote:       false,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "encap mode with IPsec",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeIPSec},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: true,
+			name:                 "encap mode with IPsec",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeIPSec},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       true,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "encap mode with WireGuard",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: true,
+			name:                 "encap mode with WireGuard",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       true,
+			expectedRoutedByHost: true,
 		},
 		{
-			name:           "encap mode with WireGuard gateway IP",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
-			ip:             remoteGwIPv4,
-			expectedRemote: false,
+			name:                 "encap mode with WireGuard gateway IP",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
+			ip:                   remoteGwIPv4,
+			expectedRemote:       false,
+			expectedRoutedByHost: false,
 		},
 		{
-			name:           "noEncap mode",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: false,
+			name:                 "noEncap mode",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       false,
+			expectedRoutedByHost: true,
 		},
 		{
-			name:           "noEncap mode with WireGuard",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: true,
+			name:                 "noEncap mode with WireGuard",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       true,
+			expectedRoutedByHost: true,
 		},
 		{
-			name:           "hybrid mode Node in the same subnet",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
-			ip:             sameSubnetPodIPv4,
-			expectedRemote: false,
+			name:                 "hybrid mode Node in the same subnet",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
+			ip:                   sameSubnetPodIPv4,
+			expectedRemote:       false,
+			expectedRoutedByHost: true,
 		},
 		{
-			name:           "hybrid mode Node in the same subnet IPv6",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
-			ip:             sameSubnetPodIPv6,
-			expectedRemote: false,
+			name:                 "hybrid mode Node in the same subnet IPv6",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
+			ip:                   sameSubnetPodIPv6,
+			expectedRemote:       false,
+			expectedRoutedByHost: true,
 		},
 		{
-			name:           "hybrid mode Node in another subnet",
-			networkConfig:  &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
-			ip:             otherSubnetPodIPv4,
-			expectedRemote: true,
+			name:                 "hybrid mode Node in another subnet",
+			networkConfig:        &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid},
+			ip:                   otherSubnetPodIPv4,
+			expectedRemote:       true,
+			expectedRoutedByHost: false,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			q := newRemotePodQuerier(nodeRouteQuerier, tc.networkConfig, nodeConfig)
-			assert.Equal(t, tc.expectedRemote, q.IsRemotePodIP(tc.ip))
+			assert.Equal(t, tc.expectedRemote, q.IsRemotePodIP(tc.ip), "Unexpected IsRemotePodIP")
+			assert.Equal(t, tc.expectedRoutedByHost, q.IsRemotePodIPRoutedByHost(tc.ip), "Unexpected IsRemotePodIPRoutedByHost")
+		})
+	}
+}
+
+func TestRemotePodQuerier_IsPodSubnetIP(t *testing.T) {
+	nodeRouteQuerier := &fakeRemotePodSubnetQuerier{
+		localPodSubnets: []netip.Prefix{netip.MustParsePrefix("10.244.1.0/24")},
+		remotePodSubnets: map[netip.Prefix]net.IP{
+			netip.MustParsePrefix("10.244.2.0/24"): net.ParseIP("192.168.77.3"),
+		},
+	}
+	q := newRemotePodQuerier(nodeRouteQuerier, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap}, &config.NodeConfig{})
+	tests := []struct {
+		ip       netip.Addr
+		expected bool
+	}{
+		{ip: netip.MustParseAddr("10.244.1.6"), expected: true},
+		{ip: netip.MustParseAddr("10.244.1.1"), expected: true},
+		{ip: netip.MustParseAddr("10.244.2.6"), expected: true},
+		{ip: netip.MustParseAddr("10.244.2.1"), expected: true},
+		{ip: netip.MustParseAddr("192.168.77.3"), expected: false},
+		{ip: netip.MustParseAddr("8.8.8.8"), expected: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.ip.String(), func(t *testing.T) {
+			assert.Equal(t, tc.expected, q.IsPodSubnetIP(tc.ip))
 		})
 	}
 }

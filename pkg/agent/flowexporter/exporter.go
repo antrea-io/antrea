@@ -181,7 +181,7 @@ func NewFlowExporter(
 			remotePodQuerier = newRemotePodQuerier(nodeRouteController, networkConfig, nodeConfig)
 		}
 	}
-	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, nodeIPs)
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier, nodeIPs, remotePodQuerier)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 

@@ -1821,3 +1821,253 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ThroughputFromDestination)
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ReverseThroughputFromDestination)
 }
+
+// TestAddOrUpdateRecordInMap_SourceNodeRecordForFromExternal validates the correlation of a "from
+// external" record exported by the destination Node of a connection whose source is an IP of
+// another Node, with the record of the source Node, which reports the connection either as
+// initiated by its host network, or as forwarded for an external client (see
+// mayHaveSourceNodeRecord). The record of the destination Node only waits for the record of the
+// source Node until it expires once.
+func TestAddOrUpdateRecordInMap_SourceNodeRecordForFromExternal(t *testing.T) {
+	const (
+		srcPort    = 40000
+		clientPort = 50000
+	)
+	srcNodeIP := net.ParseIP("172.18.0.2").To4()
+	dstNodeIP := net.ParseIP("172.18.0.3").To4()
+	externalIP := net.ParseIP("8.8.8.8").To4()
+	dstPodIP := net.ParseIP("10.244.2.6").To4()
+	nodeNames := map[string]string{
+		srcNodeIP.String(): "source-node",
+		dstNodeIP.String(): "destination-node",
+	}
+	getNodeNameByIP := func(ip string, _ time.Time) (string, bool) {
+		name, ok := nodeNames[ip]
+		return name, ok
+	}
+	stats := func(octets uint64) *flowpb.Stats {
+		return &flowpb.Stats{PacketTotalCount: octets / 10, PacketDeltaCount: octets / 10, OctetTotalCount: octets, OctetDeltaCount: octets}
+	}
+	// destinationNodeRecord returns the record of the destination Node, whose source is src.
+	destinationNodeRecord := func(src net.IP, octets uint64, end time.Duration) *flowpb.Flow {
+		return &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				DestinationPodName:      "nginx",
+				DestinationPodNamespace: "default",
+				DestinationNodeName:     "destination-node",
+			},
+			Ip:           &flowpb.IP{Version: flowpb.IPVersion_IP_VERSION_4, Source: src, Destination: dstPodIP},
+			Transport:    &flowpb.Transport{ProtocolNumber: 6, SourcePort: srcPort, DestinationPort: 80},
+			Stats:        stats(octets),
+			ReverseStats: stats(2 * octets),
+			StartTs:      timestamppb.New(currTime),
+			EndTs:        timestamppb.New(currTime.Add(end)),
+		}
+	}
+	// hostNetworkRecord returns the record of the source Node for a connection initiated by its
+	// host network.
+	hostNetworkRecord := func(octets uint64, end time.Duration) *flowpb.Flow {
+		return &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:       flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				SourceNodeName: "source-node",
+			},
+			Ip:           &flowpb.IP{Version: flowpb.IPVersion_IP_VERSION_4, Source: srcNodeIP, Destination: dstPodIP},
+			Transport:    &flowpb.Transport{ProtocolNumber: 6, SourcePort: srcPort, DestinationPort: 80},
+			Stats:        stats(octets),
+			ReverseStats: stats(2 * octets),
+			StartTs:      timestamppb.New(currTime),
+			EndTs:        timestamppb.New(currTime.Add(end)),
+		}
+	}
+	// externalClientRecord returns the record of the source Node for a connection from an external
+	// client, which it forwarded after SNAT.
+	externalClientRecord := func(octets uint64, end time.Duration) *flowpb.Flow {
+		return &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				DestinationServicePortName: "default/nginx:http",
+			},
+			Ip:            &flowpb.IP{Version: flowpb.IPVersion_IP_VERSION_4, Source: externalIP, Destination: dstPodIP},
+			Transport:     &flowpb.Transport{ProtocolNumber: 6, SourcePort: clientPort, DestinationPort: 80},
+			Stats:         stats(octets),
+			ReverseStats:  stats(2 * octets),
+			StartTs:       timestamppb.New(currTime),
+			EndTs:         timestamppb.New(currTime.Add(end)),
+			ProxySnatIp:   srcNodeIP,
+			ProxySnatPort: srcPort,
+		}
+	}
+	newProcess := func() (*aggregationProcess, *clocktesting.FakeClock) {
+		clock := clocktesting.NewFakeClock(time.Now())
+		ap, err := initAggregationProcessWithClock(AggregationInput{
+			RecordChan:            make(chan *flowpb.Flow),
+			WorkerNum:             2,
+			ActiveExpiryTimeout:   testActiveExpiry,
+			InactiveExpiryTimeout: testInactiveExpiry,
+			GetNodeNameByIP:       getNodeNameByIP,
+		}, clock)
+		require.NoError(t, err)
+		return ap, clock
+	}
+	add := func(ap *aggregationProcess, record *flowpb.Flow) *AggregationFlowRecord {
+		flowKey, isIPv4 := getFlowKeyFromRecord(record)
+		ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
+		return ap.flowKeyRecordMap[*flowKey]
+	}
+	assertStats := func(t *testing.T, record *AggregationFlowRecord, srcOctets, dstOctets uint64) {
+		t.Helper()
+		aggregation := record.Record.Aggregation
+		assert.Equal(t, srcOctets, aggregation.StatsFromSource.OctetTotalCount, "Unexpected stats of the source Node")
+		assert.Equal(t, 2*srcOctets, aggregation.ReverseStatsFromSource.OctetTotalCount, "Unexpected reverse stats of the source Node")
+		assert.Equal(t, dstOctets, aggregation.StatsFromDestination.OctetTotalCount, "Unexpected stats of the destination Node")
+		assert.Equal(t, 2*dstOctets, aggregation.ReverseStatsFromDestination.OctetTotalCount, "Unexpected reverse stats of the destination Node")
+	}
+
+	for _, sourceFirst := range []bool{false, true} {
+		for _, external := range []bool{false, true} {
+			name := "host network"
+			if external {
+				name = "external client"
+			}
+			if sourceFirst {
+				name += " source Node first"
+			} else {
+				name += " destination Node first"
+			}
+			t.Run(name, func(t *testing.T) {
+				ap, _ := newProcess()
+				srcRecord := hostNetworkRecord(60, time.Second)
+				if external {
+					srcRecord = externalClientRecord(60, time.Second)
+				}
+				dstRecord := destinationNodeRecord(srcNodeIP, 100, time.Second)
+				first, second := dstRecord, srcRecord
+				if sourceFirst {
+					first, second = srcRecord, dstRecord
+				}
+				record := add(ap, first)
+				require.NotNil(t, record)
+				assert.False(t, record.ReadyToSend, "The first record should wait for the other one")
+				record = add(ap, second)
+				require.Len(t, ap.flowKeyRecordMap, 1)
+				assert.True(t, record.ReadyToSend)
+				assert.True(t, record.areCorrelatedFieldsFilled)
+				assert.False(t, record.exportIfUncorrelated)
+				merged := record.Record
+				assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, merged.K8S.FlowType)
+				assert.Equal(t, "nginx", merged.K8S.DestinationPodName)
+				assert.Equal(t, "destination-node", merged.K8S.DestinationNodeName)
+				if external {
+					assert.Equal(t, externalIP, net.IP(merged.Ip.Source))
+					assert.Equal(t, uint32(clientPort), merged.Transport.SourcePort)
+					assert.Equal(t, srcNodeIP, net.IP(merged.ProxySnatIp))
+					assert.Equal(t, uint32(srcPort), merged.ProxySnatPort)
+					assert.Empty(t, merged.K8S.SourceNodeName)
+				} else {
+					assert.Equal(t, srcNodeIP, net.IP(merged.Ip.Source))
+					assert.Equal(t, "source-node", merged.K8S.SourceNodeName)
+				}
+				assertStats(t, record, 60, 100)
+
+				// The later records of each Node only update the stats of their own Node.
+				later := destinationNodeRecord(srcNodeIP, 300, 2*time.Second)
+				add(ap, later)
+				assertStats(t, record, 60, 300)
+				later = hostNetworkRecord(200, 2*time.Second)
+				if external {
+					later = externalClientRecord(200, 2*time.Second)
+				}
+				add(ap, later)
+				assertStats(t, record, 200, 300)
+			})
+		}
+	}
+
+	t.Run("destination Node only", func(t *testing.T) {
+		ap, clock := newProcess()
+		record := add(ap, destinationNodeRecord(srcNodeIP, 100, time.Second))
+		assert.False(t, record.ReadyToSend, "The record should wait for the record of the source Node")
+		assert.True(t, record.exportIfUncorrelated)
+		assertStats(t, record, 0, 100)
+
+		var exported []FlowKey
+		callback := func(key FlowKey, record *AggregationFlowRecord) error {
+			exported = append(exported, key)
+			// The record reports the stats of both Nodes, as a single-Node record.
+			assertStats(t, record, 100, 100)
+			assert.Empty(t, record.Record.K8S.SourceNodeName)
+			assert.Equal(t, srcNodeIP, net.IP(record.Record.Ip.Source))
+			return nil
+		}
+		require.NoError(t, ap.ForAllExpiredFlowRecordsDo(callback))
+		assert.Empty(t, exported, "The record should not be exported before it expires")
+		clock.Step(testActiveExpiry)
+		require.NoError(t, ap.ForAllExpiredFlowRecordsDo(callback))
+		require.Len(t, exported, 1, "The record should be exported once it expires")
+		assert.True(t, record.ReadyToSend)
+		assert.True(t, record.areCorrelatedFieldsFilled)
+
+		// A late record of the source Node is ignored, and the later records of the
+		// destination Node update the stats of both Nodes.
+		add(ap, hostNetworkRecord(60, 2*time.Second))
+		assertStats(t, record, 100, 100)
+		assert.Empty(t, record.Record.K8S.SourceNodeName)
+		add(ap, destinationNodeRecord(srcNodeIP, 300, 3*time.Second))
+		assertStats(t, record, 300, 300)
+	})
+
+	t.Run("destination Node record completed by a deny record", func(t *testing.T) {
+		ap, _ := newProcess()
+		record := add(ap, destinationNodeRecord(srcNodeIP, 100, time.Second))
+		assert.False(t, record.ReadyToSend)
+		denyRecord := destinationNodeRecord(srcNodeIP, 100, time.Second)
+		denyRecord.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+		add(ap, denyRecord)
+		assert.True(t, record.ReadyToSend, "The deny record does not wait for the record of the source Node")
+		assert.Equal(t, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, record.Record.K8S.IngressNetworkPolicyRuleAction)
+		assertStats(t, record, 100, 100)
+	})
+
+	for _, tc := range []struct {
+		name            string
+		getNodeNameByIP func(string, time.Time) (string, bool)
+		record          *flowpb.Flow
+	}{
+		{
+			name:            "source is an IP of the destination Node",
+			getNodeNameByIP: getNodeNameByIP,
+			record:          destinationNodeRecord(dstNodeIP, 100, time.Second),
+		},
+		{
+			name:            "source is not an IP of a Node",
+			getNodeNameByIP: getNodeNameByIP,
+			record:          destinationNodeRecord(externalIP, 100, time.Second),
+		},
+		{
+			name:            "Node IPs are unknown",
+			getNodeNameByIP: nil,
+			record:          destinationNodeRecord(srcNodeIP, 100, time.Second),
+		},
+		{
+			// The connection was not established, and the source Node does not report it.
+			name:            "ingress Drop record",
+			getNodeNameByIP: getNodeNameByIP,
+			record: func() *flowpb.Flow {
+				record := destinationNodeRecord(srcNodeIP, 100, time.Second)
+				record.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+				return record
+			}(),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ap, _ := newProcess()
+			ap.getNodeNameByIP = tc.getNodeNameByIP
+			record := add(ap, tc.record)
+			assert.True(t, record.ReadyToSend, "The record should not wait for another record")
+			assert.False(t, record.exportIfUncorrelated)
+			assertStats(t, record, 100, 100)
+		})
+	}
+}

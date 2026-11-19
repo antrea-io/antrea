@@ -16,17 +16,28 @@ package objectstore
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
+
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
-const nodeNameIndex = "nodeName"
+const (
+	nodeNameIndex = "nodeName"
+	nodeIPIndex   = "nodeIP"
+)
 
 // NodeStore interface provides Node-specific operations
 type NodeStore interface {
 	GetNodeByNameAndTime(name string, startTime time.Time) (*corev1.Node, bool)
+	// GetNodeByIPAndTime returns the Node which had the given internal, external or transport IP
+	// at the given time. ip must be in its canonical form, as returned by net.IP.String.
+	GetNodeByIPAndTime(ip string, startTime time.Time) (*corev1.Node, bool)
 	Run(stopCh <-chan struct{})
 	HasSynced() bool
 }
@@ -42,7 +53,7 @@ var _ NodeStore = &nodeStore{}
 func NewNodeStore(nodeInformer cache.SharedIndexInformer) *nodeStore {
 	config := StoreConfig[*corev1.Node]{
 		DeleteQueueName: "nodeStoreNodesToDelete",
-		Indexers:        cache.Indexers{nodeNameIndex: nodeNameIndexFunc},
+		Indexers:        cache.Indexers{nodeNameIndex: nodeNameIndexFunc, nodeIPIndex: nodeIPIndexFunc},
 		GetObjectCreationTimestamp: func(node *corev1.Node, now time.Time) time.Time {
 			if node.Status.Phase == corev1.NodePending {
 				return now
@@ -66,4 +77,37 @@ func nodeNameIndexFunc(obj interface{}) ([]string, error) {
 		return nil, fmt.Errorf("obj is not Node: %+v", obj)
 	}
 	return []string{node.Name}, nil
+}
+
+// GetNodeByIPAndTime returns the Node which had the given IP at the given time (see nodeIPIndexFunc).
+func (s *nodeStore) GetNodeByIPAndTime(ip string, startTime time.Time) (*corev1.Node, bool) {
+	return s.GetObjectByIndexAndTime(nodeIPIndex, ip, startTime)
+}
+
+// nodeIPIndexFunc indexes a Node by its internal and external IPs, and by its transport IPs, which
+// Antrea uses as the source address of the traffic that the Node forwards to the Pods running on
+// other Nodes without tunneling it, when they are not its internal IPs. The IPs are indexed in
+// their canonical form, as returned by net.IP.String.
+func nodeIPIndexFunc(obj interface{}) ([]string, error) {
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return nil, fmt.Errorf("obj is not Node: %+v", obj)
+	}
+	ips := sets.New[string]()
+	addIP := func(ip net.IP) {
+		if ip != nil {
+			ips.Insert(ip.String())
+		}
+	}
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+			addIP(net.ParseIP(addr.Address))
+		}
+	}
+	// An invalid annotation is ignored, as the index function must not fail for a valid Node.
+	if transportIPs, err := k8s.GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey); err == nil && transportIPs != nil {
+		addIP(transportIPs.IPv4)
+		addIP(transportIPs.IPv6)
+	}
+	return sets.List(ips), nil
 }

@@ -104,13 +104,17 @@ type Connection struct {
 	ProxySnatPort uint16
 	// IsFromExternal is set to true by the correlator when this Antrea-zone connection was
 	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
-	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
+	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local). It is also set for the
+	// default-zone connections (Zone is the default zone) that the correlator reports on their
+	// own, which have no Antrea-zone entry.
 	IsFromExternal bool
 	// IsServiceUnresolved is set to true by the correlator, along with IsFromExternal, when the
 	// original destination of the matching default-zone entry was looked up, and is neither a
-	// Service known to the proxier nor a NodePortLocal port. This only happens for some connections
+	// Service known to the proxier nor a NodePortLocal port, or when it could not be a Service (for
+	// a protocol other than the Service protocols). This only happens for some connections
 	// initiated by the host network of this Node (see IsFromHostNetwork), which are correlated even
-	// though they may not be connections to a Service.
+	// though they may not be connections to a Service, and for the default-zone connections that
+	// the correlator reports on their own.
 	IsServiceUnresolved bool
 	// IsFromHostNetwork is set to true during external correlation when this connection was
 	// initiated by the host network stack of this Node (e.g., by kubelet, or by a hostNetwork Pod)
