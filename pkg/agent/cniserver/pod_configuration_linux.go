@@ -20,8 +20,10 @@ package cniserver
 import (
 	"fmt"
 	"net"
+	"time"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -106,10 +108,30 @@ func (pc *podConfigurator) isInterfaceInvalid(ifaceConfig *interfacestore.Interf
 	return ifaceConfig.OFPort == -1
 }
 
-func (pc *podConfigurator) initPortStatusMonitor(_ cache.SharedIndexInformer) {
-
+func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexInformer) {
+	pc.initUnreadyPortQueue(podInformer)
 }
 
 func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
+	// unreadyPortQueue is nil for a podConfigurator instance that only configures Pod secondary
+	// network interfaces; there is nothing to run for it.
+	if pc.unreadyPortQueue == nil {
+		<-stopCh
+		return
+	}
+	defer pc.unreadyPortQueue.ShutDown()
+
+	klog.InfoS("Starting", "worker", workerName)
+	defer klog.InfoS("Shutting down", "worker", workerName)
+
+	if !cache.WaitForNamedCacheSync(workerName, stopCh, pc.podListerSynced) {
+		return
+	}
+	pc.eventBroadcaster.StartStructuredLogging(0)
+	pc.eventBroadcaster.StartRecordingToSink(stopCh)
+	defer pc.eventBroadcaster.Shutdown()
+
+	go wait.Until(pc.worker, time.Second, stopCh)
+
 	<-stopCh
 }
