@@ -436,3 +436,58 @@ func TestGroupModToString(t *testing.T) {
 		})
 	}
 }
+
+func TestNXActionCTNATToString(t *testing.T) {
+	ipv4 := net.ParseIP("192.168.10.2")
+	ipv6 := net.ParseIP("fe::ca8:a02")
+	portMin, portMax := uint16(80), uint16(90)
+	for _, tt := range []struct {
+		name     string
+		actionFn func() *openflow15.NXActionCTNAT
+		expected string
+	}{
+		{
+			name: "IPv4 DNAT with port range",
+			actionFn: func() *openflow15.NXActionCTNAT {
+				a := openflow15.NewNXActionCTNAT()
+				a.SetDNAT()
+				a.SetRangeIPv4Min(ipv4)
+				a.SetRangeIPv4Max(ipv4)
+				a.SetRangeProtoMin(&portMin)
+				a.SetRangeProtoMax(&portMax)
+				return a
+			},
+			expected: "nat(dst=192.168.10.2:80-90)",
+		},
+		{
+			name: "IPv6 DNAT with port range",
+			actionFn: func() *openflow15.NXActionCTNAT {
+				a := openflow15.NewNXActionCTNAT()
+				a.SetDNAT()
+				a.SetRangeIPv6Min(ipv6)
+				a.SetRangeIPv6Max(ipv6)
+				a.SetRangeProtoMin(&portMin)
+				a.SetRangeProtoMax(&portMax)
+				return a
+			},
+			expected: "nat(dst=[fe::ca8:a02]:80-90)",
+		},
+		{
+			name: "IPv6 SNAT with a single port",
+			actionFn: func() *openflow15.NXActionCTNAT {
+				a := openflow15.NewNXActionCTNAT()
+				a.SetSNAT()
+				a.SetRangeIPv6Min(ipv6)
+				a.SetRangeIPv6Max(ipv6)
+				a.SetRangeProtoMin(&portMin)
+				a.SetRangeProtoMax(&portMin)
+				return a
+			},
+			expected: "nat(src=[fe::ca8:a02]:80)",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, nxActionCTNATToString(tt.actionFn()))
+		})
+	}
+}

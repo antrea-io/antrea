@@ -714,9 +714,8 @@ func nxActionCTNATToString(action openflow15.Action) string {
 		}
 	}
 	var portRangeStr string
-	if a.RangeProtoMin != nil || a.RangeProtoMax != nil {
-		if a.RangeProtoMin != nil && a.RangeIPv4Max == nil ||
-			a.RangeProtoMin != nil && a.RangeIPv4Max != nil && *a.RangeProtoMin == *a.RangeProtoMax {
+	if a.RangeProtoMin != nil {
+		if a.RangeProtoMax == nil || *a.RangeProtoMin == *a.RangeProtoMax {
 			portRangeStr = fmt.Sprintf(":%d", *a.RangeProtoMin)
 		} else {
 			portRangeStr = fmt.Sprintf(":%d-%d", *a.RangeProtoMin, *a.RangeProtoMax)
