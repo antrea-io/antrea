@@ -120,7 +120,7 @@ func TestGetClusterSet(t *testing.T) {
 		},
 		{
 			name:           "error due to no kubeconfig",
-			expectedOutput: "flag accessed but not defined: kubeconfig",
+			expectedOutput: `flag "kubeconfig" does not exist`,
 			donotFake:      true,
 		},
 	}

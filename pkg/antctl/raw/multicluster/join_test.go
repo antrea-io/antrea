@@ -255,7 +255,7 @@ func TestJoinOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty kubeconfig",
-			expectedOutput: "flag accessed but not defined: kubeconfig",
+			expectedOutput: `flag "kubeconfig" does not exist`,
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					LeaderClusterID: "leader-id",

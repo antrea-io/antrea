@@ -59,13 +59,23 @@ var (
 	protocolTCP = int32(6)
 )
 
-func modifyCommandAndOption(src, dst, outputType, liveTraffic, droppedOnly, nowait string) {
-	Command.Flags().Set("source", src)
-	Command.Flags().Set("destination", dst)
-	Command.Flags().Set("output", outputType)
-	Command.Flags().Set("live-traffic", liveTraffic)
-	Command.Flags().Set("dropped-only", droppedOnly)
-	Command.Flags().Set("nowait", nowait)
+func modifyCommandAndOption(t *testing.T, src, dst, outputType, liveTraffic, droppedOnly, nowait string) {
+	t.Helper()
+	if liveTraffic == "" {
+		liveTraffic = "false"
+	}
+	if droppedOnly == "" {
+		droppedOnly = "false"
+	}
+	if nowait == "" {
+		nowait = "false"
+	}
+	require.NoError(t, Command.Flags().Set("source", src))
+	require.NoError(t, Command.Flags().Set("destination", dst))
+	require.NoError(t, Command.Flags().Set("output", outputType))
+	require.NoError(t, Command.Flags().Set("live-traffic", liveTraffic))
+	require.NoError(t, Command.Flags().Set("dropped-only", droppedOnly))
+	require.NoError(t, Command.Flags().Set("nowait", nowait))
 }
 
 // TestGetPortFields tests if a flow can be turned into a map.
@@ -109,6 +119,11 @@ func TestGetPortFields(t *testing.T) {
 
 // TestParseFlow tests if a flow can be parsed correctly.
 func TestParseFlow(t *testing.T) {
+	previousFlow := option.flow
+	t.Cleanup(func() {
+		option.flow = previousFlow
+	})
+
 	tcs := []struct {
 		flow     string
 		success  bool
@@ -199,6 +214,11 @@ func TestParseFlow(t *testing.T) {
 }
 
 func TestRunE(t *testing.T) {
+	previousTimeout := option.timeout
+	t.Cleanup(func() {
+		option.timeout = previousTimeout
+	})
+
 	tcs := []struct {
 		name        string
 		src         string
@@ -273,8 +293,8 @@ source: default/pod-1
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			modifyCommandAndOption(tt.src, tt.dst, tt.outputType, tt.liveTraffic, tt.droppedOnly, "")
-			defer modifyCommandAndOption("", "", "yaml", "", "", "")
+			modifyCommandAndOption(t, tt.src, tt.dst, tt.outputType, tt.liveTraffic, tt.droppedOnly, "")
+			defer modifyCommandAndOption(t, "", "", "yaml", "", "", "")
 
 			client := antreafakeclient.NewSimpleClientset()
 			client.PrependReactor("create", "traceflows", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -307,7 +327,7 @@ func TestGetK8sClient(t *testing.T) {
 	}{
 		{
 			name:        "kubeconfig not defined",
-			expectedErr: "flag accessed but not defined: kubeconfig",
+			expectedErr: `flag "kubeconfig" does not exist`,
 		},
 		{
 			name: "valid kubeconfig",
@@ -370,6 +390,13 @@ kind: Config`),
 }
 
 func TestNewTraceflow(t *testing.T) {
+	previousFlow, previousTimeout := option.flow, option.timeout
+	option.flow = "tcp,tcp_dst=4321,ipv6"
+	option.timeout = defaultTimeout
+	t.Cleanup(func() {
+		option.flow, option.timeout = previousFlow, previousTimeout
+	})
+
 	tcs := []struct {
 		name        string
 		src         string
@@ -512,8 +539,8 @@ func TestNewTraceflow(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			modifyCommandAndOption(tc.src, tc.dst, "yaml", tc.liveTraffic, tc.droppedOnly, "")
-			defer modifyCommandAndOption("", "", "yaml", "", "", "")
+			modifyCommandAndOption(t, tc.src, tc.dst, "yaml", tc.liveTraffic, tc.droppedOnly, "")
+			defer modifyCommandAndOption(t, "", "", "yaml", "", "", "")
 
 			tf, err := newTraceflow(k8sClient)
 			require.NoError(t, err)
@@ -555,8 +582,8 @@ func TestGetTFName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			modifyCommandAndOption("", "", "", "", "", tc.nowait)
-			defer modifyCommandAndOption("", "", "yaml", "", "", "")
+			modifyCommandAndOption(t, "", "", "", "", "", tc.nowait)
+			defer modifyCommandAndOption(t, "", "", "yaml", "", "", "")
 
 			got := getTFName(tc.prefix)
 			if tc.nowait != "" {

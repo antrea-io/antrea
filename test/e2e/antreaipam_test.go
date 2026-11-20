@@ -201,11 +201,13 @@ func TestAntreaIPAM(t *testing.T) {
 	// connectivity test with antrea redeploy
 	t.Run("testAntreaIPAMPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
+		defer exportLogsForSubtest(t, data)()
 		testPodConnectivityAfterAntreaRestart(t, data, testAntreaIPAMNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
+		defer exportLogsForSubtest(t, data)()
 		testPodConnectivityAfterAntreaRestart(t, data, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
