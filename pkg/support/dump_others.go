@@ -20,6 +20,7 @@ package support
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"path"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	"antrea.io/antrea/v2/pkg/agent/util/nftables"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
@@ -49,6 +51,13 @@ var nftablesIPv6Supported = sync.OnceValue(func() bool {
 	}
 	return true
 })
+
+// netInterfaces and getSysctlNet are indirections over net.Interfaces and sysctl.GetSysctlNet
+// so that tests can simulate failures without requiring specific interfaces or sysctl values to
+// be present on the test host.
+var netInterfaces = net.Interfaces
+
+var getSysctlNet = sysctl.GetSysctlNet
 
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
@@ -71,6 +80,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 		return err
 	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
+		return err
+	}
+	if err := d.dumpInterfaceConfigs(basedir); err != nil {
 		return err
 	}
 	return nil
@@ -137,6 +149,39 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 		return err
 	}
 	return nil
+}
+
+func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
+	interfaces, err := netInterfaces()
+	if err != nil {
+		return fmt.Errorf("error getting network interfaces: %w", err)
+	}
+	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
+	isRelevantIface := func(ifaceName string) bool {
+		return ifaceName == hostGateway ||
+			ifaceName == "antrea-egress0" ||
+			ifaceName == "antrea-ingress0" ||
+			strings.HasPrefix(ifaceName, "antrea-ext.")
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	var output bytes.Buffer
+	for _, iface := range interfaces {
+		if !isRelevantIface(iface.Name) {
+			continue
+		}
+		output.WriteString(iface.Name)
+		output.WriteString("\n")
+		for _, param := range params {
+			value, err := getSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
+			if err != nil {
+				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
+				continue
+			}
+			fmt.Fprintf(&output, "%s=%d\n", param, value)
+		}
+		output.WriteString("\n")
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", output.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
