@@ -163,6 +163,14 @@ antreaProxy:
   # -- Determines how external traffic is processed when it's load balanced
   # across Nodes by default. It must be one of "nat" or "dsr".
   defaultLoadBalancerMode: "nat"
+  dsr:
+    # -- Determines how the ingress Node sends the traffic of a DSR Service to
+    # the Node hosting the selected Endpoint by default. It must be one of
+    # "tunnel" or "l2". "l2" requires the DSRDispatchL2 feature gate, noEncap
+    # or hybrid mode, and all Nodes in one L2 segment. It is not supported with
+    # hostNetworkMode "nftables" or with enableBridgingMode. A Service can
+    # override it with the "service.antrea.io/dsr-dispatch" annotation.
+    dispatch: "tunnel"
   # -- Disables the health check server run by Antrea Proxy, which provides health
   # information about Services of type LoadBalancer with externalTrafficPolicy set to
   # Local, when proxyAll is enabled. This avoids race conditions between kube-proxy

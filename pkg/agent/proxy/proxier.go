@@ -36,6 +36,7 @@ import (
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
@@ -637,7 +638,8 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 	protocol binding.Protocol,
 	trafficPolicyLocal bool,
 	affinityTimeout uint16,
-	loadBalancerMode agentconfig.LoadBalancerMode) error {
+	loadBalancerMode agentconfig.LoadBalancerMode,
+	dsrDispatch *agentconfig.DSRDispatch) error {
 	for _, ip := range externalIPs {
 		if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
 			ServiceIP:          ip,
@@ -651,6 +653,7 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 			IsNodePort:         false,
 			IsNested:           false, // Unsupported for ExternalIP
 			IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+			DSRDispatch:        dsrDispatch,
 		}); err != nil {
 			return fmt.Errorf("failed to install ExternalIP load balancing OVS flows: %w", err)
 		}
@@ -681,7 +684,8 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 	protocol binding.Protocol,
 	trafficPolicyLocal bool,
 	affinityTimeout uint16,
-	loadBalancerMode agentconfig.LoadBalancerMode) error {
+	loadBalancerMode agentconfig.LoadBalancerMode,
+	dsrDispatch *agentconfig.DSRDispatch) error {
 	for _, ip := range loadBalancerIPs {
 		if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
 			ServiceIP:          ip,
@@ -695,6 +699,7 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 			IsNodePort:         false,
 			IsNested:           false, // Unsupported for LoadBalancerIP
 			IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+			DSRDispatch:        dsrDispatch,
 		}); err != nil {
 			return fmt.Errorf("failed to install LoadBalancerIP load balancing OVS flows: %w", err)
 		}
@@ -761,7 +766,8 @@ func (p *proxier) installService(svcPortName k8sproxy.ServicePortName, svcPort k
 			svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds() || // All Service flows use it.
 			svcInfo.ExternalPolicyLocal() != pSvcInfo.ExternalPolicyLocal() || // It affects the group ID used by external Service flows.
 			svcInfo.InternalPolicyLocal() != pSvcInfo.InternalPolicyLocal() || // It affects the group ID used by internal Service flows.
-			svcInfo.LoadBalancerMode != pSvcInfo.LoadBalancerMode
+			svcInfo.LoadBalancerMode != pSvcInfo.LoadBalancerMode ||
+			!ptr.Equal(svcInfo.DSRDispatch, pSvcInfo.DSRDispatch) // It affects the DSR flows of external Service IPs.
 		needUpdateServiceExternalAddresses = serviceExternalAddressesChanged(svcInfo, pSvcInfo)
 		needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
 			pSvcInfo.ExternalPolicyLocal() != svcInfo.ExternalPolicyLocal() ||
@@ -943,14 +949,16 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, 
 			return false
 		}
 		// Install ExternalIP flows and configurations.
-		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.ExternalIPs(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.ExternalIPs(), svcPort, svcProto,
+			svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode, svcInfo.DSRDispatch); err != nil {
 			klog.ErrorS(err, "Error when installing ExternalIP flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
 	}
 	// Install LoadBalancer flows and configurations.
 	if p.proxyLoadBalancerIPs {
-		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerVIPs(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerVIPs(), svcPort, svcProto,
+			svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode, svcInfo.DSRDispatch); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -988,7 +996,8 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 			klog.ErrorS(err, "Error when uninstalling ExternalIP flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
 		}
-		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, addedExternalIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, addedExternalIPs, svcPort, svcProto,
+			svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode, svcInfo.DSRDispatch); err != nil {
 			klog.ErrorS(err, "Error when installing ExternalIP flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -1004,7 +1013,8 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 			klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
 		}
-		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, addedLoadBalancerIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, addedLoadBalancerIPs, svcPort, svcProto,
+			svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode, svcInfo.DSRDispatch); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
