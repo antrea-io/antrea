@@ -53,7 +53,7 @@ type ConnectionStoreConfig struct {
 }
 
 // RemotePodQuerier identifies the Pods running on other Nodes, towards which this Node reports the
-// connections initiated by its host network.
+// connections initiated by its host network, or by external clients that it forwards.
 type RemotePodQuerier interface {
 	// IsRemotePodIP returns whether ip is the IP of a Pod running on another Node which receives
 	// the connections initiated by the host network of this Node with the gateway IP of this Node
@@ -63,6 +63,13 @@ type RemotePodQuerier interface {
 	// correlates with the record exported by this Node. It returns false for the gateway IP of
 	// another Node.
 	IsRemotePodIP(ip netip.Addr) bool
+	// IsRemotePodIPRoutedByHost returns whether ip is the IP of a Pod running on another Node, to
+	// which the host network of this Node routes its traffic without going through OVS, i.e.,
+	// through the uplink (noEncap mode, and hybrid mode for Nodes in the same subnet) or through
+	// antrea-wg0 (WireGuard). It returns false for the gateway IP of another Node.
+	IsRemotePodIPRoutedByHost(ip netip.Addr) bool
+	// IsPodSubnetIP returns whether ip belongs to the Pod subnet of any Node, including this Node.
+	IsPodSubnetIP(ip netip.Addr) bool
 }
 
 type connectionStore struct {

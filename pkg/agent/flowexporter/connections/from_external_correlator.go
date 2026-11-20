@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
@@ -39,7 +40,9 @@ type ExternalCorrelator interface {
 	// dumped during that poll. It updates the matching Antrea-zone connections in place. The
 	// default zone must have been dumped after the Antrea zones (see Poller.Poll). Correlate
 	// must not be called concurrently: the state carried across calls assumes sequential polls.
-	Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection)
+	// It returns the default-zone connections which must be reported on their own, as they have
+	// no Antrea-zone counterpart (see FromExternalCorrelator.Correlate).
+	Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) []*connection.Connection
 }
 
 // FromExternalCorrelator correlates default-zone (pre-Antrea DNAT/SNAT) connections with
@@ -56,7 +59,8 @@ type ExternalCorrelator interface {
 // It also identifies the Antrea-zone connections initiated by the host network stack of this Node
 // (e.g., by kubelet, or by a hostNetwork Pod), when the IPs of this Node are provided (see
 // Correlate). This requires the default zone to be the host's conntrack table, which is only the
-// case on Linux.
+// case on Linux. For the same reason, the connections that the host routes to Pods running on other
+// Nodes without going through OVS are only reported on Linux (see Correlate).
 type FromExternalCorrelator struct {
 	proxier    proxy.ProxyQuerier
 	nplQuerier portcache.NPLQuerier
@@ -65,6 +69,17 @@ type FromExternalCorrelator struct {
 	// connection received by this Node, so a default-zone connection whose original source
 	// address is one of them was initiated by the host network stack of this Node.
 	nodeIPs sets.Set[netip.Addr]
+	// remotePodQuerier identifies the Pods running on other Nodes to which the host routes its
+	// traffic without going through OVS. If nil, the connections towards these Pods are not
+	// reported by this Node (see Correlate).
+	remotePodQuerier RemotePodQuerier
+	// defaultZoneOnlyConns holds the default-zone connections ingested during the current poll
+	// which are reported from their default-zone entry alone (see isDefaultZoneOnly).
+	defaultZoneOnlyConns []*connection.Connection
+	// hairpinConns holds the masqueraded source address and port of the default-zone connections
+	// ingested during the current poll whose original source is the virtual Service IP, keyed by
+	// their original source port and destination (see setHairpinSNAT).
+	hairpinConns map[hairpinKey]hairpinSNAT
 	// connections holds the default-zone snapshots ingested during the current poll.
 	connections map[correlatorKey]defaultZoneSnapshot
 	// hostNetworkConns holds the keys of the default-zone connections initiated by the host
@@ -75,6 +90,43 @@ type FromExternalCorrelator struct {
 	matched map[antreaZoneConnIdentity]defaultZoneSnapshot
 	// nextMatched is populated during the current poll, and replaces matched at the end of it.
 	nextMatched map[antreaZoneConnIdentity]defaultZoneSnapshot
+}
+
+// hairpinKey identifies a connection that OVS sent back to the host after the hairpin SNAT, from its
+// source port and its destination. As the hairpin SNAT usually preserves the source port, this is
+// also the key of the Antrea-zone connection before correlation (see hairpinKeyFromConn).
+type hairpinKey struct {
+	srcPort  uint16
+	dstIP    netip.Addr
+	dstPort  uint16
+	protocol uint8
+}
+
+// hairpinSNAT is the source address and port of a hairpin connection after the host masqueraded
+// it.
+type hairpinSNAT struct {
+	ip   netip.Addr
+	port uint16
+}
+
+var (
+	// virtualServiceIPv4 and virtualServiceIPv6 are the source addresses of the connections that
+	// OVS sends back to the host after the hairpin SNAT.
+	virtualServiceIPv4 = netip.AddrFrom4([4]byte(config.VirtualServiceIPv4.To4()))
+	virtualServiceIPv6 = netip.AddrFrom16([16]byte(config.VirtualServiceIPv6.To16()))
+)
+
+// hairpinKeyFromConn builds the hairpin key of a default-zone connection whose original source is
+// the virtual Service IP, or of an Antrea-zone connection. The latter must not have been correlated
+// yet: correlation restores the source port used by the client before the host applied SNAT, while
+// the hairpin SNAT preserves the source port seen by OVS.
+func hairpinKeyFromConn(conn *connection.Connection) hairpinKey {
+	return hairpinKey{
+		srcPort:  conn.FlowKey.SourcePort,
+		dstIP:    conn.FlowKey.DestinationAddress,
+		dstPort:  conn.FlowKey.DestinationPort,
+		protocol: conn.FlowKey.Protocol,
+	}
 }
 
 // correlatorKey is the five-tuple used to match a default-zone (pre-NAT) conntrack entry to its
@@ -186,11 +238,15 @@ func antreaZoneConnIdentityFromConn(conn *connection.Connection, key correlatorK
 // node port (these are not registered in the proxier's Service map); it may be nil.
 // nodeIPs holds the IPs of this Node, used to identify the connections initiated by the host
 // network of this Node; if empty, these connections are not identified.
-func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier, nodeIPs sets.Set[netip.Addr]) *FromExternalCorrelator {
+// remotePodQuerier identifies the Pods running on other Nodes that the host reaches without going
+// through OVS; if nil, the connections towards these Pods are not reported (see Correlate).
+func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier, nodeIPs sets.Set[netip.Addr], remotePodQuerier RemotePodQuerier) *FromExternalCorrelator {
 	return &FromExternalCorrelator{
 		proxier:          proxier,
 		nplQuerier:       nplQuerier,
 		nodeIPs:          nodeIPs,
+		remotePodQuerier: remotePodQuerier,
+		hairpinConns:     map[hairpinKey]hairpinSNAT{},
 		connections:      map[correlatorKey]defaultZoneSnapshot{},
 		hostNetworkConns: map[correlatorKey]struct{}{},
 		matched:          map[antreaZoneConnIdentity]defaultZoneSnapshot{},
@@ -226,16 +282,70 @@ func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.
 // for a Service, the original destination. When OVS also translates the destination of such a
 // connection (i.e., for a Service handled by AntreaProxy with proxyAll), the default-zone entry is
 // keyed on the destination before that translation (see popMatchingTranslatedByHost).
-func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) {
+//
+// The host routes some connections to Pods running on other Nodes without going through OVS (see
+// RemotePodQuerier.IsRemotePodIPRoutedByHost), and the destination Node then sees an IP of this
+// Node as their source (or its gateway IP, with WireGuard). For the connections initiated by the
+// host network of this Node, and for the ones from external clients translated by the host (e.g.,
+// by kube-proxy for a NodePort Service), only this Node can report their source: they have no
+// Antrea-zone entry, and are reported from their default-zone entry alone, as the source-Node half
+// of the flow (see isDefaultZoneOnly). Correlate returns these connections. With proxyAll, the
+// connections to a Service handled by AntreaProxy whose Endpoint is such a Pod do have an
+// Antrea-zone entry, but OVS sends them back to the host after the Service translation, and the
+// host masquerades them (see setHairpinSNAT).
+func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*connection.Connection) []*connection.Connection {
+	c.defaultZoneOnlyConns = nil
 	for _, conn := range defaultZoneConns {
 		c.ingestDefaultZoneFlow(conn)
 	}
 	for _, conn := range antreaZoneConns {
+		if conn == nil {
+			continue
+		}
+		// The hairpin key and the source address seen by OVS must be read before correlation.
+		hairpinKey := hairpinKeyFromConn(conn)
+		srcIP := conn.FlowKey.SourceAddress
 		if !c.correlateIfExternal(conn) {
 			c.markIfFromHostNetwork(conn)
 		}
+		c.setHairpinSNAT(conn, hairpinKey, srcIP)
 	}
 	c.finishPoll()
+	return c.defaultZoneOnlyConns
+}
+
+// setHairpinSNAT sets the ProxySnat address and port of the given Antrea-zone connection if OVS sent
+// it back to the host after the hairpin SNAT, and the host masqueraded it to route it to a Pod
+// running on another Node without going through OVS (e.g., with proxyAll in noEncap mode, for a
+// connection to a Service whose Endpoint is such a Pod): this is the tuple seen by the destination
+// Node, which the FlowAggregator uses to correlate the records of both Nodes. key and srcIP are the
+// hairpin key and the source address of the connection before correlation.
+//
+// This applies to the connections initiated by the host network of this Node, and to the ones from
+// external clients (e.g., to a NodePort Service), which enter OVS through antrea-gw0, but not to the
+// ones from Pods, which OVS does not send back to the host. The connection is matched with the
+// hairpin connection from its source port and destination: if two hairpin connections with the
+// same source port and destination exist at the same time, the hairpin SNAT translates the source
+// port of the second one, which can then be matched with the first one. An exact match would
+// require dumping the SNAT zone of OVS.
+func (c *FromExternalCorrelator) setHairpinSNAT(conn *connection.Connection, key hairpinKey, srcIP netip.Addr) {
+	if len(c.hairpinConns) == 0 || c.remotePodQuerier == nil {
+		return
+	}
+	snat, ok := c.hairpinConns[key]
+	// If the host did not change the tuple seen by OVS (e.g., when it masquerades a connection
+	// whose source is already its gateway IP with WireGuard), the destination Node sees it as is.
+	if !ok || (snat.ip == srcIP && snat.port == key.srcPort) {
+		return
+	}
+	if !conn.IsFromHostNetwork && c.remotePodQuerier.IsPodSubnetIP(conn.FlowKey.SourceAddress) {
+		return
+	}
+	if !c.remotePodQuerier.IsRemotePodIPRoutedByHost(conn.FlowKey.DestinationAddress) {
+		return
+	}
+	conn.ProxySnatIP = snat.ip
+	conn.ProxySnatPort = snat.port
 }
 
 // finishPoll discards the default-zone snapshots ingested during the poll which were not used:
@@ -246,6 +356,7 @@ func (c *FromExternalCorrelator) Correlate(defaultZoneConns, antreaZoneConns []*
 func (c *FromExternalCorrelator) finishPoll() {
 	clear(c.connections)
 	clear(c.hostNetworkConns)
+	clear(c.hairpinConns)
 	c.matched, c.nextMatched = c.nextMatched, c.matched
 	clear(c.nextMatched)
 }
@@ -323,15 +434,31 @@ func isTranslatedByHost(conn *connection.Connection) bool {
 // during the current poll. Only connections that map to a Service (when proxier is non-nil), and
 // connections initiated by the host network of this Node and translated by the host, are retained
 // for correlation. All the connections initiated by the host network of this Node are also
-// retained to be identified (see markIfFromHostNetwork).
+// retained to be identified (see markIfFromHostNetwork). The connections which are reported from
+// their default-zone entry alone (see isDefaultZoneOnly), and the hairpin connections (see
+// setHairpinSNAT), are retained separately.
 func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connection) {
 	if conn == nil || conn.Zone != DefaultZone {
 		return
 	}
-	// This is checked first, as these connections are not limited to the Service protocols.
+	if c.ingestHairpinFlow(conn) {
+		return
+	}
+	// These are checked first, as these connections are not limited to the Service protocols.
 	isFromHostNetwork := c.isFromHostNetwork(conn.FlowKey.SourceAddress)
 	if isFromHostNetwork {
 		c.hostNetworkConns[keyFromDefaultZoneConn(conn)] = struct{}{}
+	}
+	isDefaultZoneOnly := c.isDefaultZoneOnly(conn, isFromHostNetwork)
+	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+	if err != nil {
+		if isDefaultZoneOnly {
+			// The connection cannot be a connection to a Service (e.g., an ICMP connection).
+			c.addDefaultZoneOnly(conn, "", true)
+			return
+		}
+		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
+		return
 	}
 	// Original destination may be ClusterIP, NodePort, LoadBalancer IP, or ExternalIP.
 	// GetServiceByIP looks up the proxier's ipToServiceMap built from watched Kubernetes Service
@@ -342,11 +469,6 @@ func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connecti
 	// node IP + NodePort, or ClusterIP + service port).
 	svcIP := conn.OriginalDestinationAddress.String()
 	svcPort := conn.OriginalDestinationPort
-	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
-	if err != nil {
-		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
-		return
-	}
 	// serviceResolved indicates the destination matched a Service registered in the proxier's map
 	// (ClusterIP:port, nodeIP:NodePort, LB/External IP:port, etc). With no proxier, this stays
 	// false and every default-zone flow is retained below regardless.
@@ -388,12 +510,74 @@ func (c *FromExternalCorrelator) ingestDefaultZoneFlow(conn *connection.Connecti
 		retainUnresolved = isTranslatedByHost(conn)
 	}
 	isService := serviceResolved || nplServicePortName != ""
-	if isService || retainUnresolved {
-		// With a proxier, the original destination of a flow retained without being resolved
-		// to a Service is not one that the proxier knows about, so the connection store does
-		// not look it up again.
-		c.add(conn, nplServicePortName, c.proxier != nil && !isService)
+	// With a proxier, the original destination of a flow retained without being resolved to a
+	// Service is not one that the proxier knows about, so the connection store does not look it
+	// up again.
+	serviceUnresolved := c.proxier != nil && !isService
+	if isDefaultZoneOnly {
+		c.addDefaultZoneOnly(conn, nplServicePortName, serviceUnresolved)
+		return
 	}
+	if isService || retainUnresolved {
+		c.add(conn, nplServicePortName, serviceUnresolved)
+	}
+}
+
+// ingestHairpinFlow returns whether the given default-zone connection is a connection that OVS sent
+// back to the host after the hairpin SNAT, i.e., whose original source is the virtual Service IP.
+// If the host masqueraded it, its translated source address and port are retained (see
+// setHairpinSNAT). Such a connection is not otherwise ingested: it is the continuation of an
+// Antrea-zone connection, rather than a connection received by this Node.
+func (c *FromExternalCorrelator) ingestHairpinFlow(conn *connection.Connection) bool {
+	if src := conn.FlowKey.SourceAddress; src != virtualServiceIPv4 && src != virtualServiceIPv6 {
+		return false
+	}
+	if conn.ProxySnatIP.IsValid() {
+		c.hairpinConns[hairpinKeyFromConn(conn)] = hairpinSNAT{ip: conn.ProxySnatIP, port: conn.ProxySnatPort}
+	}
+	return true
+}
+
+// ipsSeenReply is the IPS_SEEN_REPLY conntrack status bit.
+const ipsSeenReply = 1 << 1
+
+// isDefaultZoneOnly returns whether the given default-zone connection must be reported from its
+// default-zone entry alone, as the source-Node half of a flow towards a Pod running on another Node
+// which the host routes without going through OVS (see Correlate). This is the case if the
+// connection was initiated by the host network of this Node (isFromHostNetwork), or if the host
+// translated it for a client which is not a Pod (e.g., an external client connecting to a NodePort
+// Service handled by kube-proxy). In the latter case, the source address seen by the destination
+// Node is the one used by the host after SNAT, which is reported as the ProxySnat address, as for
+// the connections from external clients that OVS forwards to other Nodes. The connections from
+// Pods go through OVS on this Node, and are reported from their Antrea-zone entry.
+//
+// The connections which have not seen any reply are ignored: e.g., with WireGuard, the traffic of a
+// client bound to the Node IP is not masqueraded on antrea-wg0, and is dropped by the other Node.
+func (c *FromExternalCorrelator) isDefaultZoneOnly(conn *connection.Connection, isFromHostNetwork bool) bool {
+	if c.remotePodQuerier == nil || conn.StatusFlag&ipsSeenReply == 0 {
+		return false
+	}
+	if !isFromHostNetwork && (!conn.ProxySnatIP.IsValid() || c.remotePodQuerier.IsPodSubnetIP(conn.FlowKey.SourceAddress)) {
+		return false
+	}
+	return c.remotePodQuerier.IsRemotePodIPRoutedByHost(conn.FlowKey.DestinationAddress)
+}
+
+// addDefaultZoneOnly retains the given default-zone connection to be reported on its own (see
+// isDefaultZoneOnly). It is treated as a correlated from-external connection: its source is the
+// original source of the connection, and its original destination may be a Service translated by
+// the host. nplServicePortName and serviceUnresolved are as for add.
+func (c *FromExternalCorrelator) addDefaultZoneOnly(conn *connection.Connection, nplServicePortName string, serviceUnresolved bool) {
+	conn.IsFromExternal = true
+	conn.IsFromHostNetwork = c.isFromHostNetwork(conn.FlowKey.SourceAddress)
+	conn.IsServiceUnresolved = serviceUnresolved
+	conn.DestinationServicePortName = nplServicePortName
+	// The mark and labels of the default zone are unrelated to the ones of the Antrea zones,
+	// which identify the connections to Services and the NetworkPolicy rules.
+	conn.Mark = 0
+	conn.Labels = nil
+	conn.LabelsMask = nil
+	c.defaultZoneOnlyConns = append(c.defaultZoneOnlyConns, conn)
 }
 
 // markIfFromHostNetwork sets IsFromHostNetwork on the given Antrea-zone connection if a

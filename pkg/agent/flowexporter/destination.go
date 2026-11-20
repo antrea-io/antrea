@@ -376,6 +376,9 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 			// Any source that is not a Pod IP and not a gateway IP is treated as FromExternal.
 			// This covers external-to-Pod traffic (e.g. a host-network process on the node
 			// connecting to a local Pod via the node's transport IP rather than antrea-gw0).
+			// If the destination Pod runs on another Node, this is the source-Node half of a
+			// connection from an external client that this Node forwarded after SNAT, which
+			// carries the ProxySnat address and port seen by the destination Node.
 			return utils.FlowTypeFromExternal
 		}
 		return utils.FlowTypeUnsupported
@@ -394,10 +397,12 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 // source is not a Pod, so the connection is exported as FROM_EXTERNAL. If the destination Pod runs
 // on this Node, this is the only record for the flow. Otherwise, this is the source-Node half of
 // the flow, and the exporter sets the source Node name: the FlowAggregator correlates it with the
-// INTER_NODE record exported by the destination Node (see findFlowType). This is only possible if
-// the destination Node reports the connection with the same 5-tuple (see
-// connections.RemotePodQuerier), which also decides which of these connections the connection
-// store keeps.
+// record exported by the destination Node, which is either an INTER_NODE record (see findFlowType),
+// or a FROM_EXTERNAL record whose source is an IP of this Node. This is only possible if this Node
+// reports the connection with the 5-tuple seen by the destination Node, or with that 5-tuple as
+// the ProxySnat address and port (see connections.RemotePodQuerier and
+// connections.FromExternalCorrelator), which also decides which of these connections the
+// connection store keeps.
 func (d *Destination) findHostNetworkFlowType(conn connection.Connection) uint8 {
 	// A local Pod is identified by name, as its IP may not belong to a Pod subnet.
 	if conn.DestinationPodName != "" {
@@ -405,7 +410,19 @@ func (d *Destination) findHostNetworkFlowType(conn connection.Connection) uint8 
 	}
 	// remotePodQuerier is nil in networkPolicyOnly mode, as the Pod subnets of the other Nodes are
 	// unknown, and when there is no NodeRouteController.
-	if d.remotePodQuerier != nil && d.remotePodQuerier.IsRemotePodIP(conn.FlowKey.DestinationAddress) {
+	if d.remotePodQuerier == nil {
+		return utils.FlowTypeUnsupported
+	}
+	dstIP := conn.FlowKey.DestinationAddress
+	// A connection reported from its default-zone entry does not go through OVS on this Node.
+	if conn.Zone == connections.DefaultZone {
+		if d.remotePodQuerier.IsRemotePodIPRoutedByHost(dstIP) {
+			return utils.FlowTypeFromExternal
+		}
+		return utils.FlowTypeUnsupported
+	}
+	if d.remotePodQuerier.IsRemotePodIP(dstIP) ||
+		(conn.ProxySnatIP.IsValid() && d.remotePodQuerier.IsRemotePodIPRoutedByHost(dstIP)) {
 		return utils.FlowTypeFromExternal
 	}
 	return utils.FlowTypeUnsupported

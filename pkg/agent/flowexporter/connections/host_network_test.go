@@ -37,13 +37,17 @@ import (
 )
 
 // fakeRemotePodQuerier mimics the RemotePodQuerier of the FlowExporter for a fixed set of Pod
-// subnets of other Nodes, to which the traffic is tunneled: an IP is the IP of a Pod running on
-// another Node if it belongs to one of them, and is not the gateway IP of that Node.
+// subnets of this Node and of other Nodes. The traffic to the other Nodes is tunneled, unless
+// routedByHost is true (e.g., in noEncap mode, or with WireGuard). An IP is the IP of a Pod running
+// on another Node if it belongs to the Pod subnet of another Node, and is not the gateway IP of
+// that Node.
 type fakeRemotePodQuerier struct {
+	localPodSubnets  []netip.Prefix
 	remotePodSubnets []netip.Prefix
+	routedByHost     bool
 }
 
-func (q *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
+func (q *fakeRemotePodQuerier) isRemotePodIP(ip netip.Addr) bool {
 	for _, prefix := range q.remotePodSubnets {
 		if prefix.Contains(ip) {
 			return ip != prefix.Masked().Addr().Next()
@@ -52,12 +56,31 @@ func (q *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
 	return false
 }
 
+func (q *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
+	return !q.routedByHost && q.isRemotePodIP(ip)
+}
+
+func (q *fakeRemotePodQuerier) IsRemotePodIPRoutedByHost(ip netip.Addr) bool {
+	return q.routedByHost && q.isRemotePodIP(ip)
+}
+
+func (q *fakeRemotePodQuerier) IsPodSubnetIP(ip netip.Addr) bool {
+	for _, prefix := range append(q.localPodSubnets, q.remotePodSubnets...) {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 var (
 	// This Node's Pod subnets and gateway IPs.
-	hostTestLocalGwIPv4  = netip.MustParseAddr("10.244.1.1")
-	hostTestLocalGwIPv6  = netip.MustParseAddr("fd00:10:244:1::1")
-	hostTestLocalPodIPv4 = netip.MustParseAddr("10.244.1.6")
-	hostTestLocalPodIPv6 = netip.MustParseAddr("fd00:10:244:1::6")
+	hostTestLocalPodCIDRv4 = netip.MustParsePrefix("10.244.1.0/24")
+	hostTestLocalPodCIDRv6 = netip.MustParsePrefix("fd00:10:244:1::/64")
+	hostTestLocalGwIPv4    = netip.MustParseAddr("10.244.1.1")
+	hostTestLocalGwIPv6    = netip.MustParseAddr("fd00:10:244:1::1")
+	hostTestLocalPodIPv4   = netip.MustParseAddr("10.244.1.6")
+	hostTestLocalPodIPv6   = netip.MustParseAddr("fd00:10:244:1::6")
 	// This Node's other IPs.
 	hostTestLocalNodeIPv4      = netip.MustParseAddr("172.18.0.2")
 	hostTestLocalNodeIPv6      = netip.MustParseAddr("fd91:8054:ef1f::2")
@@ -76,14 +99,27 @@ var (
 	hostTestNodeIPs = sets.New(hostTestLocalGwIPv4, hostTestLocalGwIPv6, hostTestLocalNodeIPv4, hostTestLocalNodeIPv6, hostTestLocalTransportIPv4)
 )
 
+// newTestRemotePodQuerier returns a RemotePodQuerier for which the traffic to the other Nodes is
+// tunneled.
 func newTestRemotePodQuerier() *fakeRemotePodQuerier {
-	return &fakeRemotePodQuerier{remotePodSubnets: []netip.Prefix{hostTestRemotePodCIDRv4, hostTestRemotePodCIDRv6}}
+	return &fakeRemotePodQuerier{
+		localPodSubnets:  []netip.Prefix{hostTestLocalPodCIDRv4, hostTestLocalPodCIDRv6},
+		remotePodSubnets: []netip.Prefix{hostTestRemotePodCIDRv4, hostTestRemotePodCIDRv6},
+	}
+}
+
+// newTestRoutedByHostRemotePodQuerier returns a RemotePodQuerier for which the host routes the
+// traffic to the other Nodes without going through OVS, as in noEncap mode, or with WireGuard.
+func newTestRoutedByHostRemotePodQuerier() *fakeRemotePodQuerier {
+	q := newTestRemotePodQuerier()
+	q.routedByHost = true
+	return q
 }
 
 // TestFromExternalCorrelator_isFromHostNetwork validates the identification of the default-zone
 // connections initiated by the host network of this Node from their original source address.
 func TestFromExternalCorrelator_isFromHostNetwork(t *testing.T) {
-	c := NewFromExternalCorrelator(nil, nil, hostTestNodeIPs)
+	c := NewFromExternalCorrelator(nil, nil, hostTestNodeIPs, nil)
 	tests := []struct {
 		ip       netip.Addr
 		expected bool
@@ -107,7 +143,7 @@ func TestFromExternalCorrelator_isFromHostNetwork(t *testing.T) {
 	}
 
 	// Without the IPs of this Node (e.g., on Windows), no connection is identified.
-	c = NewFromExternalCorrelator(nil, nil, nil)
+	c = NewFromExternalCorrelator(nil, nil, nil, nil)
 	assert.False(t, c.isFromHostNetwork(hostTestLocalGwIPv4))
 }
 
@@ -130,9 +166,9 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 	tests := []struct {
 		name        string
 		withQuerier bool
-		// noRemotePodIPs makes the querier identify no remote Pod IP, as when the traffic to
-		// the other Nodes is not tunneled.
-		noRemotePodIPs    bool
+		// routedByHost makes the host route the traffic to the other Nodes without going
+		// through OVS, as in noEncap mode.
+		routedByHost      bool
 		conn              connection.Connection
 		localPodIP        netip.Addr
 		expectAdded       bool
@@ -184,19 +220,70 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 		},
 		{
 			// For example, in noEncap mode, a connection to a Service handled by AntreaProxy,
-			// which the destination Node reports on its own.
-			name:           "local gateway to untunneled remote Pod",
-			withQuerier:    true,
-			noRemotePodIPs: true,
-			conn:           hostConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4),
-			expectAdded:    false,
+			// sent back to the host by OVS, whose hairpin connection was not found: the
+			// destination Node sees it with another 5-tuple.
+			name:         "local gateway to untunneled remote Pod",
+			withQuerier:  true,
+			routedByHost: true,
+			conn:         hostConn(hostTestLocalGwIPv4, hostTestRemotePodIPv4),
+			expectAdded:  false,
+		},
+		{
+			// The same connection, whose hairpin connection was found (see
+			// FromExternalCorrelator.setHairpinSNAT).
+			name:         "local gateway to untunneled remote Pod with hairpin SNAT",
+			withQuerier:  true,
+			routedByHost: true,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: hostTestLocalGwIPv4, DestinationAddress: hostTestRemotePodIPv4},
+				IsFromHostNetwork: true,
+				ProxySnatIP:       hostTestLocalNodeIPv4,
+				ProxySnatPort:     40001,
+			},
+			expectAdded:       true,
+			expectFromHostNet: true,
+		},
+		{
+			// For example, a connection from an external client to a NodePort Service handled
+			// by AntreaProxy with proxyAll in noEncap mode.
+			name:         "external client to untunneled remote Pod with hairpin SNAT",
+			withQuerier:  true,
+			routedByHost: true,
+			conn: connection.Connection{
+				FlowKey:       connection.Tuple{SourceAddress: hostTestExternalIPv4, DestinationAddress: hostTestRemotePodIPv4},
+				ProxySnatIP:   hostTestLocalNodeIPv4,
+				ProxySnatPort: 40001,
+			},
+			expectAdded:       true,
+			expectFromHostNet: false,
+		},
+		{
+			name:         "external client to untunneled remote Pod without hairpin SNAT",
+			withQuerier:  true,
+			routedByHost: true,
+			conn:         connection.Connection{FlowKey: connection.Tuple{SourceAddress: hostTestExternalIPv4, DestinationAddress: hostTestRemotePodIPv4}},
+			expectAdded:  false,
+		},
+		{
+			// The ProxySnat address of an Antrea-zone connection is only meaningful for the
+			// connections that the host routes to the destination Node.
+			name:        "external client to tunneled remote Pod with ProxySnat",
+			withQuerier: true,
+			conn: connection.Connection{
+				FlowKey:       connection.Tuple{SourceAddress: hostTestExternalIPv4, DestinationAddress: hostTestRemotePodIPv4},
+				ProxySnatIP:   hostTestLocalNodeIPv4,
+				ProxySnatPort: 40001,
+			},
+			expectAdded: false,
 		},
 		{
 			// A connection correlated with its default-zone entry is kept regardless, but it
-			// is not exported (see Destination.findHostNetworkFlowType).
-			name:           "local Node IP to untunneled remote Pod correlated as from-external",
-			withQuerier:    true,
-			noRemotePodIPs: true,
+			// is not exported (see Destination.findHostNetworkFlowType). The connections
+			// reported from their default-zone entry alone are correlated in the same way
+			// (see FromExternalCorrelator.isDefaultZoneOnly), and are exported.
+			name:         "local Node IP to untunneled remote Pod correlated as from-external",
+			withQuerier:  true,
+			routedByHost: true,
 			conn: connection.Connection{
 				FlowKey:           connection.Tuple{SourceAddress: hostTestLocalNodeIPv4, DestinationAddress: hostTestRemotePodIPv4},
 				IsFromExternal:    true,
@@ -249,8 +336,8 @@ func TestConntrackConnectionStore_HostNetworkConnections(t *testing.T) {
 					return nil, false
 				}).AnyTimes()
 			cfg := testFlowExporterOptions
-			if tc.noRemotePodIPs {
-				cfg.RemotePodQuerier = &fakeRemotePodQuerier{}
+			if tc.routedByHost {
+				cfg.RemotePodQuerier = newTestRoutedByHostRemotePodQuerier()
 			} else if tc.withQuerier {
 				cfg.RemotePodQuerier = newTestRemotePodQuerier()
 			}
@@ -624,7 +711,7 @@ func TestFromExternalCorrelator_HostNetwork(t *testing.T) {
 			if tc.withNodeIPs {
 				nodeIPs = hostTestNodeIPs
 			}
-			correlator := NewFromExternalCorrelator(tc.proxier, nil, nodeIPs)
+			correlator := NewFromExternalCorrelator(tc.proxier, nil, nodeIPs, nil)
 			conn := tc.antreaZoneConn
 			correlator.Correlate(tc.defaultZoneConns, []*connection.Connection{conn})
 			assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
@@ -800,7 +887,7 @@ func TestFromExternalCorrelator_HostNetworkProxyAll(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			correlator := NewFromExternalCorrelator(proxier, nil, hostTestNodeIPs)
+			correlator := NewFromExternalCorrelator(proxier, nil, hostTestNodeIPs, nil)
 			expectedDst := netip.AddrPortFrom(tc.antreaZoneConn.FlowKey.DestinationAddress, tc.antreaZoneConn.FlowKey.DestinationPort)
 			check := func(t *testing.T, conn *connection.Connection) {
 				assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
@@ -933,7 +1020,7 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 				StartTime:                  refTime,
 				StopTime:                   refTime,
 			}
-			correlator := NewFromExternalCorrelator(mockProxier, nil, hostTestNodeIPs)
+			correlator := NewFromExternalCorrelator(mockProxier, nil, hostTestNodeIPs, nil)
 			correlator.Correlate([]*connection.Connection{defaultZoneConn}, []*connection.Connection{antreaZoneConn})
 			require.True(t, antreaZoneConn.IsFromExternal)
 			require.True(t, antreaZoneConn.IsFromHostNetwork)
@@ -945,6 +1032,429 @@ func TestConntrackConnectionStore_HostNetworkServiceLookup(t *testing.T) {
 			assert.Equal(t, hostTestLocalNodeIPv4, storedConn.FlowKey.SourceAddress)
 			assert.Equal(t, tc.origDst, netip.AddrPortFrom(storedConn.OriginalDestinationAddress, storedConn.OriginalDestinationPort))
 			assert.Equal(t, tc.expectedServiceName, storedConn.DestinationServicePortName)
+		})
+	}
+}
+
+// TestFromExternalCorrelator_DefaultZoneOnly validates which default-zone connections are reported
+// on their own, as the source-Node half of a flow towards a Pod running on another Node that the
+// host routes without going through OVS (e.g., in noEncap mode, or with WireGuard).
+func TestFromExternalCorrelator_DefaultZoneOnly(t *testing.T) {
+	const (
+		srcPort  = 40000
+		snatPort = 40001
+		nodePort = 30080
+	)
+	clusterIP := netip.MustParseAddr("10.96.0.10")
+	unknownClusterIP := netip.MustParseAddr("10.96.0.11")
+	clusterIPv6 := netip.MustParseAddr("fd00:10:96::10")
+	proxier := staticProxier{
+		fmt.Sprintf("%s:80/TCP", clusterIP):                       {},
+		fmt.Sprintf("%s:80/TCP", clusterIPv6):                     {},
+		fmt.Sprintf("%s:%d/TCP", hostTestLocalNodeIPv4, nodePort): {},
+	}
+	// defaultZoneConn returns the default-zone entry of a TCP connection from src to
+	// origDst:origDstPort, which the host translated to dst:80, and masqueraded with snatIP if it
+	// is valid. Its mark and labels are set, to check that they are not reported.
+	defaultZoneConn := func(src, origDst netip.Addr, origDstPort uint16, dst, snatIP netip.Addr) *connection.Connection {
+		conn := &connection.Connection{
+			Zone:                       DefaultZone,
+			StatusFlag:                 ipsSeenReply,
+			Mark:                       openflow.ServiceCTMark.GetValue(),
+			Labels:                     []byte{0x1},
+			LabelsMask:                 []byte{0xff},
+			FlowKey:                    connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: srcPort, DestinationPort: 80},
+			OriginalDestinationAddress: origDst,
+			OriginalDestinationPort:    origDstPort,
+		}
+		if snatIP.IsValid() {
+			conn.ProxySnatIP = snatIP
+			conn.ProxySnatPort = snatPort
+		}
+		return conn
+	}
+	toPod := func(src, dst netip.Addr) *connection.Connection {
+		return defaultZoneConn(src, dst, 80, dst, netip.Addr{})
+	}
+	icmpToPod := func(src, dst netip.Addr) *connection.Connection {
+		conn := toPod(src, dst)
+		conn.FlowKey.Protocol = 1
+		conn.FlowKey.SourcePort, conn.FlowKey.DestinationPort, conn.OriginalDestinationPort = 0, 0, 0
+		return conn
+	}
+	unreplied := func(conn *connection.Connection) *connection.Connection {
+		conn.StatusFlag = 0
+		return conn
+	}
+
+	tests := []struct {
+		name                    string
+		querier                 RemotePodQuerier
+		conn                    *connection.Connection
+		expectReported          bool
+		expectFromHostNet       bool
+		expectServiceUnresolved bool
+	}{
+		{
+			// With a proxier, the original destination of a connection to a Pod IP is looked
+			// up, and is not a Service.
+			name:                    "local Node IP to remote Pod",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    toPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			name:                    "IPv6 local Node IP to remote Pod",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    toPod(hostTestLocalNodeIPv6, hostTestRemotePodIPv6),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			// With WireGuard, the host uses the address of antrea-wg0, which is its gateway
+			// IP.
+			name:                    "local gateway to remote Pod",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    toPod(hostTestLocalGwIPv4, hostTestRemotePodIPv4),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			name:              "local Node IP to ClusterIP translated by the host",
+			querier:           newTestRoutedByHostRemotePodQuerier(),
+			conn:              defaultZoneConn(hostTestLocalNodeIPv4, clusterIP, 80, hostTestRemotePodIPv4, netip.Addr{}),
+			expectReported:    true,
+			expectFromHostNet: true,
+		},
+		{
+			name:              "IPv6 local Node IP to ClusterIP translated by the host",
+			querier:           newTestRoutedByHostRemotePodQuerier(),
+			conn:              defaultZoneConn(hostTestLocalNodeIPv6, clusterIPv6, 80, hostTestRemotePodIPv6, netip.Addr{}),
+			expectReported:    true,
+			expectFromHostNet: true,
+		},
+		{
+			name:                    "local Node IP to unknown ClusterIP translated by the host",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    defaultZoneConn(hostTestLocalNodeIPv4, unknownClusterIP, 80, hostTestRemotePodIPv4, netip.Addr{}),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			// The connection cannot be a connection to a Service.
+			name:                    "ICMP from local Node IP to remote Pod",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    icmpToPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			name:                    "IPv6 ICMP from local Node IP to remote Pod",
+			querier:                 newTestRoutedByHostRemotePodQuerier(),
+			conn:                    icmpToPod(hostTestLocalNodeIPv6, hostTestRemotePodIPv6),
+			expectReported:          true,
+			expectFromHostNet:       true,
+			expectServiceUnresolved: true,
+		},
+		{
+			// For example, with kube-proxy, which masquerades the connections to a NodePort.
+			name:           "external client to NodePort translated and masqueraded by the host",
+			querier:        newTestRoutedByHostRemotePodQuerier(),
+			conn:           defaultZoneConn(hostTestExternalIPv4, hostTestLocalNodeIPv4, nodePort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			expectReported: true,
+		},
+		{
+			// The destination Node sees the address of the external client.
+			name:    "external client to remote Pod not masqueraded by the host",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			conn:    toPod(hostTestExternalIPv4, hostTestRemotePodIPv4),
+		},
+		{
+			// The connections from Pods go through OVS, and are reported from their
+			// Antrea-zone entry.
+			name:    "local Pod to NodePort translated and masqueraded by the host",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			conn:    defaultZoneConn(hostTestLocalPodIPv4, hostTestLocalNodeIPv4, nodePort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+		},
+		{
+			// For example, with WireGuard, the traffic of a client bound to the Node IP, which
+			// is dropped by the destination Node.
+			name:    "unreplied connection from local Node IP to remote Pod",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			conn:    unreplied(toPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4)),
+		},
+		{
+			// The host sends the connection through antrea-gw0, and OVS tunnels it: it is
+			// reported from its Antrea-zone entry.
+			name:    "local Node IP to tunneled remote Pod",
+			querier: newTestRemotePodQuerier(),
+			conn:    toPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4),
+		},
+		{
+			name:    "ICMP from local Node IP to tunneled remote Pod",
+			querier: newTestRemotePodQuerier(),
+			conn:    icmpToPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4),
+		},
+		{
+			name:    "local Node IP to remote gateway",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			conn:    toPod(hostTestLocalNodeIPv4, hostTestRemoteGwIPv4),
+		},
+		{
+			name:    "local Node IP to remote Pod without RemotePodQuerier",
+			querier: nil,
+			conn:    toPod(hostTestLocalNodeIPv4, hostTestRemotePodIPv4),
+		},
+		{
+			// A connection sent back to the host by OVS after the hairpin SNAT is the
+			// continuation of an Antrea-zone connection (see setHairpinSNAT).
+			name:    "hairpin connection to remote Pod masqueraded by the host",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			conn:    defaultZoneConn(virtualServiceIPv4, hostTestRemotePodIPv4, 80, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			correlator := NewFromExternalCorrelator(proxier, nil, hostTestNodeIPs, tc.querier)
+			conn := tc.conn
+			expectedFlowKey := conn.FlowKey
+			expectedProxySnat := netip.AddrPortFrom(conn.ProxySnatIP, conn.ProxySnatPort)
+			reported := correlator.Correlate([]*connection.Connection{conn}, nil)
+			if !tc.expectReported {
+				assert.Empty(t, reported)
+				return
+			}
+			require.Len(t, reported, 1)
+			assert.Same(t, conn, reported[0])
+			assert.True(t, conn.IsFromExternal, "The connection should be treated as a correlated from-external connection")
+			assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
+			assert.Equal(t, tc.expectServiceUnresolved, conn.IsServiceUnresolved, "Unexpected IsServiceUnresolved")
+			assert.Equal(t, expectedFlowKey, conn.FlowKey, "The 5-tuple of the connection should not change")
+			assert.Equal(t, expectedProxySnat, netip.AddrPortFrom(conn.ProxySnatIP, conn.ProxySnatPort), "The ProxySnat address of the connection should not change")
+			assert.Zero(t, conn.Mark, "The default-zone mark should not be reported")
+			assert.Nil(t, conn.Labels, "The default-zone labels should not be reported")
+			assert.Nil(t, conn.LabelsMask, "The default-zone labels should not be reported")
+			// The connection is only reported for the poll in which it was dumped.
+			assert.Empty(t, correlator.Correlate(nil, nil))
+		})
+	}
+}
+
+// TestFromExternalCorrelator_HairpinSNAT validates that the Antrea-zone connections that OVS sends
+// back to the host after the hairpin SNAT, and that the host routes to a Pod running on another
+// Node without going through OVS (e.g., with proxyAll in noEncap mode), are reported with the
+// tuple seen by the destination Node as their ProxySnat address and port.
+func TestFromExternalCorrelator_HairpinSNAT(t *testing.T) {
+	const (
+		// clientPort is the source port used by the client.
+		clientPort = 40000
+		// ovsPort is the source port seen by OVS, when the host masquerades the connection
+		// before sending it to OVS.
+		ovsPort = 40001
+		// snatPort is the source port of the hairpin connection after the host masqueraded it.
+		snatPort = 40002
+		nodePort = 30080
+		podPort  = 8080
+	)
+	clusterIP := netip.MustParseAddr("10.96.0.10")
+	clusterIPv6 := netip.MustParseAddr("fd00:10:96::10")
+	virtualNodePortDNATIP := netip.MustParseAddr("169.254.0.252")
+
+	// hairpinConn returns the default-zone entry of the connection sent back to the host by OVS,
+	// whose source port seen by OVS was srcPort, after the Service translation to dst, and
+	// masqueraded by the host with snatIP:snatPort.
+	hairpinConn := func(srcPort uint16, dst, snatIP netip.Addr) *connection.Connection {
+		virtualIP := virtualServiceIPv4
+		if dst.Is6() {
+			virtualIP = virtualServiceIPv6
+		}
+		return &connection.Connection{
+			Zone:                       DefaultZone,
+			StatusFlag:                 ipsSeenReply,
+			FlowKey:                    connection.Tuple{SourceAddress: virtualIP, DestinationAddress: dst, Protocol: 6, SourcePort: srcPort, DestinationPort: podPort},
+			OriginalDestinationAddress: dst,
+			OriginalDestinationPort:    podPort,
+			ProxySnatIP:                snatIP,
+			ProxySnatPort:              snatPort,
+		}
+	}
+	// clientConn returns the default-zone entry of the connection from the client to dst:dstPort,
+	// which the host does not translate, unless snatIP is valid, in which case the host
+	// masquerades it with snatIP:ovsPort.
+	clientConn := func(src, dst netip.Addr, dstPort uint16, snatIP netip.Addr) *connection.Connection {
+		conn := &connection.Connection{
+			Zone:                       DefaultZone,
+			StatusFlag:                 ipsSeenReply,
+			FlowKey:                    connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: clientPort, DestinationPort: dstPort},
+			OriginalDestinationAddress: dst,
+			OriginalDestinationPort:    dstPort,
+		}
+		if snatIP.IsValid() {
+			conn.ProxySnatIP = snatIP
+			conn.ProxySnatPort = ovsPort
+		}
+		return conn
+	}
+	// antreaZoneConn returns the Antrea-zone entry of the connection from src:srcPort to
+	// origDst:origDstPort, translated by OVS to dst:podPort.
+	antreaZoneConn := func(src netip.Addr, srcPort uint16, origDst netip.Addr, origDstPort uint16, dst netip.Addr) *connection.Connection {
+		return &connection.Connection{
+			Zone:                       openflow.CtZone,
+			StatusFlag:                 ipsSeenReply,
+			FlowKey:                    connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: srcPort, DestinationPort: podPort},
+			OriginalDestinationAddress: origDst,
+			OriginalDestinationPort:    origDstPort,
+		}
+	}
+	withSNAT := func(conn *connection.Connection, snat netip.AddrPort) *connection.Connection {
+		conn.ProxySnatIP = snat.Addr()
+		conn.ProxySnatPort = snat.Port()
+		return conn
+	}
+
+	tests := []struct {
+		name              string
+		querier           RemotePodQuerier
+		defaultZoneConns  []*connection.Connection
+		antreaZoneConn    *connection.Connection
+		expectSource      netip.AddrPort
+		expectProxySnat   netip.AddrPort
+		expectFromHostNet bool
+	}{
+		{
+			name:    "local gateway to ClusterIP",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv4, clusterIP, 80, netip.Addr{}),
+				hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort),
+			expectProxySnat:   netip.AddrPortFrom(hostTestLocalNodeIPv4, snatPort),
+			expectFromHostNet: true,
+		},
+		{
+			name:    "IPv6 local gateway to ClusterIP",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv6, clusterIPv6, 80, netip.Addr{}),
+				hairpinConn(clientPort, hostTestRemotePodIPv6, hostTestLocalNodeIPv6),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv6, clientPort, clusterIPv6, 80, hostTestRemotePodIPv6),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv6, clientPort),
+			expectProxySnat:   netip.AddrPortFrom(hostTestLocalNodeIPv6, snatPort),
+			expectFromHostNet: true,
+		},
+		{
+			// A client bound to the Node IP: the host masquerades the connection with the
+			// gateway IP before sending it to OVS, and again with the Node IP after the hairpin
+			// SNAT. The connection is correlated with the first default-zone entry, which
+			// restores the source used by the client.
+			name:    "local Node IP to ClusterIP masqueraded by the host",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalNodeIPv4, clusterIP, 80, hostTestLocalGwIPv4),
+				hairpinConn(ovsPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, ovsPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalNodeIPv4, clientPort),
+			expectProxySnat:   netip.AddrPortFrom(hostTestLocalNodeIPv4, snatPort),
+			expectFromHostNet: true,
+		},
+		{
+			// The host translates the destination to the virtual NodePort DNAT IP, and OVS
+			// translates it to the Endpoint.
+			name:    "external client to NodePort",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestExternalIPv4, virtualNodePortDNATIP, nodePort, netip.Addr{}),
+				hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:  antreaZoneConn(hostTestExternalIPv4, clientPort, virtualNodePortDNATIP, nodePort, hostTestRemotePodIPv4),
+			expectSource:    netip.AddrPortFrom(hostTestExternalIPv4, clientPort),
+			expectProxySnat: netip.AddrPortFrom(hostTestLocalNodeIPv4, snatPort),
+		},
+		{
+			// OVS does not send the connections from Pods back to the host: a hairpin
+			// connection with the same source port and destination is unrelated.
+			name:    "local Pod to ClusterIP",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn: antreaZoneConn(hostTestLocalPodIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:   netip.AddrPortFrom(hostTestLocalPodIPv4, clientPort),
+		},
+		{
+			// For example, with WireGuard, the host masquerades the hairpin connection with
+			// the address of antrea-wg0, which is its gateway IP, and may preserve the source
+			// port.
+			name:    "local gateway to ClusterIP with an unchanged tuple",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv4, clusterIP, 80, netip.Addr{}),
+				withSNAT(hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalGwIPv4), netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort)),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort),
+			expectFromHostNet: true,
+		},
+		{
+			name:    "local gateway to ClusterIP with another hairpin connection",
+			querier: newTestRoutedByHostRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv4, clusterIP, 80, netip.Addr{}),
+				hairpinConn(clientPort+10, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort),
+			expectFromHostNet: true,
+		},
+		{
+			// OVS tunnels the connection to the other Node.
+			name:    "local gateway to ClusterIP with tunneled Endpoint",
+			querier: newTestRemotePodQuerier(),
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv4, clusterIP, 80, netip.Addr{}),
+				hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort),
+			expectFromHostNet: true,
+		},
+		{
+			name:    "local gateway to ClusterIP without RemotePodQuerier",
+			querier: nil,
+			defaultZoneConns: []*connection.Connection{
+				clientConn(hostTestLocalGwIPv4, clusterIP, 80, netip.Addr{}),
+				hairpinConn(clientPort, hostTestRemotePodIPv4, hostTestLocalNodeIPv4),
+			},
+			antreaZoneConn:    antreaZoneConn(hostTestLocalGwIPv4, clientPort, clusterIP, 80, hostTestRemotePodIPv4),
+			expectSource:      netip.AddrPortFrom(hostTestLocalGwIPv4, clientPort),
+			expectFromHostNet: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			correlator := NewFromExternalCorrelator(nil, nil, hostTestNodeIPs, tc.querier)
+			conn := tc.antreaZoneConn
+			reported := correlator.Correlate(tc.defaultZoneConns, []*connection.Connection{conn})
+			assert.Empty(t, reported, "No default-zone connection should be reported on its own")
+			assert.Equal(t, tc.expectSource, netip.AddrPortFrom(conn.FlowKey.SourceAddress, conn.FlowKey.SourcePort), "Unexpected source")
+			assert.Equal(t, tc.expectProxySnat, netip.AddrPortFrom(conn.ProxySnatIP, conn.ProxySnatPort), "Unexpected ProxySnat address")
+			assert.Equal(t, tc.expectFromHostNet, conn.IsFromHostNetwork, "Unexpected IsFromHostNetwork")
+
+			// The hairpin connections are only used during the poll in which they were dumped.
+			conn = tc.antreaZoneConn
+			conn.ProxySnatIP, conn.ProxySnatPort = netip.Addr{}, 0
+			correlator.Correlate(nil, []*connection.Connection{conn})
+			assert.False(t, conn.ProxySnatIP.IsValid(), "The hairpin connection of the previous poll should not be used")
 		})
 	}
 }

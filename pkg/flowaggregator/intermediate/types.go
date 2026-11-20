@@ -57,6 +57,11 @@ type AggregationFlowRecord struct {
 	// isIPv4 indicates whether the source and destination addresses are IPv4 or
 	// IPv6 in the aggregated flow record.
 	isIPv4 bool
+	// exportIfUncorrelated is true for a record of the destination Node which waits for a record
+	// of the source Node, but is complete on its own: if no such record is received before it
+	// expires, it is exported as is, instead of being deleted (see mayHaveSourceNodeRecord). It
+	// is reset once the record is correlated.
+	exportIfUncorrelated bool
 }
 
 type AggregationElements struct {

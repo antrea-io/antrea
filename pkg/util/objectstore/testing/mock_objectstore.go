@@ -56,6 +56,21 @@ func (m *MockNodeStore) EXPECT() *MockNodeStoreMockRecorder {
 	return m.recorder
 }
 
+// GetNodeByIPAndTime mocks base method.
+func (m *MockNodeStore) GetNodeByIPAndTime(ip string, startTime time.Time) (*v1.Node, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeByIPAndTime", ip, startTime)
+	ret0, _ := ret[0].(*v1.Node)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetNodeByIPAndTime indicates an expected call of GetNodeByIPAndTime.
+func (mr *MockNodeStoreMockRecorder) GetNodeByIPAndTime(ip, startTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeByIPAndTime", reflect.TypeOf((*MockNodeStore)(nil).GetNodeByIPAndTime), ip, startTime)
+}
+
 // GetNodeByNameAndTime mocks base method.
 func (m *MockNodeStore) GetNodeByNameAndTime(name string, startTime time.Time) (*v1.Node, bool) {
 	m.ctrl.T.Helper()

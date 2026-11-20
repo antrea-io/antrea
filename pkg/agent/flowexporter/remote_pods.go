@@ -58,8 +58,8 @@ func newRemotePodQuerier(nodeRouteQuerier remotePodSubnetQuerier, networkConfig 
 // and masqueraded with the address of antrea-wg0, which is also the gateway IP. Otherwise (in
 // noEncap mode, and in hybrid mode for the Nodes in the same subnet), the host routes its traffic
 // to the Pods running on the other Node through the uplink, and masquerades it with its own IP if
-// it is first sent to OVS for a Service: the other Node reports such a connection on its own, as a
-// From External flow whose source is an IP of this Node.
+// it is first sent to OVS for a Service: the other Node then sees a different 5-tuple, and this
+// Node only reports the connection if it knows that 5-tuple (see IsRemotePodIPRoutedByHost).
 func (q *remotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
 	peerIP, ok := q.nodeRouteQuerier.GetNodeIPForPodIP(ip)
 	if !ok {
@@ -71,9 +71,36 @@ func (q *remotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
 	if q.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		return true
 	}
-	localIP := q.nodeConfig.NodeTransportIPv4Addr
-	if ip.Is6() {
-		localIP = q.nodeConfig.NodeTransportIPv6Addr
+	return q.networkConfig.NeedsTunnelToPeer(peerIP, q.localTransportIP(ip))
+}
+
+// IsRemotePodIPRoutedByHost implements connections.RemotePodQuerier.
+//
+// The host network of this Node routes its traffic to a Pod running on another Node through
+// antrea-gw0 only when the traffic to that Node is tunneled by OVS. Otherwise, it routes it through
+// the uplink (in noEncap mode, and in hybrid mode for the Nodes in the same subnet), or through
+// antrea-wg0 with WireGuard, for which NeedsTunnelToPeer returns false.
+func (q *remotePodQuerier) IsRemotePodIPRoutedByHost(ip netip.Addr) bool {
+	peerIP, ok := q.nodeRouteQuerier.GetNodeIPForPodIP(ip)
+	if !ok {
+		return false
 	}
-	return q.networkConfig.NeedsTunnelToPeer(peerIP, localIP)
+	if _, isGw := q.nodeRouteQuerier.LookupIPInPodSubnets(ip); isGw {
+		return false
+	}
+	return !q.networkConfig.NeedsTunnelToPeer(peerIP, q.localTransportIP(ip))
+}
+
+// IsPodSubnetIP implements connections.RemotePodQuerier.
+func (q *remotePodQuerier) IsPodSubnetIP(ip netip.Addr) bool {
+	isPod, _ := q.nodeRouteQuerier.LookupIPInPodSubnets(ip)
+	return isPod
+}
+
+// localTransportIP returns the transport IP of this Node in the IP family of ip.
+func (q *remotePodQuerier) localTransportIP(ip netip.Addr) *net.IPNet {
+	if ip.Is6() {
+		return q.nodeConfig.NodeTransportIPv6Addr
+	}
+	return q.nodeConfig.NodeTransportIPv4Addr
 }

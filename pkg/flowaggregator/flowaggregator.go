@@ -297,6 +297,15 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
 	}
+	if fa.nodeStore != nil {
+		apInput.GetNodeNameByIP = func(ip string, startTime time.Time) (string, bool) {
+			node, ok := fa.nodeStore.GetNodeByIPAndTime(ip, startTime)
+			if !ok {
+				return "", false
+			}
+			return node.Name, true
+		}
+	}
 	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput)
 	return err
 }

@@ -42,6 +42,7 @@ import (
 	flowexportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
@@ -334,13 +335,23 @@ func (f *fakePodSubnetChecker) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) 
 }
 
 // fakeRemotePodQuerier is a test implementation of connections.RemotePodQuerier for a fixed set of
-// IPs of Pods running on other Nodes.
+// IPs of Pods running on other Nodes, to which the traffic is tunneled (remotePodIPs), or routed by
+// the host without going through OVS (routedByHostIPs).
 type fakeRemotePodQuerier struct {
-	remotePodIPs sets.Set[netip.Addr]
+	remotePodIPs    sets.Set[netip.Addr]
+	routedByHostIPs sets.Set[netip.Addr]
 }
 
 func (f *fakeRemotePodQuerier) IsRemotePodIP(ip netip.Addr) bool {
 	return f.remotePodIPs.Has(ip)
+}
+
+func (f *fakeRemotePodQuerier) IsRemotePodIPRoutedByHost(ip netip.Addr) bool {
+	return f.routedByHostIPs.Has(ip)
+}
+
+func (f *fakeRemotePodQuerier) IsPodSubnetIP(ip netip.Addr) bool {
+	return f.remotePodIPs.Has(ip) || f.routedByHostIPs.Has(ip)
 }
 
 func TestDestination_findFlowType(t *testing.T) {
@@ -368,9 +379,10 @@ func TestDestination_findFlowType(t *testing.T) {
 	}
 	// podIP2 is the IP of a Pod running on another Node.
 	remotePods := &fakeRemotePodQuerier{remotePodIPs: sets.New(podIP2)}
-	// The other Node does not see the gateway IP of this Node as the source of the connections
-	// initiated by its host network, e.g., in noEncap mode.
-	untunneledRemotePods := &fakeRemotePodQuerier{}
+	// The host routes the traffic to the other Node without going through OVS, e.g., in noEncap
+	// mode, so the other Node does not see the gateway IP of this Node as the source of the
+	// connections initiated by its host network.
+	untunneledRemotePods := &fakeRemotePodQuerier{routedByHostIPs: sets.New(podIP2)}
 
 	tests := []struct {
 		name                string
@@ -380,8 +392,11 @@ func TestDestination_findFlowType(t *testing.T) {
 		// noLocalGatewayIPs is true if the gateway IPs of this Node are not provided, as on
 		// Windows.
 		noLocalGatewayIPs bool
-		conn              connection.Connection
-		expectedFlowType  uint8
+		// defaultZone is true for a default-zone connection reported on its own (see
+		// connections.FromExternalCorrelator), and false for an Antrea-zone connection.
+		defaultZone      bool
+		conn             connection.Connection
+		expectedFlowType uint8
 	}{
 		{
 			name:                "NetworkPolicyOnly mode - IntraNode",
@@ -636,6 +651,76 @@ func TestDestination_findFlowType(t *testing.T) {
 			expectedFlowType: utils.FlowTypeUnsupported,
 		},
 		{
+			// OVS sent the connection back to the host after the hairpin SNAT: its ProxySnat
+			// address and port are the ones seen by the destination Node.
+			name:             "Source is local host network with untunneled remote destination Pod and hairpin SNAT - FromExternal",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP2},
+				IsFromHostNetwork: true,
+				ProxySnatIP:       nodeHostIP,
+				ProxySnatPort:     40000,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			// The connection does not go through OVS, and is reported from its default-zone
+			// entry, with the 5-tuple seen by the destination Node.
+			name:             "Default-zone connection from local host network IP to untunneled remote destination Pod - FromExternal",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			defaultZone:      true,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP2},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			// For example, if the routes changed after the connection was polled.
+			name:             "Default-zone connection from local host network IP to tunneled remote destination Pod - Unsupported",
+			checker:          checker,
+			remotePodQuerier: remotePods,
+			defaultZone:      true,
+			conn: connection.Connection{
+				FlowKey:           connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP2},
+				IsFromExternal:    true,
+				IsFromHostNetwork: true,
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			// For example, a connection to a NodePort Service handled by kube-proxy in noEncap
+			// mode: the source-Node half of the flow, with the ProxySnat address and port
+			// seen by the destination Node.
+			name:             "Default-zone connection from external source to untunneled remote destination Pod - FromExternal",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			defaultZone:      true,
+			conn: connection.Connection{
+				FlowKey:        connection.Tuple{SourceAddress: externalIP, DestinationAddress: podIP2},
+				IsFromExternal: true,
+				ProxySnatIP:    nodeHostIP,
+				ProxySnatPort:  40000,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			// For example, a connection to a NodePort Service handled by AntreaProxy with
+			// proxyAll in noEncap mode, which OVS sent back to the host after the hairpin SNAT.
+			name:             "External source to untunneled remote destination Pod with hairpin SNAT - FromExternal",
+			checker:          checker,
+			remotePodQuerier: untunneledRemotePods,
+			conn: connection.Connection{
+				FlowKey:       connection.Tuple{SourceAddress: externalIP, DestinationAddress: podIP2},
+				ProxySnatIP:   nodeHostIP,
+				ProxySnatPort: 40000,
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
 			name:             "Source is local host network IP with gateway destination - Unsupported",
 			checker:          checker,
 			remotePodQuerier: remotePods,
@@ -688,7 +773,12 @@ func TestDestination_findFlowType(t *testing.T) {
 				nodeRouteController: tc.checker,
 				remotePodQuerier:    tc.remotePodQuerier,
 			}
-			flowType := dest.findFlowType(tc.conn)
+			conn := tc.conn
+			conn.Zone = openflow.CtZone
+			if tc.defaultZone {
+				conn.Zone = connections.DefaultZone
+			}
+			flowType := dest.findFlowType(conn)
 			assert.Equal(t, tc.expectedFlowType, flowType)
 		})
 	}
