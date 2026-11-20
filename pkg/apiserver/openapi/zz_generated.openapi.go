@@ -148,6 +148,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.PeerService{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_PeerService(ref),
 		v1beta1.PodOwner{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_PodOwner(ref),
 		v1beta1.Rule{}.OpenAPIModelName():                                 schema_pkg_apis_crd_v1beta1_Rule(ref),
+		v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName():               schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref),
 		v1beta1.Source{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_Source(ref),
 		v1beta1.StatefulSetOwner{}.OpenAPIModelName():                     schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
 		v1beta1.SubnetInfo{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
@@ -2974,11 +2975,17 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Ref:         ref(v1beta1.NetworkInfo{}.OpenAPIModelName()),
 						},
 					},
+					"secondaryNetwork": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecondaryNetwork reports secondary network realization for either static Agent configuration or AntreaNodeConfig.",
+							Ref:         ref(v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5861,6 +5868,71 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 		},
 		Dependencies: []string{
 			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.L7Protocol{}.OpenAPIModelName(), v1beta1.NetworkPolicyPeer{}.OpenAPIModelName(), v1beta1.NetworkPolicyPort{}.OpenAPIModelName(), v1beta1.NetworkPolicyProtocol{}.OpenAPIModelName(), v1beta1.PeerService{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SecondaryNetworkStatus describes secondary network configuration realization on a Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Source identifies the configuration used for this reconciliation, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigName is the AntreaNodeConfig name when Source is AntreaNodeConfig.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"configUID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigUID identifies the AntreaNodeConfig incarnation when Source is AntreaNodeConfig. Name and generation cannot distinguish same-name recreation.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"currentBridge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"desiredBridge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DesiredBridge is the desired secondary OVS bridge, if any.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is the AntreaNodeConfig generation when Source is AntreaNodeConfig, or zero otherwise.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"conditions"},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 

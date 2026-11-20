@@ -335,6 +335,11 @@ func (in Rule) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in SecondaryNetworkStatus) OpenAPIModelName() string {
+	return "io.antrea.crd.v1beta1.SecondaryNetworkStatus"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in Source) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.Source"
 }
