@@ -45,7 +45,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     - name: Run unit tests
@@ -71,7 +71,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: '.go-version'
       - name: Run unit tests
@@ -98,7 +98,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: '.go-version'
       - name: Run integration tests
@@ -133,7 +133,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     - name: Run golangci-lint
@@ -150,7 +150,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: '.go-version'
       - name: Run golangci-lint
@@ -179,7 +179,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     - name: Build Antrea binaries for amd64
@@ -212,7 +212,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     - name: Build Antrea windows binaries
@@ -229,7 +229,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -251,7 +251,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: '.go-version'
     - name: Run verify scripts
@@ -289,7 +289,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: '.go-version'
       - name: Run Go benchmark test
