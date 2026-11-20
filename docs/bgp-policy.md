@@ -14,6 +14,7 @@
   - [BGPPeers](#bgppeers)
 - [BGP router ID](#bgp-router-id)
 - [BGP Authentication](#bgp-authentication)
+- [Draining Nodes for maintenance](#draining-nodes-for-maintenance)
 - [Example Usage](#example-usage)
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
@@ -171,6 +172,100 @@ stringData:
   2001:db8::1-65000: "password"
 type: Opaque
 ```
+
+## Draining Nodes for maintenance
+
+`kubectl drain` cordons a Node and then evicts its Pods, and throughout that time the Node keeps advertising its Service
+IPs to BGP peers, so traffic keeps arriving while the Pods are being torn down. A graceful drain needs the opposite
+order: withdraw the Service routes first, then evict, so traffic has already moved elsewhere by the time the Pods stop
+serving it.
+
+The optional `spec.drainOnTaints` field on a BGPPolicy gets that order without changing how you drain a Node. It makes
+the antrea-agent treat an untolerated Node taint as a signal to withdraw the Node's Service advertisements, while
+keeping its BGP sessions established. The following BGPPolicy advertises ClusterIP, ExternalIP, and LoadBalancerIP
+Service IPs on Nodes labeled `bgp=enabled`, and tolerates the control-plane taint so that a control-plane Node which
+also speaks BGP does not drain on that taint alone:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: BGPPolicy
+metadata:
+  name: advertise-service-ips-with-drain-on-taints
+spec:
+  nodeSelector:
+    matchLabels:
+      bgp: enabled
+  localASN: 64512
+  listenPort: 179
+  advertisements:
+    service:
+      ipTypes: [ClusterIP, ExternalIP, LoadBalancerIP]
+  bgpPeers:
+    - address: 192.168.77.200
+      asn: 65001
+      port: 179
+  drainOnTaints:
+    enabled: true
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+```
+
+`drainOnTaints` has the following semantics:
+
+- It is off by default. A BGPPolicy without `drainOnTaints` behaves exactly as before, so upgrading Antrea does not
+  change anything.
+- A Node is draining when it carries a `NoSchedule` or `NoExecute` taint that the BGPPolicy does not tolerate.
+  `PreferNoSchedule` taints are ignored.
+- Cordoning a Node drains it out of the box. The node lifecycle controller adds the
+  `node.kubernetes.io/unschedulable:NoSchedule` taint to every cordoned Node, and that taint alone is enough to
+  trigger draining, whether or not a drain follows the cordon.
+- `tolerations` uses the same matching rules as Pod tolerations. Tolerate a taint that is permanent on some Nodes,
+  such as `node-role.kubernetes.io/control-plane`, or a site-specific taint unrelated to maintenance, and the Node
+  keeps advertising through it.
+- A draining Node withdraws its Service advertisements only: ClusterIP, ExternalIP, and LoadBalancerIP routes. Pod
+  CIDR routes and Egress IP routes are not withdrawn. Other Nodes that still have endpoints for the Service keep
+  advertising it, so the fabric converges onto them.
+- BGP sessions stay up while a Node drains. Draining changes only the advertised route set. Uncordoning restores the
+  advertisements with no session teardown, no re-establishment, and no interaction with graceful restart.
+- `enabled` is required inside `drainOnTaints`, so `drainOnTaints: {}` is rejected. Setting `enabled: false` with a
+  `tolerations` list is accepted and does nothing, so the feature can be turned off without deleting the list.
+
+With `drainOnTaints` configured, the recommended sequence for maintenance is:
+
+```bash
+# 1. Cordon the Node. It withdraws its Service routes but keeps serving existing connections.
+kubectl cordon <node>
+
+# 2. Wait for the fabric to converge: one antrea-agent sync plus BGP propagation, typically seconds.
+sleep 5
+
+# 3. Evict the Pods. Traffic has already moved to other Nodes.
+kubectl drain <node> --ignore-daemonsets
+
+# 4. Perform the maintenance.
+
+# 5. Bring the Node back into service.
+kubectl uncordon <node>
+```
+
+A bare `kubectl cordon`, with no `kubectl drain` following it, also withdraws the Node's Service routes while its
+Pods keep serving traffic locally. This is intended: the cordon taint is what `drainOnTaints` watches for, and the
+Node's Pods have not been asked to stop, only new ones have been asked not to schedule there.
+
+Without `drainOnTaints`, an operator can move traffic away before a drain by hand with a label: set a label on the
+Node that the BGPPolicy's `nodeSelector` excludes, then cordon and drain. That moves traffic away before eviction
+too, but at a higher cost. When a Node stops matching a BGPPolicy, the antrea-agent stops the BGP server on that Node entirely,
+tearing down every BGP session on cordon and re-establishing all of them on uncordon, a flap every peer sees.
+`drainOnTaints` avoids that: the BGP sessions never go down, only the advertised routes change.
+
+If control-plane Nodes are also BGP speakers, tolerate `node-role.kubernetes.io/control-plane` in `drainOnTaints`.
+Many clusters keep that taint on control-plane Nodes permanently, so without the toleration those Nodes would
+withdraw their Service routes at all times, not only during maintenance.
+
+Each transition is logged by the antrea-agent, naming the BGPPolicy and, when draining starts, the taint that
+caused it. The current state is also visible as a `draining` field in the output of `antctl get bgppolicy -o json`
+and `-o yaml`.
 
 ## Example Usage
 

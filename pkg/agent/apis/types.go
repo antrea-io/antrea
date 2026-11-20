@@ -221,6 +221,7 @@ func (r ServiceExternalIPInfo) SortRows() bool {
 // BGPPolicyResponse describes the response struct of bgppolicy command.
 type BGPPolicyResponse struct {
 	BGPPolicyName           string   `json:"name,omitempty"`
+	Draining                bool     `json:"draining,omitempty"`
 	RouterID                string   `json:"routerID,omitempty"`
 	LocalASN                int32    `json:"localASN,omitempty"`
 	ListenPort              int32    `json:"listenPort,omitempty"`
