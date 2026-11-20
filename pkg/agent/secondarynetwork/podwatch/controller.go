@@ -17,6 +17,7 @@ package podwatch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -28,8 +29,10 @@ import (
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -45,6 +48,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	agentutil "antrea.io/antrea/v2/pkg/agent/util"
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -87,6 +91,11 @@ type podCNIInfo struct {
 	netNS       string
 }
 
+type secondaryNetworkRollbackState struct {
+	podUID      k8stypes.UID
+	containerID string
+}
+
 type PodController struct {
 	kubeClient          clientset.Interface
 	netAttachDefClient  netdefclient.K8sCniCncfIoV1Interface
@@ -109,7 +118,10 @@ type PodController struct {
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
-	nodeConfig         *config.NodeConfig
+	// Map from "namespace/pod" to secondaryNetworkRollbackState. Only failed
+	// rollbacks are retained; status annotations are not configuration state.
+	pendingRollbacks sync.Map
+	nodeConfig       *config.NodeConfig
 }
 
 func NewPodController(
@@ -220,6 +232,18 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		return nil
 	}
 
+	podKey := podKeyGet(pod.Name, pod.Namespace)
+	if state, pending := pc.pendingRollbacks.Load(podKey); pending {
+		if state == (secondaryNetworkRollbackState{podUID: pod.UID, containerID: podCNIInfo.containerID}) {
+			if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
+				return fmt.Errorf("failed to finish secondary interface rollback for Pod %s/%s: %w", pod.Namespace, pod.Name, err)
+			}
+			storedSecondaryInterfaces = nil
+		}
+		// A new Pod or sandbox must not inherit a previous rollback request.
+		pc.pendingRollbacks.Delete(podKey)
+	}
+
 	var networkList []*netdefv1.NetworkSelectionElement
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
@@ -238,12 +262,14 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 
 	if len(storedSecondaryInterfaces) > 0 {
 		if len(networkList) > 0 {
-			// We do not support secondary network update at the moment. Return as long as one
-			// secondary interface has been created for the Pod.
+			// Annotation entries may be ignored during configuration, and secondary network
+			// updates are not supported. A difference in interface counts does not prove
+			// incomplete setup, so only an explicit pending rollback permits rebuilding.
 			klog.V(1).InfoS("Secondary network already configured on this Pod. Changes to secondary network configuration are not supported, skipping update",
 				"Pod", klog.KObj(pod))
 			return nil
 		}
+		// Removing the network attachment annotation explicitly requests interface cleanup.
 		if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
 			return err
 		}
@@ -409,6 +435,7 @@ func (pc *PodController) syncPod(key string) error {
 	}
 
 	if !podExists {
+		pc.pendingRollbacks.Delete(key)
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
@@ -520,7 +547,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		if err != nil {
 			klog.ErrorS(err, "Failed to get NetworkAttachmentDefinition", "network", network, "Pod", klog.KObj(pod))
 			savedErr = err
-			continue
+			break
 		}
 
 		cniConfig, err := netdefutils.GetCNIConfig(netAttachDef, "")
@@ -554,7 +581,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				// It is probably worth retrying as the NetworkAttachmentDefinition
 				// may eventually be updated with the missing annotation.
 				savedErr = err
-				continue
+				break
 			}
 			resourceName = v
 		}
@@ -609,7 +636,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				"Pod", klog.KObj(pod), "interface", network.InterfaceRequest,
 				"networkType", networkConfig.NetworkType)
 			savedErr = err
-			continue
+			break
 		}
 		status := &netdefv1.NetworkStatus{
 			Name:    network.Name,
@@ -638,9 +665,27 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		interfacesConfigured++
 	}
 
-	if savedErr != nil && interfacesConfigured == 0 {
-		// As we do not support secondary network update, do not return error to
-		// retry, if at least one secondary network is configured.
+	if savedErr != nil {
+		if interfacesConfigured > 0 {
+			// Roll back any partially configured secondary interfaces so that the Pod
+			// does not end up running with missing interfaces and can be cleanly reconciled
+			// on retry.
+			klog.InfoS("Rolling back partially configured secondary interfaces due to configuration failure",
+				"Pod", klog.KObj(pod), "interfacesConfigured", interfacesConfigured)
+			var storedInterfaces []*interfacestore.InterfaceConfig
+			for _, iface := range pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace) {
+				if iface.ContainerID == podCNIInfo.containerID {
+					storedInterfaces = append(storedInterfaces, iface)
+				}
+			}
+			if err := pc.removeInterfaces(storedInterfaces); err != nil {
+				pc.pendingRollbacks.Store(podKeyGet(pod.Name, pod.Namespace), secondaryNetworkRollbackState{
+					podUID: pod.UID, containerID: podCNIInfo.containerID,
+				})
+				klog.ErrorS(err, "Failed to remove partially configured secondary interfaces", "Pod", klog.KObj(pod))
+				return nil, errors.Join(savedErr, fmt.Errorf("failed to roll back partially configured secondary interfaces: %w", err))
+			}
+		}
 		return nil, savedErr
 	}
 
@@ -726,31 +771,45 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 // primary InterfaceStore is empty, preventing the secondary InterfaceStore from
 // initializing correctly. Consequently, secondary IPs assigned to old Pods (with
 // previous container IDs) are not deleted. To resolve this, all IPPool allocations
-// must be checked, and any IPs associated with non-existing container IDs should be
-// released. Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
+// must be checked, and any IPs associated with non-existing secondary interfaces
+// must be released. This also covers allocations left behind by deleted Pods.
+// Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
 // We run it periodically to cover the case where a Pod is recreated with
 // the same name on another Node and has any secondary IP as well.
 func (pc *PodController) cleanUpStaleIPAddresses() {
 	pools, _ := pc.ipPoolLister.List(labels.Everything())
 	for _, ipPool := range pools {
 		for _, address := range ipPool.Status.IPAddresses {
-			if address.Owner.Pod == nil {
+			stalePodOwner := address.Owner.Pod
+			if stalePodOwner == nil {
 				klog.InfoS("IPAM allocation found with no Pod owner", "IPPool", ipPool.Name)
 				continue
 			}
-			if _, err := pc.podLister.Pods(address.Owner.Pod.Namespace).Get(address.Owner.Pod.Name); err == nil {
-				if _, found := pc.interfaceStore.GetContainerInterface(address.Owner.Pod.ContainerID); !found {
-					stalePodOwner := address.Owner.Pod
-					// Only consider SecondaryNetwork interfaces
-					if stalePodOwner.IFName == "" {
-						continue
-					}
-					klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
-					if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
-						klog.ErrorS(err, "Error when releasing IPAM allocation",
-							"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
-					}
+			// Only consider SecondaryNetwork interfaces.
+			if stalePodOwner.IFName == "" {
+				continue
+			}
+			interfaceKey := agentutil.GenerateContainerInterfaceKey(stalePodOwner.ContainerID, stalePodOwner.IFName)
+			if _, found := pc.interfaceStore.GetInterface(interfaceKey); found {
+				continue
+			}
+			// The IPPool cache is cluster-wide while interfaceStore only contains local interfaces.
+			// Use authoritative Pod state to preserve allocations for live Pods on other Nodes.
+			pod, err := pc.kubeClient.CoreV1().Pods(stalePodOwner.Namespace).Get(
+				context.TODO(), stalePodOwner.Name, metav1.GetOptions{})
+			if err == nil {
+				if pod.Spec.NodeName != pc.nodeConfig.Name {
+					continue
 				}
+			} else if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to get Pod before releasing stale IPAM allocation",
+					"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
+				continue
+			}
+			klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
+			if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
+				klog.ErrorS(err, "Error when releasing IPAM allocation",
+					"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
 			}
 		}
 	}
