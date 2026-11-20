@@ -1763,7 +1763,7 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 
 			cacheKey := fmt.Sprintf("s%x", mark)
-			assert.NoError(t, fc.InstallSNATMarkFlows(tc.snatIP, mark))
+			assert.NoError(t, fc.InstallSNATMarkFlows([]net.IP{tc.snatIP}, mark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1821,7 +1821,7 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 			cacheKey := fmt.Sprintf("p%x", ofPort)
 
-			assert.NoError(t, fc.InstallPodSNATFlows(ofPort, snatIP, tc.snatMark))
+			assert.NoError(t, fc.InstallPodSNATFlows(ofPort, []net.IP{snatIP}, tc.snatMark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1829,6 +1829,89 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 			assert.NoError(t, fc.UninstallPodSNATFlows(ofPort))
 			_, ok = fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
+		})
+	}
+}
+
+func Test_client_DualStackSNATFlows(t *testing.T) {
+	snatIPs := []net.IP{net.ParseIP("192.168.77.100"), net.ParseIP("fec0:192:168:77::100")}
+	const mark, ofPort = uint32(100), uint32(101)
+	for _, trafficShaping := range []bool{false, true} {
+		for _, local := range []bool{false, true} {
+			t.Run(fmt.Sprintf("trafficShaping=%t/local=%t", trafficShaping, local), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				m := opstest.NewMockOFEntryOperations(ctrl)
+				fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(trafficShaping))
+				defer resetPipelines()
+				nextTable := "L2ForwardingCalc"
+				if trafficShaping {
+					nextTable = "EgressQoS"
+				}
+				m.EXPECT().AddAll(gomock.Len(2))
+				require.NoError(t, fc.InstallSNATMarkFlows(snatIPs, mark))
+				cached, exists := fc.featureEgress.cachedFlows.Load("s64")
+				require.True(t, exists)
+				assert.ElementsMatch(t, []string{
+					"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:" + nextTable,
+					"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ipv6,tun_ipv6_dst=fec0:192:168:77::100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:" + nextTable,
+				}, getFlowStrings(cached))
+				podMark := uint32(0)
+				if local {
+					podMark = mark
+				}
+				m.EXPECT().AddAll(gomock.Len(2))
+				require.NoError(t, fc.InstallPodSNATFlows(ofPort, snatIPs, podMark))
+				cached, exists = fc.featureEgress.cachedFlows.Load("p65")
+				require.True(t, exists)
+				var expected []string
+				if local {
+					expected = []string{
+						"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,in_port=101 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:" + nextTable,
+						"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ipv6,in_port=101 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:" + nextTable,
+					}
+				} else {
+					expected = []string{
+						"cookie=0x1040000000000, table=EgressMark, priority=200,ip,in_port=101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.100->tun_dst,set_field:0x10/0xf0->reg0,set_field:0x80000/0x80000->reg0,goto_table:L2ForwardingCalc",
+						"cookie=0x1040000000000, table=EgressMark, priority=200,ipv6,in_port=101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:fec0:192:168:77::100->tun_ipv6_dst,set_field:0x10/0xf0->reg0,set_field:0x80000/0x80000->reg0,goto_table:L2ForwardingCalc",
+					}
+				}
+				assert.ElementsMatch(t, expected, getFlowStrings(cached))
+				assert.Len(t, fc.featureEgress.replayFlows(), 4)
+				m.EXPECT().DeleteAll(gomock.Len(2)).Times(2)
+				require.NoError(t, fc.UninstallPodSNATFlows(ofPort))
+				require.NoError(t, fc.UninstallSNATMarkFlows(mark))
+				assert.Empty(t, fc.featureEgress.replayFlows())
+			})
+		}
+	}
+}
+
+func Test_client_DualStackSNATFlowFailures(t *testing.T) {
+	for _, pod := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pod=%t", pod), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := opstest.NewMockOFEntryOperations(ctrl)
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+			snatIPs := []net.IP{net.ParseIP("192.0.2.10"), net.ParseIP("2001:db8::10")}
+			install := func() error { return fc.InstallSNATMarkFlows(snatIPs, 10) }
+			uninstall := func() error { return fc.UninstallSNATMarkFlows(10) }
+			if pod {
+				install = func() error { return fc.InstallPodSNATFlows(10, snatIPs, 10) }
+				uninstall = func() error { return fc.UninstallPodSNATFlows(10) }
+			}
+			m.EXPECT().AddAll(gomock.Len(2)).Return(fmt.Errorf("bundle failed"))
+			require.Error(t, install())
+			assert.Empty(t, fc.featureEgress.replayFlows())
+			m.EXPECT().AddAll(gomock.Len(2))
+			require.NoError(t, install())
+			require.NoError(t, install(), "a repeated installation must use the existing cache entry")
+			m.EXPECT().DeleteAll(gomock.Len(2)).Return(fmt.Errorf("bundle failed"))
+			require.Error(t, uninstall())
+			assert.Len(t, fc.featureEgress.replayFlows(), 2)
+			m.EXPECT().DeleteAll(gomock.Len(2))
+			require.NoError(t, uninstall())
+			assert.Empty(t, fc.featureEgress.replayFlows())
 		})
 	}
 }

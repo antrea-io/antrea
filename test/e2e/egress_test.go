@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -280,7 +280,7 @@ func testEgressLegacyClientCompatibility(t *testing.T, data *TestData) {
 		{"IPv6 to IPv4", "2021:3::200/124", "2021:3::201", "169.254.105.0/30", "169.254.105.1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pool := data.createExternalIPPool(t, "legacy-family-pool-", v1beta2.IPRange{CIDR: tc.cidr},
+			pool := data.createExternalIPPool(t, "legacy-family-pool-", []v1beta2.IPRange{{CIDR: tc.cidr}},
 				nil, nil, map[string]string{v1.LabelHostname: nodeName(0)})
 			t.Cleanup(func() { assert.NoError(t, pools.Delete(ctx, pool.Name, metav1.DeleteOptions{})) })
 			// Native v1beta1 admission checks allocator state for explicitly requested IPs.
@@ -348,278 +348,244 @@ func testEgressLegacyClientCompatibility(t *testing.T, data *TestData) {
 }
 
 func testEgressClientIP(t *testing.T, data *TestData) {
-	tests := []struct {
-		name       string
-		localIP0   string
-		localIP1   string
-		serverIP   string
-		fakeServer string
-		ipMaskLen  int
-	}{
-		{
-			name:       "ipv4-cluster",
-			localIP0:   "1.1.1.10",
-			localIP1:   "1.1.1.11",
-			serverIP:   "1.1.1.20",
-			fakeServer: "eth-ipv4",
-			ipMaskLen:  24,
-		},
-		{
-			name:       "ipv6-cluster",
-			localIP0:   "2021::aaa1",
-			localIP1:   "2021::aaa2",
-			serverIP:   "2021::aaa3",
-			fakeServer: "eth-ipv6",
-			ipMaskLen:  124,
-		},
+	type server struct {
+		localIP0, localIP1, serverIP string
+		prefixLen                    int
 	}
-	for _, tt := range tests {
+	for _, tt := range []struct {
+		name    string
+		servers []server
+	}{
+		{name: "ipv4-cluster", servers: []server{{"1.1.1.10", "1.1.1.11", "1.1.1.20", 24}}},
+		{name: "ipv6-cluster", servers: []server{{"2021::aaa1", "2021::aaa2", "2021::aaa3", 124}}},
+		{name: "dual-stack-cluster", servers: []server{
+			{"2021:2::aaa1", "2021:2::aaa2", "2021:2::aaaf", 124},
+			{"1.1.2.10", "1.1.2.11", "1.1.2.20", 24},
+		}},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
 			egressNode := controlPlaneNodeName()
-			var egressNodeIP string
-			if utilnet.IsIPv6String(tt.localIP0) {
-				skipIfNotIPv6Cluster(t)
-				egressNodeIP = controlPlaneNodeIPv6()
-			} else {
-				skipIfNotIPv4Cluster(t)
-				egressNodeIP = controlPlaneNodeIPv4()
+			servers := slices.Clone(tt.servers)
+			var egressIPs []string
+			for _, server := range servers {
+				if utilnet.IsIPv6String(server.serverIP) {
+					skipIfNotIPv6Cluster(t)
+					egressIPs = append(egressIPs, controlPlaneNodeIPv6())
+				} else {
+					skipIfNotIPv4Cluster(t)
+					egressIPs = append(egressIPs, controlPlaneNodeIPv4())
+				}
+			}
+			for i, server := range servers {
+				name := fmt.Sprintf("egress-server-%s-%d", tt.name, i)
+				cmd, _ := getCommandInFakeExternalNetwork("/agnhost netexec", server.prefixLen, server.serverIP, server.localIP0, utilnet.IsIPv6String(server.serverIP), server.localIP1)
+				require.NoError(t, NewPodBuilder(name, data.testNamespace, agnhostImage).OnNode(egressNode).
+					WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data))
+				defer deletePodWrapper(t, data, data.testNamespace, name)
+				require.NoError(t, data.podWaitForRunning(defaultTimeout, name, data.testNamespace))
+			}
+			localPod, remotePod := "localpod-"+tt.name, "remotepod-"+tt.name
+			for pod, node := range map[string]string{localPod: egressNode, remotePod: workerNodeName(1)} {
+				require.NoError(t, data.createToolboxPodOnNode(pod, data.testNamespace, node, false))
+				defer deletePodWrapper(t, data, data.testNamespace, pod)
+				require.NoError(t, data.podWaitForRunning(defaultTimeout, pod, data.testNamespace))
+			}
+			// Only Pods on the Egress Node can reach its fake external networks before Egress is added.
+			for _, server := range servers {
+				assertClientIP(data, t, localPod, toolboxContainerName, server.serverIP, server.localIP0, server.localIP1)
+				assertConnError(data, t, remotePod, toolboxContainerName, server.serverIP)
 			}
 
-			cmd, _ := getCommandInFakeExternalNetwork("/agnhost netexec", tt.ipMaskLen, tt.serverIP, tt.localIP0, utilnet.IsIPv6String(tt.localIP0), tt.localIP1)
-			if err := NewPodBuilder(tt.fakeServer, data.testNamespace, agnhostImage).OnNode(egressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
-				t.Fatalf("Failed to create server Pod: %v", err)
-			}
-			defer deletePodWrapper(t, data, data.testNamespace, tt.fakeServer)
-			if err := data.podWaitForRunning(defaultTimeout, tt.fakeServer, data.testNamespace); err != nil {
-				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", tt.fakeServer)
-			}
-
-			localPod := fmt.Sprintf("localpod%s", tt.name)
-			remotePod := fmt.Sprintf("remotepod%s", tt.name)
-			if err := data.createToolboxPodOnNode(localPod, data.testNamespace, egressNode, false); err != nil {
-				t.Fatalf("Failed to create local Pod: %v", err)
-			}
-			defer deletePodWrapper(t, data, data.testNamespace, localPod)
-			if err := data.podWaitForRunning(defaultTimeout, localPod, data.testNamespace); err != nil {
-				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
-			}
-			if err := data.createToolboxPodOnNode(remotePod, data.testNamespace, workerNodeName(1), false); err != nil {
-				t.Fatalf("Failed to create remote Pod: %v", err)
-			}
-			defer deletePodWrapper(t, data, data.testNamespace, remotePod)
-			if err := data.podWaitForRunning(defaultTimeout, remotePod, data.testNamespace); err != nil {
-				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", remotePod)
-			}
-
-			// As the fake server runs in a netns of the Egress Node, only egress Node can reach the server, Pods running on
-			// other Nodes cannot reach it before Egress is added.
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
-
-			t.Logf("Creating an Egress applying to all e2e Pods")
-			matchExpressions := []metav1.LabelSelectorRequirement{
-				{
-					Key:      "antrea-e2e",
-					Operator: metav1.LabelSelectorOpExists,
+			egress, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), &v1beta2.Egress{
+				ObjectMeta: metav1.ObjectMeta{GenerateName: "egress-"},
+				Spec: v1beta2.EgressSpec{
+					AppliedTo: v1beta2.EgressAppliedTo{PodSelector: &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+						{Key: "antrea-e2e", Operator: metav1.LabelSelectorOpExists},
+					}}},
+					EgressIPs: egressIPs,
 				},
-			}
-			egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressNodeIP, nil)
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
 			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, egressNodeIP)
-			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIP, egressNodeIP)
-
-			var err error
-			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, false,
-				func(ctx context.Context) (bool, error) {
-					egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-					if err != nil {
-						return false, err
+			egress, err = data.waitForEgressRealized(egress)
+			require.NoError(t, err)
+			assert.Equal(t, egressNode, egress.Status.EgressNode)
+			checkTraffic := func(pods ...string) {
+				t.Helper()
+				for i, server := range servers {
+					for _, pod := range pods {
+						assertClientIP(data, t, pod, toolboxContainerName, server.serverIP, egress.Spec.EgressIPs[i])
 					}
-					return egress.Status.EgressNode == egressNode, nil
-				})
-			assert.NoError(t, err, "Egress failed to reach expected status")
+				}
+			}
+			checkTraffic(localPod, remotePod)
 
-			t.Log("Checking the client IP of a Pod whose Egress has been created in advance")
-			initialIPChecker := "initial-ip-checker"
-			clientIPStr := getEgressIP(egress)
-			if utilnet.IsIPv6String(clientIPStr) {
-				clientIPStr = fmt.Sprintf("[%s]", clientIPStr)
+			t.Log("Checking the first connection from a Pod created after the Egress")
+			var commands []string
+			for i, server := range servers {
+				clientIP := egress.Spec.EgressIPs[i]
+				if utilnet.IsIPv6String(clientIP) {
+					clientIP = "[" + clientIP + "]"
+				}
+				commands = append(commands, fmt.Sprintf("wget -T 3 -t 1 -O - %s | grep -F '%s:'", getHTTPURLFromIPPort(server.serverIP, 8080, "clientip"), clientIP))
 			}
-			url := getHTTPURLFromIPPort(tt.serverIP, 8080, "clientip")
-			cmd = fmt.Sprintf("wget -T 3 -O - %s | grep %s:", url, clientIPStr)
-			if err := NewPodBuilder(initialIPChecker, data.testNamespace, agnhostImage).OnNode(egressNode).WithCommand([]string{"sh", "-c", cmd}).Create(data); err != nil {
-				t.Fatalf("Failed to create Pod initial-ip-checker: %v", err)
-			}
+			initialIPChecker := "initial-ip-checker-" + tt.name
+			require.NoError(t, NewPodBuilder(initialIPChecker, data.testNamespace, agnhostImage).OnNode(egressNode).
+				WithCommand([]string{"sh", "-c", strings.Join(commands, " && ")}).Create(data))
 			defer data.DeletePod(data.testNamespace, initialIPChecker)
 			_, err = data.PodWaitFor(timeout, initialIPChecker, data.testNamespace, func(pod *v1.Pod) (bool, error) {
 				if pod.Status.Phase == v1.PodFailed {
-					return false, fmt.Errorf("Pod terminated with failure")
+					return false, fmt.Errorf("initial client IP check failed")
 				}
 				return pod.Status.Phase == v1.PodSucceeded, nil
 			})
-			assert.NoError(t, err, "Failed to get expected client IP %s for Pod initial-ip-checker", initialIPChecker)
+			require.NoError(t, err)
 
-			t.Log("Updating the Egress's AppliedTo to remotePod only")
-			egress.Spec.AppliedTo = v1beta2.EgressAppliedTo{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"antrea-e2e": remotePod},
-				},
+			updateEgress := func(updateSpec func(*v1beta2.EgressSpec)) {
+				t.Helper()
+				require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					current, err := data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					updateSpec(&current.Spec)
+					current, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), current, metav1.UpdateOptions{})
+					if err == nil {
+						egress = current
+					}
+					return err
+				}))
+				egress, err = data.waitForEgressRealized(egress)
+				require.NoError(t, err)
+				assert.Equal(t, egressNode, egress.Status.EgressNode)
 			}
-			egress, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
-			if err != nil {
-				t.Fatalf("Failed to update Egress %v: %v", egress, err)
+			if len(servers) == 2 {
+				// Reordering the same pair must preserve local and remote forwarding and the ordered status.
+				updateEgress(func(spec *v1beta2.EgressSpec) { slices.Reverse(spec.EgressIPs) })
+				slices.Reverse(servers)
+				checkTraffic(localPod, remotePod)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
-			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIP, egressNodeIP)
+			for _, selectedPod := range []string{remotePod, localPod} {
+				t.Logf("Updating the Egress's AppliedTo to %s only", selectedPod)
+				updateEgress(func(spec *v1beta2.EgressSpec) {
+					spec.AppliedTo.PodSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": selectedPod}}
+				})
+				checkTraffic(selectedPod)
+				for _, server := range servers {
+					if selectedPod == remotePod {
+						assertClientIP(data, t, localPod, toolboxContainerName, server.serverIP, server.localIP0, server.localIP1)
+					} else {
+						assertConnError(data, t, remotePod, toolboxContainerName, server.serverIP)
+					}
+				}
+			}
 
-			t.Log("Updating the Egress's AppliedTo to localPod only")
-			egress.Spec.AppliedTo = v1beta2.EgressAppliedTo{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"antrea-e2e": localPod},
-				},
+			// Change each address independently, checking that the other family's traffic still works.
+			for i, server := range servers {
+				updateEgress(func(spec *v1beta2.EgressSpec) { spec.EgressIPs[i] = server.localIP1 })
+				checkTraffic(localPod)
+				for _, server := range servers {
+					assertConnError(data, t, remotePod, toolboxContainerName, server.serverIP)
+				}
 			}
-			egress, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
-			if err != nil {
-				t.Fatalf("Failed to update Egress %v: %v", egress, err)
+			require.NoError(t, data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{}))
+			for _, server := range servers {
+				assertClientIP(data, t, localPod, toolboxContainerName, server.serverIP, server.localIP0, server.localIP1)
+				assertConnError(data, t, remotePod, toolboxContainerName, server.serverIP)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, egressNodeIP)
-			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
-
-			t.Logf("Updating the Egress's EgressIP to %s", tt.localIP1)
-			egress.Spec.EgressIPs = []string{tt.localIP1}
-			egress, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
-			if err != nil {
-				t.Fatalf("Failed to update Egress %v: %v", egress, err)
-			}
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
-
-			t.Log("Deleting the Egress")
-			err = data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			if err != nil {
-				t.Fatalf("Failed to delete Egress %v: %v", egress, err)
-			}
-			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
 		})
 	}
 }
 
 func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 	skipIfEgressSeparateSubnetDisabled(t)
-	tests := []struct {
-		name        string
-		serverIP    string
-		vlanSubnet  string
-		vlanGateway string
-		vlanID      int
-	}{
-		{
-			name:        "ipv4-cluster",
-			serverIP:    externalInfo.externalServerIPv4,
-			vlanSubnet:  externalInfo.vlanSubnetIPv4,
-			vlanGateway: externalInfo.vlanGatewayIPv4,
-			vlanID:      externalInfo.vlanID,
-		},
-		{
-			name:        "ipv6-cluster",
-			serverIP:    externalInfo.externalServerIPv6,
-			vlanSubnet:  externalInfo.vlanSubnetIPv6,
-			vlanGateway: externalInfo.vlanGatewayIPv6,
-			vlanID:      externalInfo.vlanID,
-		},
+	type externalNetwork struct {
+		serverIP, subnet, gateway string
+		family                    v1.IPFamily
 	}
-	for _, tt := range tests {
+	ipv4 := externalNetwork{externalInfo.externalServerIPv4, externalInfo.vlanSubnetIPv4, externalInfo.vlanGatewayIPv4, v1.IPv4Protocol}
+	ipv6 := externalNetwork{externalInfo.externalServerIPv6, externalInfo.vlanSubnetIPv6, externalInfo.vlanGatewayIPv6, v1.IPv6Protocol}
+	for _, tt := range []struct {
+		name     string
+		networks []externalNetwork
+	}{
+		{name: "ipv4-cluster", networks: []externalNetwork{ipv4}},
+		{name: "ipv6-cluster", networks: []externalNetwork{ipv6}},
+		{name: "dual-stack-cluster", networks: []externalNetwork{ipv6, ipv4}},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.serverIP == "" {
-				t.Skipf("Skipping test as the server IP is not set")
+			var ranges []v1beta2.IPRange
+			var subnets []v1beta2.SubnetInfo
+			var families []v1.IPFamily
+			var defaultClientIPs []string
+			for _, network := range tt.networks {
+				if network.serverIP == "" || network.subnet == "" || network.gateway == "" {
+					t.Skipf("Skipping test as the external server or VLAN subnet configuration for %s is not set", network.family)
+				}
+				if network.family == v1.IPv6Protocol {
+					skipIfNotIPv6Cluster(t)
+					defaultClientIPs = append(defaultClientIPs, workerNodeIPv6(1))
+				} else {
+					skipIfNotIPv4Cluster(t)
+					defaultClientIPs = append(defaultClientIPs, workerNodeIPv4(1))
+				}
+				gatewayIP := net.ParseIP(network.gateway)
+				require.NotNil(t, gatewayIP)
+				_, cidr, err := net.ParseCIDR(network.subnet)
+				require.NoError(t, err)
+				prefixLength, _ := cidr.Mask.Size()
+				// Reserve one address per family, immediately after the gateway.
+				ranges = append(ranges, v1beta2.IPRange{Start: ip.NextIP(gatewayIP).String(), End: ip.NextIP(gatewayIP).String()})
+				subnets = append(subnets, v1beta2.SubnetInfo{Gateway: network.gateway, PrefixLength: int32(prefixLength), VLAN: int32(externalInfo.vlanID)})
+				families = append(families, network.family)
 			}
-			if tt.vlanSubnet == "" {
-				t.Skipf("Skipping test as the vlan subnet is not set")
-			}
-			if utilnet.IsIPv6String(tt.serverIP) {
-				skipIfNotIPv6Cluster(t)
-			} else {
-				skipIfNotIPv4Cluster(t)
-			}
-
-			clientNode := workerNodeName(1)
 			clientPod1 := fmt.Sprintf("clientpod1-%s", tt.name)
 			clientPod2 := fmt.Sprintf("clientpod2-%s", tt.name)
-			if err := data.createToolboxPodOnNode(clientPod1, data.testNamespace, clientNode, false); err != nil {
-				t.Fatalf("Failed to create client Pod %s: %v", clientPod1, err)
+			for _, pod := range []string{clientPod1, clientPod2} {
+				require.NoError(t, data.createToolboxPodOnNode(pod, data.testNamespace, workerNodeName(1), false))
+				defer deletePodWrapper(t, data, data.testNamespace, pod)
+				require.NoError(t, data.podWaitForRunning(defaultTimeout, pod, data.testNamespace))
 			}
-			defer deletePodWrapper(t, data, data.testNamespace, clientPod1)
-			if err := data.podWaitForRunning(defaultTimeout, clientPod1, data.testNamespace); err != nil {
-				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", clientPod1)
-			}
-			if err := data.createToolboxPodOnNode(clientPod2, data.testNamespace, clientNode, false); err != nil {
-				t.Fatalf("Failed to create applied Pod %s: %v", clientPod2, err)
-			}
-			defer deletePodWrapper(t, data, data.testNamespace, clientPod2)
-			if err := data.podWaitForRunning(defaultTimeout, clientPod2, data.testNamespace); err != nil {
-				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", clientPod2)
-			}
-
-			gatewayIP := net.ParseIP(tt.vlanGateway)
-			_, cidr, _ := net.ParseCIDR(tt.vlanSubnet)
-			prefixLength, _ := cidr.Mask.Size()
-			// We need only 1 Egress IP, set the range to include the next IP of the gateway IP.
-			ipRange := v1beta2.IPRange{Start: ip.NextIP(gatewayIP).String(), End: ip.NextIP(gatewayIP).String()}
-			subnet := v1beta2.SubnetInfo{
-				Gateway:      tt.vlanGateway,
-				PrefixLength: int32(prefixLength),
-				VLAN:         int32(tt.vlanID),
-			}
-			pool := data.createExternalIPPool(t, "pool-vlan", ipRange, &subnet, nil, nil)
+			pool := data.createExternalIPPool(t, "pool-vlan", ranges, subnets, nil, nil)
 			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{})
-
-			egress := data.createEgress(t, "egress-vlan", nil, map[string]string{"antrea-e2e": clientPod1}, pool.Name, "", nil)
+			egress := data.createEgress(t, "egress-vlan", nil, map[string]string{"antrea-e2e": clientPod1}, pool.Name, "", nil, families...)
 			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 3*time.Second, true, func(ctx context.Context) (done bool, err error) {
-				egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-				if err != nil {
-					return false, err
-				}
-				if !k8s.SemanticIgnoringTime.DeepEqual([]metav1.Condition{
-					{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-					{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
-				}, egress.Status.Conditions) {
-					return false, nil
-				}
-				return true, nil
-			})
-			require.NoError(t, err, "Egress didn't meet expected conditions, current status: %v", egress.Status)
-
-			// By default, Pod will be SNATed to Node IP.
-			defaultClientIP := workerNodeIPv4(1)
-			if utilnet.IsIPv6String(tt.serverIP) {
-				defaultClientIP = workerNodeIPv6(1)
+			egress, err := data.waitForEgressRealized(egress)
+			require.NoError(t, err)
+			expectedConditions := []metav1.Condition{
+				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 			}
-
-			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, getEgressIP(egress))
-			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, defaultClientIP)
+			assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedConditions, egress.Status.Conditions), "Unexpected Egress conditions: %v", egress.Status.Conditions)
+			for i, network := range tt.networks {
+				assertClientIP(data, t, clientPod1, toolboxContainerName, network.serverIP, egress.Spec.EgressIPs[i])
+				assertClientIP(data, t, clientPod2, toolboxContainerName, network.serverIP, defaultClientIPs[i])
+			}
 
 			t.Log("Updating the Egress's AppliedTo to clientPod2 only")
-			egress.Spec.AppliedTo = v1beta2.EgressAppliedTo{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"antrea-e2e": clientPod2},
-				},
+			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current, err := data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				current.Spec.AppliedTo.PodSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": clientPod2}}
+				current, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), current, metav1.UpdateOptions{})
+				if err == nil {
+					egress = current
+				}
+				return err
+			}))
+			for i, network := range tt.networks {
+				assertClientIP(data, t, clientPod1, toolboxContainerName, network.serverIP, defaultClientIPs[i])
+				assertClientIP(data, t, clientPod2, toolboxContainerName, network.serverIP, egress.Spec.EgressIPs[i])
 			}
-			egress, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
-			if err != nil {
-				t.Fatalf("Failed to update Egress %v: %v", egress, err)
-			}
-			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, defaultClientIP)
-			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, getEgressIP(egress))
 
 			t.Log("Deleting the Egress")
-			err = data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			if err != nil {
-				t.Fatalf("Failed to delete Egress %v: %v", egress, err)
+			require.NoError(t, data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{}))
+			for i, network := range tt.networks {
+				assertClientIP(data, t, clientPod1, toolboxContainerName, network.serverIP, defaultClientIPs[i])
+				assertClientIP(data, t, clientPod2, toolboxContainerName, network.serverIP, defaultClientIPs[i])
 			}
-			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, defaultClientIP)
-			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, defaultClientIP)
 		})
 	}
 }
@@ -627,48 +593,49 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 func testEgressCRUD(t *testing.T, data *TestData) {
 	tests := []struct {
 		name               string
-		ipRange            v1beta2.IPRange
+		ipRanges           []v1beta2.IPRange
+		families           []v1.IPFamily
 		nodeSelector       metav1.LabelSelector
-		expectedEgressIP   string
+		expectedEgressIPs  []string
 		expectedNodes      sets.Set[string]
 		expectedTotal      int64
 		expectedConditions []metav1.Condition
 	}{
 		{
-			name:    "single matching Node",
-			ipRange: v1beta2.IPRange{CIDR: "169.254.100.0/30"},
+			name:     "single matching Node",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
 				},
 			},
-			expectedEgressIP: "169.254.100.1",
-			expectedNodes:    sets.New[string](nodeName(0)),
-			expectedTotal:    2,
+			expectedEgressIPs: []string{"169.254.100.1"},
+			expectedNodes:     sets.New[string](nodeName(0)),
+			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 			},
 		},
 		{
-			name:    "single matching Node with IPv6 range",
-			ipRange: v1beta2.IPRange{CIDR: "2021:1::aaa0/124"},
+			name:     "single matching Node with IPv6 range",
+			ipRanges: []v1beta2.IPRange{{CIDR: "2021:1::aaa0/124"}},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
 				},
 			},
-			expectedEgressIP: "2021:1::aaa1",
-			expectedNodes:    sets.New[string](nodeName(0)),
-			expectedTotal:    15,
+			expectedEgressIPs: []string{"2021:1::aaa1"},
+			expectedNodes:     sets.New[string](nodeName(0)),
+			expectedTotal:     15,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 			},
 		},
 		{
-			name:    "two matching Nodes",
-			ipRange: v1beta2.IPRange{Start: "169.254.101.10", End: "169.254.101.11"},
+			name:     "two matching Nodes",
+			ipRanges: []v1beta2.IPRange{{Start: "169.254.101.10", End: "169.254.101.11"}},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -678,51 +645,71 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedEgressIP: "169.254.101.10",
-			expectedNodes:    sets.New[string](nodeName(0), nodeName(1)),
-			expectedTotal:    2,
+			expectedEgressIPs: []string{"169.254.101.10"},
+			expectedNodes:     sets.New[string](nodeName(0), nodeName(1)),
+			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 			},
 		},
 		{
-			name:    "no matching Node",
-			ipRange: v1beta2.IPRange{CIDR: "169.254.102.0/30"},
+			name:     "no matching Node",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.102.0/30"}},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"foo": "bar",
 				},
 			},
-			expectedEgressIP: "169.254.102.1",
-			expectedNodes:    sets.New[string](),
-			expectedTotal:    2,
+			expectedEgressIPs: []string{"169.254.102.1"},
+			expectedNodes:     sets.New[string](),
+			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 			},
 		},
 	}
+	for _, single := range tests {
+		if utilnet.IsIPv6String(single.expectedEgressIPs[0]) {
+			continue
+		}
+		for _, families := range [][]v1.IPFamily{{v1.IPv4Protocol, v1.IPv6Protocol}, {v1.IPv6Protocol, v1.IPv4Protocol}} {
+			dual := single
+			dual.name += fmt.Sprintf(" dual-stack %s first", families[0])
+			dual.ipRanges = append(slices.Clone(single.ipRanges), v1beta2.IPRange{CIDR: "2021:100::/124"})
+			dual.families = families
+			dual.expectedEgressIPs = []string{single.expectedEgressIPs[0], "2021:100::1"}
+			if families[0] == v1.IPv6Protocol {
+				slices.Reverse(dual.expectedEgressIPs)
+			}
+			dual.expectedTotal += 15
+			tests = append(tests, dual)
+		}
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if utilnet.IsIPv6String(tt.expectedEgressIP) {
-				skipIfNotIPv6Cluster(t)
-			} else {
-				skipIfNotIPv4Cluster(t)
+			for _, ip := range tt.expectedEgressIPs {
+				if utilnet.IsIPv6String(ip) {
+					skipIfNotIPv6Cluster(t)
+				} else {
+					skipIfNotIPv4Cluster(t)
+				}
 			}
-			pool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			pool := data.createExternalIPPool(t, "crud-pool-", tt.ipRanges, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{})
 
-			egress := data.createEgress(t, "crud-egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "", nil)
+			egress := data.createEgress(t, "crud-egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "", nil, tt.families...)
 			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			// Use Poll to wait the interval before the first run to detect the case that the IP is assigned to any Node
 			// when it's not supposed to.
 			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 3*time.Second, false, func(ctx context.Context) (done bool, err error) {
-				egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				current, err := data.CRDClient.CrdV1beta2().Egresses().Get(ctx, egress.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
-				if getEgressIP(egress) != tt.expectedEgressIP {
+				egress = current
+				if !slices.Equal(egress.Spec.EgressIPs, tt.expectedEgressIPs) {
 					return false, nil
 				}
 				if !k8s.SemanticIgnoringTime.DeepEqual(tt.expectedConditions, egress.Status.Conditions) {
@@ -739,19 +726,21 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				}
 				return true, nil
 			})
-			require.NoError(t, err, "Expected egressIP=%s nodeName in %s, got egressIP=%s nodeName=%s", tt.expectedEgressIP, sets.List(tt.expectedNodes), getEgressIP(egress), egress.Status.EgressNode)
+			require.NoError(t, err, "Expected egressIP=%s nodeName in %s, got egressIP=%s nodeName=%s", tt.expectedEgressIPs, sets.List(tt.expectedNodes), egress.Spec.EgressIPs, egress.Status.EgressNode)
 			if egress.Status.EgressNode != "" {
-				exists, err := hasIP(data, egress.Status.EgressNode, getEgressIP(egress))
-				require.NoError(t, err, "Failed to check if IP exists on Node")
-				assert.True(t, exists, "Didn't find desired IP on Node")
-				// Testing the events recorded during creation of an Egress resource.
-				expectedMessage := fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.expectedEgressIP, egress.Status.EgressNode)
+				assert.Equal(t, tt.expectedEgressIPs, egress.Status.EgressIPs)
+				for _, ip := range tt.expectedEgressIPs {
+					exists, err := hasIP(data, egress.Status.EgressNode, ip)
+					require.NoError(t, err, "Failed to check if IP exists on Node")
+					assert.True(t, exists, "Didn't find desired IP %s on Node", ip)
+				}
+				expectedMessage := fmt.Sprintf("Assigned Egress %s with %s on Node %s", egress.Name, egressIPDescription(tt.expectedEgressIPs), egress.Status.EgressNode)
 				assert.EventuallyWithT(t, func(c *assert.CollectT) {
 					events, err := data.clientset.EventsV1().Events("").List(context.TODO(), metav1.ListOptions{
 						FieldSelector: fmt.Sprintf("regarding.name=%s", egress.Name),
 					})
 					if assert.NoError(c, err) && assert.Len(c, events.Items, 1) {
-						assert.Contains(c, events.Items[0].Note, expectedMessage)
+						assert.Equal(c, expectedMessage, events.Items[0].Note)
 					}
 				}, 2*time.Second, 200*time.Millisecond)
 			}
@@ -760,7 +749,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				var gotUsed, gotTotal int64
 				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 2*time.Second, true,
 					func(ctx context.Context) (done bool, err error) {
-						pool, err := data.CRDClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
+						pool, err := data.CRDClient.CrdV1beta2().ExternalIPPools().Get(ctx, pool.Name, metav1.GetOptions{})
 						if err != nil {
 							return false, fmt.Errorf("failed to get ExternalIPPool: %v", err)
 						}
@@ -775,20 +764,25 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 					})
 				require.NoError(t, err, "ExternalIPPool status not match: expectedTotal=%d, got=%d, expectedUsed=%d, got=%d", tt.expectedTotal, gotTotal, expectedUsed, gotUsed)
 			}
-			checkEIPStatus(1)
+			checkEIPStatus(int64(len(tt.expectedEgressIPs)))
 
 			err = data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			require.NoError(t, err, "Failed to delete Egress")
 			if egress.Status.EgressNode != "" {
 				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
 					func(ctx context.Context) (done bool, err error) {
-						exists, err := hasIP(data, egress.Status.EgressNode, getEgressIP(egress))
-						if err != nil {
-							return false, fmt.Errorf("check ip error: %v", err)
+						for _, ip := range tt.expectedEgressIPs {
+							exists, err := hasIP(data, egress.Status.EgressNode, ip)
+							if err != nil {
+								return false, fmt.Errorf("check ip error: %v", err)
+							}
+							if exists {
+								return false, nil
+							}
 						}
-						return !exists, nil
+						return true, nil
 					})
-				require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", getEgressIP(egress), egress.Status.EgressNode)
+				require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", egress.Spec.EgressIPs, egress.Status.EgressNode)
 			}
 			checkEIPStatus(0)
 		})
@@ -824,19 +818,14 @@ func testEgressIPFamilySelection(t *testing.T, data *TestData) {
 			},
 		}
 	}
-	automatic, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), newEgress(), metav1.CreateOptions{})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), automatic.Name, metav1.DeleteOptions{}))
+	t.Run("automatic single-stack", func(t *testing.T) {
+		automatic, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), newEgress(), metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), automatic.Name, metav1.DeleteOptions{})
+		automatic, err = data.waitForEgressRealized(automatic)
+		require.NoError(t, err)
+		assert.Len(t, automatic.Spec.EgressIPs, 1)
 	})
-	automatic, err = data.waitForEgressRealized(automatic)
-	require.NoError(t, err)
-	assert.Len(t, automatic.Spec.EgressIPs, 1)
-
-	reversedFamilies := newEgress()
-	reversedFamilies.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}
-	_, err = data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), reversedFamilies, metav1.CreateOptions{})
-	require.ErrorContains(t, err, "dual-stack Egress runtime is not supported yet")
 
 	for _, tc := range []struct {
 		name     string
@@ -845,14 +834,19 @@ func testEgressIPFamilySelection(t *testing.T, data *TestData) {
 		err      string
 	}{
 		{
+			name:     "automatic IPv6 first",
+			families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+		},
+		{
 			name: "IPv4 first", ips: []string{"169.254.103.1", "2021:1::aab1"},
 			families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
-			err:      "dual-stack Egress runtime is not supported yet",
 		},
 		{
 			name: "IPv6 first", ips: []string{"2021:1::aab1", "169.254.103.1"},
 			families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
-			err:      "dual-stack Egress runtime is not supported yet",
+		},
+		{
+			name: "IPv6 first without families", ips: []string{"2021:1::aab1", "169.254.103.1"},
 		},
 		{
 			name: "IPv4 first with reversed families", ips: []string{"169.254.103.1", "2021:1::aab1"},
@@ -869,15 +863,24 @@ func testEgressIPFamilySelection(t *testing.T, data *TestData) {
 			egress := newEgress()
 			egress.Spec.EgressIPs = tc.ips
 			egress.Spec.IPFamilies = tc.families
-			_, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
-			require.ErrorContains(t, err, tc.err)
+			egress, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+			egress, err = data.waitForEgressRealized(egress)
+			require.NoError(t, err)
+			require.Len(t, egress.Status.EgressIPs, 2)
+			if len(tc.ips) > 0 {
+				assert.Equal(t, tc.ips, egress.Status.EgressIPs)
+			}
+			for i, family := range tc.families {
+				assert.Equal(t, family == v1.IPv6Protocol, utilnet.IsIPv6String(egress.Status.EgressIPs[i]))
+			}
 		})
 	}
-
-	reversedIPs := newEgress()
-	reversedIPs.Spec.EgressIPs = []string{"2021:1::aab1", "169.254.103.1"}
-	_, err = data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), reversedIPs, metav1.CreateOptions{})
-	require.ErrorContains(t, err, "dual-stack Egress runtime is not supported yet")
 
 	egress := newEgress()
 	egress.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
@@ -892,75 +895,89 @@ func testEgressIPFamilySelection(t *testing.T, data *TestData) {
 
 func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 	tests := []struct {
-		name             string
-		originalNode     string
-		newNode          string
-		originalIPRange  v1beta2.IPRange
-		originalEgressIP string
-		newIPRange       v1beta2.IPRange
-		newEgressIP      string
+		name              string
+		originalNode      string
+		newNode           string
+		originalIPRanges  []v1beta2.IPRange
+		originalEgressIPs []string
+		newIPRanges       []v1beta2.IPRange
+		newEgressIPs      []string
+		families          []v1.IPFamily
 	}{
 		{
-			name:             "same Node",
-			originalNode:     nodeName(0),
-			newNode:          nodeName(0),
-			originalIPRange:  v1beta2.IPRange{CIDR: "169.254.100.0/30"},
-			originalEgressIP: "169.254.100.1",
-			newIPRange:       v1beta2.IPRange{CIDR: "169.254.101.0/30"},
-			newEgressIP:      "169.254.101.1",
+			name:              "same Node",
+			originalNode:      nodeName(0),
+			newNode:           nodeName(0),
+			originalIPRanges:  []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}},
+			originalEgressIPs: []string{"169.254.100.1"},
+			newIPRanges:       []v1beta2.IPRange{{CIDR: "169.254.101.0/30"}},
+			newEgressIPs:      []string{"169.254.101.1"},
 		},
 		{
-			name:             "different Nodes",
-			originalNode:     nodeName(0),
-			newNode:          nodeName(1),
-			originalIPRange:  v1beta2.IPRange{CIDR: "169.254.100.0/30"},
-			originalEgressIP: "169.254.100.1",
-			newIPRange:       v1beta2.IPRange{CIDR: "169.254.101.0/30"},
-			newEgressIP:      "169.254.101.1",
+			name:              "different Nodes",
+			originalNode:      nodeName(0),
+			newNode:           nodeName(1),
+			originalIPRanges:  []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}},
+			originalEgressIPs: []string{"169.254.100.1"},
+			newIPRanges:       []v1beta2.IPRange{{CIDR: "169.254.101.0/30"}},
+			newEgressIPs:      []string{"169.254.101.1"},
 		},
 		{
-			name:             "different Nodes in IPv6 cluster",
-			originalNode:     nodeName(0),
-			newNode:          nodeName(1),
-			originalIPRange:  v1beta2.IPRange{CIDR: "2021:2::aaa0/124"},
-			originalEgressIP: "2021:2::aaa1",
-			newIPRange:       v1beta2.IPRange{CIDR: "2021:2::bbb0/124"},
-			newEgressIP:      "2021:2::bbb1",
+			name:              "different Nodes in IPv6 cluster",
+			originalNode:      nodeName(0),
+			newNode:           nodeName(1),
+			originalIPRanges:  []v1beta2.IPRange{{CIDR: "2021:2::aaa0/124"}},
+			originalEgressIPs: []string{"2021:2::aaa1"},
+			newIPRanges:       []v1beta2.IPRange{{CIDR: "2021:2::bbb0/124"}},
+			newEgressIPs:      []string{"2021:2::bbb1"},
 		},
+	}
+	for _, single := range tests {
+		if utilnet.IsIPv6String(single.originalEgressIPs[0]) {
+			continue
+		}
+		dual := single
+		dual.name += " dual-stack"
+		dual.originalIPRanges = append(slices.Clone(single.originalIPRanges), v1beta2.IPRange{CIDR: "2021:2::aaa0/124"})
+		dual.newIPRanges = append(slices.Clone(single.newIPRanges), v1beta2.IPRange{CIDR: "2021:2::bbb0/124"})
+		dual.originalEgressIPs = []string{single.originalEgressIPs[0], "2021:2::aaa1"}
+		dual.newEgressIPs = []string{single.newEgressIPs[0], "2021:2::bbb1"}
+		dual.families = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+		tests = append(tests, dual)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if utilnet.IsIPv6String(tt.originalEgressIP) {
-				skipIfNotIPv6Cluster(t)
-			} else {
-				skipIfNotIPv4Cluster(t)
+			for _, ip := range tt.originalEgressIPs {
+				if utilnet.IsIPv6String(ip) {
+					skipIfNotIPv6Cluster(t)
+				} else {
+					skipIfNotIPv4Cluster(t)
+				}
 			}
-			originalPool := data.createExternalIPPool(t, "originalpool-", tt.originalIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.originalNode})
+			originalPool := data.createExternalIPPool(t, "originalpool-", tt.originalIPRanges, nil, nil, map[string]string{v1.LabelHostname: tt.originalNode})
 			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), originalPool.Name, metav1.DeleteOptions{})
-			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.newNode})
+			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRanges, nil, nil, map[string]string{v1.LabelHostname: tt.newNode})
 			defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), newPool.Name, metav1.DeleteOptions{})
 
-			egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, originalPool.Name, "", nil)
+			egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, originalPool.Name, "", nil, tt.families...)
 			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			egress, err := data.checkEgressState(egress.Name, tt.originalEgressIP, tt.originalNode, "", time.Second)
+			egress, err := data.checkEgressState(egress.Name, tt.originalEgressIPs, tt.originalNode, "", time.Second)
 			require.NoError(t, err)
 
-			// The Egress maybe has been modified.
-			toUpdate := egress.DeepCopy()
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				toUpdate.Spec.ExternalIPPool = newPool.Name
-				toUpdate.Spec.EgressIPs = []string{tt.newEgressIP}
-				_, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
-				if err != nil && errors.IsConflict(err) {
-					toUpdate, _ = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				toUpdate, err := data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
 				}
+				toUpdate.Spec.ExternalIPPool = newPool.Name
+				toUpdate.Spec.EgressIPs = tt.newEgressIPs
+				_, err = data.CRDClient.CrdV1beta2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 				return err
-			})
-			require.NoError(t, err, "Failed to update Egress")
+			}), "Failed to update Egress")
 			expectedMessages := []string{
-				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.originalEgressIP, tt.originalNode),
-				fmt.Sprintf("Unassigned Egress %s with IP %s from Node %v", egress.Name, tt.originalEgressIP, tt.originalNode),
-				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.newEgressIP, tt.newNode),
+				fmt.Sprintf("Assigned Egress %s with %s on Node %s", egress.Name, egressIPDescription(tt.originalEgressIPs), tt.originalNode),
+				fmt.Sprintf("Unassigned Egress %s with %s from Node %s", egress.Name, egressIPDescription(tt.originalEgressIPs), tt.originalNode),
+				fmt.Sprintf("Assigned Egress %s with %s on Node %s", egress.Name, egressIPDescription(tt.newEgressIPs), tt.newNode),
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				events, err := data.clientset.EventsV1().Events("").List(context.TODO(), metav1.ListOptions{
@@ -972,22 +989,27 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 						recordedMessages = append(recordedMessages, items.Note)
 					}
 					assert.Equal(c, expectedMessages[0], recordedMessages[0])
-					// The order of unassigning from original Node and assigning on new Node is random.
+					// Assignment and unassignment on different Nodes may be recorded in either order.
 					assert.ElementsMatch(c, expectedMessages[1:], recordedMessages[1:])
 				}
 			}, 2*time.Second, 200*time.Millisecond)
 
-			_, err = data.checkEgressState(egress.Name, tt.newEgressIP, tt.newNode, "", time.Second)
+			_, err = data.checkEgressState(egress.Name, tt.newEgressIPs, tt.newNode, "", time.Second)
 			require.NoError(t, err)
 			err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
 				func(ctx context.Context) (done bool, err error) {
-					exists, err := hasIP(data, tt.originalNode, tt.originalEgressIP)
-					if err != nil {
-						return false, fmt.Errorf("check ip error: %v", err)
+					for _, ip := range tt.originalEgressIPs {
+						exists, err := hasIP(data, tt.originalNode, ip)
+						if err != nil {
+							return false, fmt.Errorf("check ip error: %v", err)
+						}
+						if exists {
+							return false, nil
+						}
 					}
-					return !exists, nil
+					return true, nil
 				})
-			require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", tt.originalEgressIP, tt.originalNode)
+			require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", tt.originalEgressIPs, tt.originalNode)
 		})
 	}
 }
@@ -997,28 +1019,34 @@ func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 	// In hybrid mode, Nodes are in different subnets, so the test is skipped.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	tests := []struct {
-		name      string
-		ipRange   v1beta2.IPRange
-		ipVersion int
+		name     string
+		ipRanges []v1beta2.IPRange
+		families []v1.IPFamily
 	}{
 		{
-			name:      "IPv4 cluster",
-			ipRange:   v1beta2.IPRange{CIDR: "169.254.100.0/30"},
-			ipVersion: 4,
+			name:     "IPv4 cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}},
+			families: []v1.IPFamily{v1.IPv4Protocol},
 		},
 		{
-			name:      "IPv6 cluster",
-			ipRange:   v1beta2.IPRange{CIDR: "2021:3::aaa1/124"},
-			ipVersion: 6,
+			name:     "IPv6 cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "2021:3::aaa1/124"}},
+			families: []v1.IPFamily{v1.IPv6Protocol},
+		},
+		{
+			name:     "dual-stack cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}, {CIDR: "2021:5::/124"}},
+			families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			switch tt.ipVersion {
-			case 4:
-				skipIfNotIPv4Cluster(t)
-			case 6:
-				skipIfNotIPv6Cluster(t)
+			for _, family := range tt.families {
+				if family == v1.IPv4Protocol {
+					skipIfNotIPv4Cluster(t)
+				} else {
+					skipIfNotIPv6Cluster(t)
+				}
 			}
 			updateNodeSelector := func(poolName, evictNode string, ensureExists bool) {
 				pool, err := data.CRDClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
@@ -1043,7 +1071,7 @@ func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 			}
 			// Egress IP migration should happen fast when it's caused by nodeSelector update.
 			// No IP should be left on the evicted Node.
-			testEgressMigration(t, data, shrinkEgressNodes, restoreEgressNodes, true, time.Second, &tt.ipRange)
+			testEgressMigration(t, data, shrinkEgressNodes, restoreEgressNodes, true, time.Second, tt.ipRanges, tt.families)
 		})
 	}
 }
@@ -1053,28 +1081,34 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 	// In hybrid mode, Nodes are in different subnets, so the test is skipped.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	tests := []struct {
-		name      string
-		ipRange   v1beta2.IPRange
-		ipVersion int
+		name     string
+		ipRanges []v1beta2.IPRange
+		families []v1.IPFamily
 	}{
 		{
-			name:      "IPv4 cluster",
-			ipRange:   v1beta2.IPRange{CIDR: "169.254.100.0/30"},
-			ipVersion: 4,
+			name:     "IPv4 cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}},
+			families: []v1.IPFamily{v1.IPv4Protocol},
 		},
 		{
-			name:      "IPv6 cluster",
-			ipRange:   v1beta2.IPRange{CIDR: "2021:4::aaa1/124"},
-			ipVersion: 6,
+			name:     "IPv6 cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "2021:4::aaa1/124"}},
+			families: []v1.IPFamily{v1.IPv6Protocol},
+		},
+		{
+			name:     "dual-stack cluster",
+			ipRanges: []v1beta2.IPRange{{CIDR: "169.254.100.0/30"}, {CIDR: "2021:5::/124"}},
+			families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			switch tt.ipVersion {
-			case 4:
-				skipIfNotIPv4Cluster(t)
-			case 6:
-				skipIfNotIPv6Cluster(t)
+			for _, family := range tt.families {
+				if family == v1.IPv4Protocol {
+					skipIfNotIPv4Cluster(t)
+				} else {
+					skipIfNotIPv6Cluster(t)
+				}
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
@@ -1097,12 +1131,12 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			// Egress IP migration may take a few seconds when it's caused by Node failure detection.
 			// Skip checking Egress IP on the evicted Node because Egress IP will be left on it (no running antrea-agent).
-			testEgressMigration(t, data, pauseAgent, restoreAgent, false, 10*time.Second, &tt.ipRange)
+			testEgressMigration(t, data, pauseAgent, restoreAgent, false, 10*time.Second, tt.ipRanges, tt.families)
 		})
 	}
 }
 
-func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc func(poolName, evictNode string), checkEvictNode bool, timeout time.Duration, ipRange *v1beta2.IPRange) {
+func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc func(poolName, evictNode string), checkEvictNode bool, timeout time.Duration, ipRanges []v1beta2.IPRange, families []v1.IPFamily) {
 	nodeCandidates := sets.New[string](nodeName(0), nodeName(1))
 	matchExpressions := []metav1.LabelSelectorRequirement{
 		{
@@ -1111,10 +1145,10 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 			Values:   sets.List(nodeCandidates),
 		},
 	}
-	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", *ipRange, nil, matchExpressions, nil)
+	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", ipRanges, nil, matchExpressions, nil)
 	defer data.CRDClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
 
-	egress := data.createEgress(t, "migration-egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "", nil)
+	egress := data.createEgress(t, "migration-egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "", nil, families...)
 	defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	var err error
@@ -1126,13 +1160,19 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	if egress.Status.EgressNode != fromNode {
 		fromNode, toNode = nodeName(1), nodeName(0)
 	}
-	var checkIPNeighbor func(string)
+	var neighborCheckers []func(string)
 	if observerNode := nodeName(2); observerNode != "" {
-		checkIPNeighbor, err = setupIPNeighborChecker(data, t, observerNode, fromNode, toNode, getEgressIP(egress))
-		require.NoError(t, err)
+		for _, ip := range egress.Spec.EgressIPs {
+			check, err := setupIPNeighborChecker(data, t, observerNode, fromNode, toNode, ip)
+			require.NoError(t, err)
+			neighborCheckers = append(neighborCheckers, check)
+		}
 	} else {
-		checkIPNeighbor = func(_ string) {
-			t.Logf("The cluster didn't have enough Nodes, skip IP neighbor check")
+		t.Log("The cluster didn't have enough Nodes, skip IP neighbor check")
+	}
+	checkIPNeighbor := func(node string) {
+		for _, check := range neighborCheckers {
+			check(node)
 		}
 	}
 
@@ -1147,112 +1187,128 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	if checkEvictNode {
 		otherNodeToCheck = fromNode
 	}
-	_, err = data.checkEgressState(egress.Name, getEgressIP(egress), toNode, otherNodeToCheck, timeout)
+	_, err = data.checkEgressState(egress.Name, egress.Spec.EgressIPs, toNode, otherNodeToCheck, timeout)
 	assert.NoError(t, err)
 	checkIPNeighbor(toNode)
 
 	// Revert the operation. The EgressIP should be moved back.
 	revertFunc(externalIPPoolTwoNodes.Name, fromNode)
-	_, err = data.checkEgressState(egress.Name, getEgressIP(egress), fromNode, toNode, timeout)
+	_, err = data.checkEgressState(egress.Name, egress.Spec.EgressIPs, fromNode, toNode, timeout)
 	assert.NoError(t, err)
 	checkIPNeighbor(fromNode)
 }
 
 func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
 	skipIfEgressShapingDisabled(t)
-	skipIfNotIPv4Cluster(t)
 	skipIfHasWindowsNodes(t)
-	bandwidth := &v1beta2.Bandwidth{
-		Rate:  "100M",
-		Burst: "200M",
+	for caseIndex, tt := range []struct {
+		name     string
+		families []v1.IPFamily
+	}{
+		{name: "IPv4", families: []v1.IPFamily{v1.IPv4Protocol}},
+		{name: "IPv6", families: []v1.IPFamily{v1.IPv6Protocol}},
+		{name: "dual-stack", families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			bandwidth := &v1beta2.Bandwidth{Rate: "100M", Burst: "200M"}
+			egressNode := workerNodeName(1)
+			var egressIPs, serverIPs []string
+			for i, family := range tt.families {
+				serverIP, localIP, prefixLen := fmt.Sprintf("1.1.%d.1", caseIndex+1), fmt.Sprintf("1.1.%d.254", caseIndex+1), 24
+				if family == v1.IPv6Protocol {
+					skipIfNotIPv6Cluster(t)
+					egressIPs = append(egressIPs, workerNodeIPv6(1))
+					serverIP, localIP, prefixLen = fmt.Sprintf("2021:%d::1", caseIndex+6), fmt.Sprintf("2021:%d::e", caseIndex+6), 124
+				} else {
+					skipIfNotIPv4Cluster(t)
+					egressIPs = append(egressIPs, workerNodeIPv4(1))
+				}
+				serverIPs = append(serverIPs, serverIP)
+				name := fmt.Sprintf("qos-server-%s-%d", strings.ToLower(tt.name), i)
+				cmd, _ := getCommandInFakeExternalNetwork("iperf3 -s", prefixLen, serverIP, localIP, family == v1.IPv6Protocol)
+				require.NoError(t, NewPodBuilder(name, data.testNamespace, ToolboxImage).OnNode(egressNode).
+					WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data))
+				defer deletePodWrapper(t, data, data.testNamespace, name)
+				require.NoError(t, data.podWaitForRunning(defaultTimeout, name, data.testNamespace))
+			}
+			clientPodName := "qos-client-" + strings.ToLower(tt.name)
+			require.NoError(t, data.createToolboxPodOnNode(clientPodName, data.testNamespace, egressNode, false))
+			defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
+			require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+
+			egress, err := data.CRDClient.CrdV1beta2().Egresses().Create(context.TODO(), &v1beta2.Egress{
+				ObjectMeta: metav1.ObjectMeta{GenerateName: "egress-qos-"},
+				Spec: v1beta2.EgressSpec{
+					AppliedTo: v1beta2.EgressAppliedTo{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": clientPodName}}},
+					EgressIPs: egressIPs,
+					Bandwidth: bandwidth,
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+			_, err = data.waitForEgressRealized(egress)
+			require.NoError(t, err)
+
+			// Use the same burst and steady-state checks, including tolerance, for each family.
+			runIperf := func(serverIP, args string, expectedBandwidth int) {
+				t.Helper()
+				cmd := fmt.Sprintf("iperf3 -c %s -f m %s | grep sender | awk '{print $7}'", serverIP, args)
+				stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, []string{"bash", "-c", cmd})
+				require.NoError(t, err, "iperf3 failed: %s", stderr)
+				actualBandwidth, err := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+				require.NoError(t, err, "Unexpected iperf3 output: %s", stdout)
+				t.Logf("Actual bandwidth to %s: %v Mbits/sec", serverIP, actualBandwidth)
+				assert.InEpsilon(t, expectedBandwidth, actualBandwidth, 0.2)
+			}
+			for i, serverIP := range serverIPs {
+				if i > 0 {
+					// Both families share a meter. Refill its 200M burst at 100M/s before checking the next family.
+					time.Sleep(2 * time.Second)
+				}
+				runIperf(serverIP, "-t 1", 300)
+				runIperf(serverIP, "-O 1", 100)
+			}
+		})
 	}
-	transMap := map[string]int{
-		"100M": 100,
-		"200M": 200,
-	}
-
-	egressNode := nodeName(1)
-	egressNodeIP := nodeIP(1)
-
-	// Create another netns to fake an external network on the host network Pod.
-	fakeExternalName := "fake-external"
-	fakeExternalCmd := "iperf3 -s"
-	cmd, _ := getCommandInFakeExternalNetwork(fakeExternalCmd, 24, "1.1.1.1", "1.1.1.254", false)
-
-	err := NewPodBuilder(fakeExternalName, data.testNamespace, ToolboxImage).OnNode(egressNode).WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data)
-	require.NoError(t, err, "Failed to create fake external Pod")
-	defer deletePodWrapper(t, data, data.testNamespace, fakeExternalName)
-	err = data.podWaitForRunning(defaultTimeout, fakeExternalName, data.testNamespace)
-	require.NoError(t, err, "Error when waiting for fake external Pod to be in the Running state")
-
-	clientPodName := "client-pod"
-	err = NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(egressNode).Create(data)
-	require.NoError(t, err, "Failed to create client Pod")
-	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
-	err = data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace)
-	require.NoError(t, err, "Error when waiting for the client Pod to be in the Running state")
-
-	egress := data.createEgress(t, "egress-qos-", nil, map[string]string{"antrea-e2e": clientPodName}, "", egressNodeIP, bandwidth)
-	_, err = data.waitForEgressRealized(egress)
-	require.NoError(t, err, "Error when waiting for Egress to be realized")
-	defer data.CRDClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-
-	// expectedBandwidth is Mbps
-	runIperf := func(cmd []string, expectedBandwidth int) {
-		stdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, "toolbox", cmd)
-		if err != nil {
-			t.Fatalf("Error when running iperf3 client: %v", err)
-		}
-		stdout = strings.TrimSpace(stdout)
-		actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
-		t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
-		// Allow a certain deviation.
-		assert.InEpsilon(t, actualBandwidth, expectedBandwidth, 0.2)
-	}
-
-	runIperf([]string{"bash", "-c", "iperf3 -c 1.1.1.1 -f m -t 1|grep sender|awk '{print $7}'"}, transMap[bandwidth.Rate]+transMap[bandwidth.Burst])
-	runIperf([]string{"bash", "-c", "iperf3 -c 1.1.1.1 -f m -O 1|grep sender|awk '{print $7}'"}, transMap[bandwidth.Rate])
 }
 
-func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, otherNode string, timeout time.Duration) (*v1beta2.Egress, error) {
+func (data *TestData) checkEgressState(egressName string, expectedIPs []string, expectedNode, otherNode string, timeout time.Duration) (*v1beta2.Egress, error) {
 	var egress *v1beta2.Egress
-	var expectedNodeHasIP, otherNodeHasIP bool
 	pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
 		var err error
-		egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
+		egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(ctx, egressName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
-		if getEgressIP(egress) != expectedIP {
+		if !slices.Equal(egress.Spec.EgressIPs, expectedIPs) || !slices.Equal(egress.Status.EgressIPs, expectedIPs) || egress.Status.EgressNode != expectedNode {
 			return false, nil
 		}
-		if egress.Status.EgressNode != expectedNode {
-			return false, nil
-		}
-		// Make sure the IP is configured on the desired Node.
-		expectedNodeHasIP, err = hasIP(data, expectedNode, expectedIP)
-		if err != nil {
-			return false, err
-		}
-		if !expectedNodeHasIP {
-			return false, nil
-		}
-		if otherNode != "" {
-			// Make sure the IP is not configured on the other Node.
-			otherNodeHasIP, err = hasIP(data, otherNode, expectedIP)
-			if err != nil {
+		for _, ip := range expectedIPs {
+			// Every IP must be configured on the desired Node and removed from the other Node.
+			exists, err := hasIP(data, expectedNode, ip)
+			if err != nil || !exists {
 				return false, err
 			}
-			if otherNodeHasIP {
-				return false, nil
+			if otherNode != "" {
+				exists, err = hasIP(data, otherNode, ip)
+				if err != nil || exists {
+					return false, err
+				}
 			}
 		}
 		return true, nil
 	})
 	if pollErr != nil {
-		return egress, fmt.Errorf("egress did not reach expected state, err: %v, egress: %v, expectedIP: %s, expectedNode: %s, expectedNodeHasIP: %v, otherNodeHasIP: %v", pollErr, egress, expectedIP, expectedNode, expectedNodeHasIP, otherNodeHasIP)
+		return egress, fmt.Errorf("egress did not reach expected state, err: %v, egress: %v, expectedIPs: %v, expectedNode: %s, otherNode: %s", pollErr, egress, expectedIPs, expectedNode, otherNode)
 	}
 	return egress, nil
+}
+
+func egressIPDescription(ips []string) string {
+	if len(ips) == 1 {
+		return "IP " + ips[0]
+	}
+	return "IPs " + strings.Join(ips, ", ")
 }
 
 func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
@@ -1324,26 +1380,24 @@ func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, n
 	return checkIPNeighbor, nil
 }
 
-func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ipRange v1beta2.IPRange, subnet *v1beta2.SubnetInfo, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string) *v1beta2.ExternalIPPool {
+func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ipRanges []v1beta2.IPRange, subnets []v1beta2.SubnetInfo, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string) *v1beta2.ExternalIPPool {
 	pool := &v1beta2.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
 		Spec: v1beta2.ExternalIPPoolSpec{
-			IPRanges: []v1beta2.IPRange{ipRange},
+			IPRanges: ipRanges,
+			Subnets:  subnets,
 			NodeSelector: metav1.LabelSelector{
 				MatchExpressions: matchExpressions,
 				MatchLabels:      matchLabels,
 			},
 		},
 	}
-	if subnet != nil {
-		pool.Spec.Subnets = []v1beta2.SubnetInfo{*subnet}
-	}
 	pool, err := data.CRDClient.CrdV1beta2().ExternalIPPools().Create(context.TODO(), pool, metav1.CreateOptions{})
 	require.NoError(t, err, "Failed to create ExternalIPPool")
 	return pool
 }
 
-func (data *TestData) createEgress(t *testing.T, generateName string, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string, externalPoolName string, egressIP string, bandwidth *v1beta2.Bandwidth) *v1beta2.Egress {
+func (data *TestData) createEgress(t *testing.T, generateName string, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string, externalPoolName string, egressIP string, bandwidth *v1beta2.Bandwidth, families ...v1.IPFamily) *v1beta2.Egress {
 	egress := &v1beta2.Egress{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
 		Spec: v1beta2.EgressSpec{
@@ -1355,6 +1409,7 @@ func (data *TestData) createEgress(t *testing.T, generateName string, matchExpre
 			},
 			ExternalIPPool: externalPoolName,
 			Bandwidth:      bandwidth,
+			IPFamilies:     families,
 		},
 	}
 	if egressIP != "" {
@@ -1368,14 +1423,14 @@ func (data *TestData) createEgress(t *testing.T, generateName string, matchExpre
 func (data *TestData) waitForEgressRealized(egress *v1beta2.Egress) (*v1beta2.Egress, error) {
 	err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressRealizedTimeout, true,
 		func(ctx context.Context) (done bool, err error) {
-			egress, err = data.CRDClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			current, err := data.CRDClient.CrdV1beta2().Egresses().Get(ctx, egress.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
-			if getEgressIP(egress) == "" || egress.Status.EgressNode == "" {
-				return false, nil
-			}
-			return true, nil
+			egress = current
+			return len(egress.Spec.EgressIPs) > 0 &&
+				slices.Equal(egress.Spec.EgressIPs, egress.Status.EgressIPs) &&
+				egress.Status.EgressNode != "", nil
 		})
 	if err != nil {
 		return nil, fmt.Errorf("wait for Egress %#v realized failed: %v", egress, err)
@@ -1423,7 +1478,8 @@ func assertConnError(data *TestData, t *testing.T, pod, container, serverIP stri
 	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, false,
 		func(ctx context.Context) (done bool, err error) {
 			url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
-			stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, url, container, 5)
+			stdout, stderr, exeErr = data.RunCommandFromPod(data.testNamespace, pod, container,
+				[]string{"wget", "-O", "-", url, "-T", "1", "-t", "1"})
 			if exeErr != nil {
 				return true, nil
 			}

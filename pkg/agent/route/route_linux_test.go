@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1379,7 +1380,7 @@ COMMIT
 				},
 			}
 			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
+				c.markToSNATIP.Store(snatMarkKey{mark: mark, isIPv6: net.ParseIP(snatIP).To4() == nil}, net.ParseIP(snatIP))
 			}
 			if tt.nodeNetworkPolicyEnabled {
 				c.initNodeNetworkPolicy()
@@ -2321,156 +2322,122 @@ func TestUnMigrateRoutesToGw(t *testing.T) {
 	}
 }
 
-func TestAddSNATRule(t *testing.T) {
-	tests := []struct {
-		name          string
-		networkConfig *config.NetworkConfig
-		nodeConfig    *config.NodeConfig
-		snatIP        net.IP
-		mark          uint32
-		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
-	}{
-		{
-			name: "IPv4",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			snatIP: net.ParseIP("1.1.1.1"),
-			mark:   10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
-				})
-			},
-		},
-		{
-			name: "IPv6",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			snatIP: net.ParseIP("fe80::e643:4bff:fe44:1"),
-			mark:   11,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.InsertRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:1",
-				})
-			},
-		},
+func TestSNATRuleDesiredState(t *testing.T) {
+	const mark = uint32(10)
+	ipv4 := net.ParseIP("1.1.1.1")
+	ipv6 := net.ParseIP("2001:db8::1")
+	c := &Client{iptablesSyncCh: make(chan struct{}, 1)}
+	for _, snatIP := range []net.IP{ipv4, ipv6, ipv4} {
+		assert.NoError(t, c.AddSNATRule(snatIP, mark))
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{iptables: mockIPTables,
-				nodeConfig: tt.nodeConfig,
-			}
-			tt.expectedCalls(mockIPTables.EXPECT())
-			assert.NoError(t, c.AddSNATRule(tt.snatIP, tt.mark))
-		})
+	assert.Len(t, c.iptablesSyncCh, 1, "changes should coalesce until the worker processes them")
+	for _, snatIP := range []net.IP{ipv4, ipv6} {
+		value, exists := c.markToSNATIP.Load(snatMarkKey{mark: mark, isIPv6: snatIP.To4() == nil})
+		require.True(t, exists)
+		assert.Equal(t, snatIP, value)
 	}
+
+	<-c.iptablesSyncCh
+	assert.NoError(t, c.DeleteSNATRule(mark, true))
+	assert.Len(t, c.iptablesSyncCh, 1)
+	_, exists := c.markToSNATIP.Load(snatMarkKey{mark: mark, isIPv6: true})
+	assert.False(t, exists)
+	_, exists = c.markToSNATIP.Load(snatMarkKey{mark: mark})
+	assert.True(t, exists, "deleting IPv6 must preserve the IPv4 rule for the shared mark")
+	assert.NoError(t, c.DeleteSNATRule(mark, false))
+	assert.NoError(t, c.DeleteSNATRule(mark, false), "deletion must be idempotent")
+	_, exists = c.markToSNATIP.Load(snatMarkKey{mark: mark})
+	assert.False(t, exists)
 }
 
-func TestDeleteSNATRule(t *testing.T) {
-	tests := []struct {
-		name                  string
-		networkConfig         *config.NetworkConfig
-		egressSNATRandomFully bool
-		markToSNATIP          map[uint32]net.IP
-		nodeConfig            *config.NodeConfig
-		mark                  uint32
-		expectedCalls         func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
-	}{
-		{
-			name: "IPv4",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
-			},
-			mark: 10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
-				})
-			},
-		},
-		{
-			name: "IPv6",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("fe80::e643:4bff:fe44:1"),
-				11: net.ParseIP("fe80::e643:4bff:fe44:2"),
-			},
-			mark: 11,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:2",
-				})
-			},
-		},
-		{
-			name: "IPv4 with random ports for SNAT",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			egressSNATRandomFully: true,
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
-			},
-			mark: 10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1", "--random-fully",
-				})
-			},
-		},
+func TestSyncIPTablesSharedSNATMark(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	c := &Client{
+		iptables:       mockIPTables,
+		networkConfig:  &config.NetworkConfig{IPv4Enabled: true, IPv6Enabled: true},
+		nodeConfig:     &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+		iptablesCache:  newIPTablesCache(),
+		iptablesSyncCh: make(chan struct{}, 1),
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{
-				iptables:              mockIPTables,
-				nodeConfig:            tt.nodeConfig,
-				egressSNATRandomFully: tt.egressSNATRandomFully,
-				markToSNATIP:          sync.Map{},
-			}
-			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(mark, snatIP)
-			}
-			tt.expectedCalls(mockIPTables.EXPECT())
-			assert.NoError(t, c.DeleteSNATRule(tt.mark))
-		})
+	require.NoError(t, c.AddSNATRule(net.ParseIP("192.0.2.10"), 10))
+	require.NoError(t, c.AddSNATRule(net.ParseIP("2001:db8::10"), 10))
+	<-c.iptablesSyncCh
+	gomock.InOrder(
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(data string, _, _ bool) error {
+			assert.Contains(t, data, "--to 192.0.2.10")
+			assert.NotContains(t, data, "--to 2001:db8::10")
+			// A delete during restore must queue another sync of the new desired state.
+			require.NoError(t, c.DeleteSNATRule(10, false))
+			return nil
+		}),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(func(data string, _, _ bool) error {
+			assert.Contains(t, data, "--to 2001:db8::10")
+			assert.NotContains(t, data, "--to 192.0.2.10")
+			return fmt.Errorf("restore failed")
+		}),
+	)
+	require.Error(t, c.syncIPTables(false))
+	require.Len(t, c.iptablesSyncCh, 1)
+	<-c.iptablesSyncCh
+	mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(data string, _, _ bool) error {
+		assert.NotContains(t, data, "--to 192.0.2.10")
+		return nil
+	})
+	mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(func(data string, _, _ bool) error {
+		assert.Contains(t, data, "--to 2001:db8::10")
+		return nil
+	})
+	require.NoError(t, c.syncIPTables(false))
+}
+
+func TestRunRetriesSNATUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	initialized := make(chan struct{})
+	close(initialized)
+	c := &Client{
+		iptables:            mockIPTables,
+		networkConfig:       &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly, IPv4Enabled: true},
+		nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+		iptablesCache:       newIPTablesCache(),
+		iptablesSyncCh:      make(chan struct{}, 1),
+		iptablesInitialized: initialized,
+	}
+	reconciled := make(chan struct{})
+	gomock.InOrder(
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(_ string, _, _ bool) error {
+			// Queue an update while the initial snapshot is being programmed.
+			assert.NoError(t, c.AddSNATRule(net.ParseIP("192.0.2.10"), 10))
+			return fmt.Errorf("initial restore failed")
+		}),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).Return(fmt.Errorf("restore failed")),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(data string, _, _ bool) error {
+			assert.Contains(t, data, "--to 192.0.2.10")
+			close(reconciled)
+			return nil
+		}),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan struct{})
+	go func() {
+		defer close(runDone)
+		c.Run(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-runDone
+	}()
+	select {
+	case <-reconciled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SNAT update was not retried before the periodic sync")
 	}
 }
 
@@ -3551,6 +3518,32 @@ func TestEgressRoutes(t *testing.T) {
 	}
 }
 
+func TestEgressRoutesPartialFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+	c := &Client{netlink: mockNetlink}
+	const tableID = uint32(101)
+	localRoute := &netlink.Route{Dst: ip.MustParseCIDR("2001:db8::/64"), Scope: netlink.SCOPE_LINK, LinkIndex: 10, Table: int(tableID)}
+	defaultRoute := &netlink.Route{Gw: net.ParseIP("2001:db8::1"), LinkIndex: 10, Table: int(tableID)}
+	addErr, deleteErr := fmt.Errorf("adding default route failed"), fmt.Errorf("deleting subnet route failed")
+	gomock.InOrder(
+		mockNetlink.EXPECT().RouteReplace(localRoute),
+		mockNetlink.EXPECT().RouteReplace(defaultRoute).Return(addErr),
+		mockNetlink.EXPECT().RouteDel(localRoute).Return(deleteErr),
+		mockNetlink.EXPECT().RouteDel(localRoute),
+		mockNetlink.EXPECT().RouteDel(defaultRoute).Return(unix.ESRCH),
+	)
+	require.ErrorIs(t, c.AddEgressRoutes(tableID, 10, defaultRoute.Gw, 64), addErr)
+	_, exists := c.egressRoutes.Load(tableID)
+	require.True(t, exists, "partial installation must remain available for rollback")
+	require.ErrorIs(t, c.DeleteEgressRoutes(tableID), deleteErr)
+	_, exists = c.egressRoutes.Load(tableID)
+	require.True(t, exists, "failed cleanup must retain the desired routes for retry")
+	require.NoError(t, c.DeleteEgressRoutes(tableID))
+	_, exists = c.egressRoutes.Load(tableID)
+	assert.False(t, exists)
+}
+
 func TestEgressRule(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -3991,31 +3984,16 @@ func TestEnqueue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			// The content of the sync is covered by TestSyncIPTables, only the fact that it runs matters
-			// here: the rules must be programmed, not only cached.
-			mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			if tt.expectSync {
-				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MinTimes(1)
-			} else {
-				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(0)
-			}
-			// Report iptables as initialized, so that Enqueue syncs the rules instead of only caching
-			// them.
-			iptablesInitialized := make(chan struct{})
-			close(iptablesInitialized)
+			// The worker programs these cached rules after Enqueue signals the change.
 			c := &Client{
-				endpointResolver:    tt.endpointResolver,
-				networkConfig:       tt.networkConfig,
-				iptablesCache:       newIPTablesCache(),
-				iptables:            mockIPTables,
-				iptablesInitialized: iptablesInitialized,
-				nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+				endpointResolver: tt.endpointResolver,
+				networkConfig:    tt.networkConfig,
+				iptablesCache:    newIPTablesCache(),
+				iptablesSyncCh:   make(chan struct{}, 1),
+				nodeConfig:       &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 			}
 			c.Enqueue()
+			assert.Equal(t, tt.expectSync, len(c.iptablesSyncCh) == 1)
 
 			expectedInputRules := []string{
 				`-A ANTREA-INPUT -m comment --comment "Antrea: allow Controller APIServer input packets" -p tcp --dport 10349 -j ACCEPT`,
@@ -4060,24 +4038,13 @@ func TestEnqueue(t *testing.T) {
 // checks each state on a fresh Client, so it would not catch a change returning early instead of storing
 // the empty rules.
 func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockIPTables := iptablestest.NewMockInterface(ctrl)
-	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	// Once for the Endpoint being resolved, once for it going away.
-	mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(2)
-
-	iptablesInitialized := make(chan struct{})
-	close(iptablesInitialized)
 	resolver := &fakeEndpointResolver{url: &url.URL{Scheme: "https", Host: "antrea.kube-system.svc:10349"}}
 	c := &Client{
-		endpointResolver:    resolver,
-		networkConfig:       &config.NetworkConfig{IPv4Enabled: true},
-		iptablesCache:       newIPTablesCache(),
-		iptables:            mockIPTables,
-		iptablesInitialized: iptablesInitialized,
-		nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+		endpointResolver: resolver,
+		networkConfig:    &config.NetworkConfig{IPv4Enabled: true},
+		iptablesCache:    newIPTablesCache(),
+		iptablesSyncCh:   make(chan struct{}, 1),
+		nodeConfig:       &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 	}
 
 	getRules := func(chain string) []string {

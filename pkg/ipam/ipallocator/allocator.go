@@ -221,7 +221,16 @@ func (a *SingleIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 }
 
 func (a *SingleIPAllocator) getOffset(ip net.IP) int {
-	return int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	if utilnet.IPFamilyOf(ip) != a.ipFamily {
+		return -1
+	}
+	offset := big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base)
+	// Check the full address difference before converting it: IPv6 prefixes that differ above
+	// the low 64 bits must not alias an address in the allocator's range.
+	if offset.Sign() < 0 || offset.Cmp(big.NewInt(int64(a.max))) >= 0 {
+		return -1
+	}
+	return int(offset.Int64())
 }
 
 // Release releases the provided IP. It returns error if the IP is not in the range or not allocated.

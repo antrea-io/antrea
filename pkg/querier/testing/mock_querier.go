@@ -338,18 +338,18 @@ func (mr *MockEgressQuerierMockRecorder) GetEgress(podNamespace, podName any) *g
 }
 
 // GetEgressIPByMark mocks base method.
-func (m *MockEgressQuerier) GetEgressIPByMark(mark uint32) (string, error) {
+func (m *MockEgressQuerier) GetEgressIPByMark(mark uint32, isIPv6 bool) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEgressIPByMark", mark)
+	ret := m.ctrl.Call(m, "GetEgressIPByMark", mark, isIPv6)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetEgressIPByMark indicates an expected call of GetEgressIPByMark.
-func (mr *MockEgressQuerierMockRecorder) GetEgressIPByMark(mark any) *gomock.Call {
+func (mr *MockEgressQuerierMockRecorder) GetEgressIPByMark(mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgressIPByMark", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgressIPByMark), mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgressIPByMark", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgressIPByMark), mark, isIPv6)
 }
 
 // MockAgentBGPPolicyInfoQuerier is a mock of AgentBGPPolicyInfoQuerier interface.

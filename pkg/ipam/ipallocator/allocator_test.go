@@ -340,3 +340,42 @@ func TestNameAndTotal(t *testing.T) {
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
 	assert.Equal(t, 14, ma.Total())
 }
+
+func TestRejectIPOutsideRange(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		cidr    string
+		valid   string
+		foreign string
+	}{
+		{
+			name: "IPv6 prefix above range", cidr: "2001:db8:20::/120",
+			valid: "2001:db8:20::2", foreign: "2001:db8:30::2",
+		},
+		{
+			name: "IPv6 prefix below range", cidr: "2001:db8:20::/120",
+			valid: "2001:db8:20::2", foreign: "2001:db8:10::2",
+		},
+		{
+			name: "IPv6 address aliases IPv4 range", cidr: "192.0.2.0/24",
+			valid: "192.0.2.2", foreign: "::c000:202",
+		},
+		{
+			name: "IPv4 address aliases IPv6 range", cidr: "::c000:200/120",
+			valid: "::c000:202", foreign: "192.0.2.2",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			allocator := newCIDRAllocator(tc.cidr, nil)
+			valid, foreign := net.ParseIP(tc.valid), net.ParseIP(tc.foreign)
+			require.True(t, allocator.Has(valid))
+			assert.False(t, allocator.Has(foreign))
+			require.NoError(t, allocator.AllocateIP(valid))
+			require.Error(t, allocator.Release(foreign), "an out-of-range IP must not release another address")
+			assert.Equal(t, 1, allocator.Used())
+			require.NoError(t, allocator.Release(valid))
+			require.Error(t, allocator.AllocateIP(foreign))
+			assert.Zero(t, allocator.Used())
+		})
+	}
+}

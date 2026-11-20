@@ -39,8 +39,6 @@ import (
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
-const dualStackRuntimeUnsupportedMessage = "dual-stack Egress runtime is not supported yet"
-
 type specifiedEgressIP struct {
 	value  string
 	ip     net.IP
@@ -117,10 +115,6 @@ func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crd
 			}
 		}
 	}
-	if requiresDualStackEgress(newEgress) {
-		return fmt.Errorf("%s", dualStackRuntimeUnsupportedMessage)
-	}
-
 	if newEgress.Spec.ExternalIPPool == "" {
 		if len(specifiedIPs) == 0 {
 			return fmt.Errorf("an Egress IP or ExternalIPPool must be specified")
@@ -133,9 +127,6 @@ func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crd
 		return nil
 	}
 	poolName := newEgress.Spec.ExternalIPPool
-	clearingIP := len(oldEgress.Spec.EgressIPs) == 1 && len(specifiedIPs) == 0 &&
-		oldEgress.Spec.ExternalIPPool == poolName &&
-		slices.Equal(oldEgress.Spec.IPFamilies, newEgress.Spec.IPFamilies)
 	poolFamilies, err := c.externalIPAllocator.IPPoolIPFamilies(poolName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -149,8 +140,24 @@ func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crd
 	}
 	// A Pool may have been recreated with different ranges. Permit clearing the obsolete IP even when no new
 	// allocation is currently possible, but do not exempt changes of Pool or families, or requests to clear a valid IP.
-	if clearingIP && !c.externalIPAllocator.IPPoolHasIP(poolName, net.ParseIP(oldEgress.Spec.EgressIPs[0])) {
-		return nil
+	if len(oldEgress.Spec.EgressIPs) > 0 && len(specifiedIPs) == 0 && oldEgress.Spec.ExternalIPPool == poolName {
+		oldIPs, err := parseSpecifiedEgressIPs(&oldEgress.Spec)
+		if err != nil {
+			return err
+		}
+		var oldFamilies []corev1.IPFamily
+		obsolete := false
+		for _, ip := range oldIPs {
+			oldFamilies = append(oldFamilies, ip.family)
+			if !c.externalIPAllocator.IPPoolHasIP(poolName, ip.ip) {
+				obsolete = true
+			}
+		}
+		familiesUnchanged := slices.Equal(oldEgress.Spec.IPFamilies, ipFamilies) ||
+			len(oldEgress.Spec.IPFamilies) == 0 && slices.Equal(oldFamilies, ipFamilies)
+		if obsolete && familiesUnchanged {
+			return nil
+		}
 	}
 	if poolFamilies.Len() == 0 {
 		// Automatic allocation is retried when IP ranges are added to the Pool.
