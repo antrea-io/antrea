@@ -19,6 +19,7 @@ different from the Antrea-native `ClusterNetworkPolicy` CRD (`crd.antrea.io/v1be
   - [Enabling the Feature Gate When a Custom Tier Exists at Priority 220](#enabling-the-feature-gate-when-a-custom-tier-exists-at-priority-220)
 - [Usage](#usage)
   - [Sample ClusterNetworkPolicy specs](#sample-clusternetworkpolicy-specs)
+  - [Statistics](#statistics)
 <!-- /toc -->
 
 ## Introduction
@@ -207,3 +208,49 @@ spec:
       from:
         - namespaces: {}
 ```
+
+### Statistics
+
+When the `NetworkPolicyStats` feature gate is enabled, the Antrea Controller collects traffic statistics for
+`ClusterNetworkPolicies` and exposes them through the `clusternetworkpolicystats` resource of the Antrea Stats API:
+
+```bash
+> kubectl get clusternetworkpolicystats
+NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
+sample-cnp            3          36        5199    2026-02-24T09:04:53Z
+
+> kubectl get clusternetworkpolicystats sample-cnp -o json
+{
+    "apiVersion": "stats.antrea.io/v1alpha1",
+    "kind": "ClusterNetworkPolicyStats",
+    "metadata": {
+        "creationTimestamp": "2026-02-24T09:04:53Z",
+        "name": "sample-cnp",
+        "uid": "940cf76a-d836-4e76-b773-d275370b9328"
+    },
+    "ruleTrafficStats": [
+        {
+            "name": "allow-from-client",
+            "trafficStats": {
+                "bytes": 5199,
+                "packets": 36,
+                "sessions": 3
+            }
+        }
+    ],
+    "trafficStats": {
+        "bytes": 5199,
+        "packets": 36,
+        "sessions": 3
+    }
+}
+```
+
+`spec.ingress[].name` and `spec.egress[].name` are optional in the upstream API. Rules that do not set a name are
+reported under a name derived from their direction, index and a hash of their contents, such as `ingress-0-2c8bf` or
+`egress-1-a41d6`.
+
+Statistics of the Antrea-native `ClusterNetworkPolicy` CRD are reported separately, under the
+`antreaclusternetworkpolicystats` resource. Statistics are collected asynchronously, so there may be a delay of up to
+one minute before a change is reflected in API responses. See
+[NetworkPolicyStats](feature-gates.md#networkpolicystats) for more information.
