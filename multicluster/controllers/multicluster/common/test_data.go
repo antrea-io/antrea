@@ -61,44 +61,6 @@ var (
 		},
 		Spec: SvcNginxSpec,
 	}
-	addr1 = corev1.EndpointAddress{
-		IP:       "192.168.17.11",
-		Hostname: "pod1",
-	}
-	addr2 = corev1.EndpointAddress{
-		IP:       "192.168.17.12",
-		Hostname: "pod1",
-	}
-	EPPorts80 = []corev1.EndpointPort{
-		{
-			Name:     "http",
-			Port:     80,
-			Protocol: corev1.ProtocolTCP,
-		},
-	}
-	EPNginxSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				addr1,
-			},
-			Ports: EPPorts80,
-		},
-	}
-	EPNginxSubset2 = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				addr2,
-			},
-			Ports: EPPorts80,
-		},
-	}
-	EPNginx = &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx",
-			Namespace: "default",
-		},
-		Subsets: EPNginxSubset,
-	}
 
 	TestCtx    = context.Background()
 	TestScheme = runtime.NewScheme()
