@@ -19,20 +19,24 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 
 	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
 
 func TestREST(t *testing.T) {
 	fakeClock := clocktesting.NewFakeClock(time.Now())
-	r := newRESTWithClock(fakeClock)
+	r := newRESTWithClock(fakeClock, newNodeLister(t, "node1"))
 	assert.Equal(t, &statsv1alpha1.NodeLatencyStats{}, r.New())
 	assert.Equal(t, &statsv1alpha1.NodeLatencyStats{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
@@ -75,7 +79,7 @@ func TestRESTCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
-			r := newRESTWithClock(fakeClock)
+			r := newRESTWithClock(fakeClock, newNodeLister(t, "node1"))
 			fakeClock.Step(timeStep)
 			obj, err := r.Create(ctx, tt.summary, nil, nil)
 			require.NoError(t, err)
@@ -120,7 +124,7 @@ func TestRESTGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
-			r := newRESTWithClock(fakeClock)
+			r := newRESTWithClock(fakeClock, newNodeLister(t, "node1"))
 			ctx := context.Background()
 
 			_, err := r.Create(ctx, tt.summary, nil, nil)
@@ -172,7 +176,7 @@ func TestRESTDelete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
-			r := newRESTWithClock(fakeClock)
+			r := newRESTWithClock(fakeClock, newNodeLister(t, "node1"))
 			ctx := context.Background()
 
 			_, err := r.Create(ctx, tt.summary, nil, nil)
@@ -205,7 +209,7 @@ func TestRESTList(t *testing.T) {
 		},
 	}
 
-	r := newRESTWithClock(fakeClock)
+	r := newRESTWithClock(fakeClock, newNodeLister(t, "node1"))
 	ctx := context.Background()
 
 	_, err := r.Create(ctx, summary, nil, nil)
@@ -246,7 +250,7 @@ func TestRESTConvertToTable(t *testing.T) {
 	}
 	expectedCells := []interface{}{"node1", 2, "1.5ms", "2ms"}
 
-	r := NewREST()
+	r := newRESTWithClock(clock.RealClock{}, newNodeLister(t, "node1", "node2", "node3"))
 	ctx := context.Background()
 
 	_, err := r.Create(ctx, summary, nil, nil)
@@ -254,4 +258,45 @@ func TestRESTConvertToTable(t *testing.T) {
 	obj, err := r.ConvertToTable(ctx, summary, nil)
 	require.NoError(t, err)
 	assert.Equal(t, expectedCells, obj.Rows[0].Cells)
+}
+
+func TestRESTCreateFiltersInvalidPeerNodeLatencyStats(t *testing.T) {
+	r := newRESTWithClock(clock.RealClock{}, newNodeLister(t, "node1", "node2", "node3"))
+	summary := &statsv1alpha1.NodeLatencyStats{
+		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		PeerNodeLatencyStats: []statsv1alpha1.PeerNodeLatencyStats{
+			{NodeName: "node2"},
+			{NodeName: "unknown"},
+			{NodeName: "node2"},
+			{NodeName: "node1"},
+			{NodeName: "node3"},
+		},
+	}
+
+	obj, err := r.Create(context.Background(), summary, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t,
+		[]statsv1alpha1.PeerNodeLatencyStats{{NodeName: "node2"}, {NodeName: "node3"}},
+		obj.(*statsv1alpha1.NodeLatencyStats).PeerNodeLatencyStats,
+	)
+}
+
+func TestRESTCreateRejectsUnknownReportingNode(t *testing.T) {
+	r := newRESTWithClock(clock.RealClock{}, newNodeLister(t, "node1"))
+	summary := &statsv1alpha1.NodeLatencyStats{ObjectMeta: metav1.ObjectMeta{Name: "unknown"}}
+
+	_, err := r.Create(context.Background(), summary, nil, nil)
+	require.Error(t, err)
+	assert.True(t, errors.IsNotFound(err))
+	_, err = r.Get(context.Background(), summary.Name, nil)
+	assert.True(t, errors.IsNotFound(err))
+}
+
+func newNodeLister(t *testing.T, nodeNames ...string) corelisters.NodeLister {
+	t.Helper()
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	for _, nodeName := range nodeNames {
+		require.NoError(t, indexer.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName}}))
+	}
+	return corelisters.NewNodeLister(indexer)
 }

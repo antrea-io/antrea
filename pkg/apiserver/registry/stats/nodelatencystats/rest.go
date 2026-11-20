@@ -25,16 +25,20 @@ import (
 	metatable "k8s.io/apimachinery/pkg/api/meta/table"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
 
 type REST struct {
-	indexer cache.Indexer
-	clock   clock.Clock
+	indexer    cache.Indexer
+	clock      clock.Clock
+	nodeLister corelisters.NodeLister
 }
 
 var (
@@ -47,14 +51,15 @@ var (
 )
 
 // NewREST returns a REST object that will work against API services.
-func NewREST() *REST {
-	return newRESTWithClock(clock.RealClock{})
+func NewREST(nodeInformer coreinformers.NodeInformer) *REST {
+	return newRESTWithClock(clock.RealClock{}, nodeInformer.Lister())
 }
 
-func newRESTWithClock(clock clock.Clock) *REST {
+func newRESTWithClock(clock clock.Clock, nodeLister corelisters.NodeLister) *REST {
 	return &REST{
-		indexer: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{}),
-		clock:   clock,
+		indexer:    cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{}),
+		clock:      clock,
+		nodeLister: nodeLister,
 	}
 }
 
@@ -68,6 +73,31 @@ func (r *REST) Destroy() {
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	// Update will add the object if the key does not exist.
 	summary := obj.(*statsv1alpha1.NodeLatencyStats)
+	if _, err := r.nodeLister.Get(summary.Name); err != nil {
+		return nil, err
+	}
+	nodes, err := r.nodeLister.List(labels.Everything())
+	if err != nil {
+		return nil, errors.NewInternalError(err)
+	}
+	validPeerNames := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		if node.Name != summary.Name {
+			validPeerNames[node.Name] = struct{}{}
+		}
+	}
+	if len(summary.PeerNodeLatencyStats) > 0 {
+		// Keep at most one entry for every current peer Node so reports cannot retain arbitrary data.
+		filteredPeerNodeLatencyStats := make([]statsv1alpha1.PeerNodeLatencyStats, 0, len(validPeerNames))
+		for _, peerNodeLatencyStats := range summary.PeerNodeLatencyStats {
+			if _, exists := validPeerNames[peerNodeLatencyStats.NodeName]; !exists {
+				continue
+			}
+			delete(validPeerNames, peerNodeLatencyStats.NodeName)
+			filteredPeerNodeLatencyStats = append(filteredPeerNodeLatencyStats, peerNodeLatencyStats)
+		}
+		summary.PeerNodeLatencyStats = filteredPeerNodeLatencyStats
+	}
 	if summary.ObjectMeta.CreationTimestamp.IsZero() {
 		summary.ObjectMeta.CreationTimestamp = metav1.Time{Time: r.clock.Now()}
 	}
