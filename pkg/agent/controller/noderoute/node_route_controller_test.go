@@ -53,8 +53,10 @@ var (
 	// podCIDRs of "remote" Node
 	_, podCIDR1, _    = net.ParseCIDR("1.1.1.0/24")
 	_, podCIDR1v6, _  = net.ParseCIDR("2001:4860:0001::/48")
+	_, podCIDR2, _    = net.ParseCIDR("1.1.2.0/24")
 	podCIDR1Gateway   = util.GetGatewayIPForPodCIDR(podCIDR1)
 	podCIDR1v6Gateway = util.GetGatewayIPForPodCIDR(podCIDR1v6)
+	podCIDR2Gateway   = util.GetGatewayIPForPodCIDR(podCIDR2)
 	nodeIP1           = net.ParseIP("10.10.10.10")
 	dsIPs1            = utilip.DualStackIPs{IPv4: nodeIP1}
 	nodeIP2           = net.ParseIP("10.10.10.11")
@@ -196,6 +198,68 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
+	}
+}
+
+// TestNodePodCIDRUpdate checks that the routes and flows installed for a Node are replaced when its
+// PodCIDRs change, and removed when its PodCIDRs are cleared.
+func TestNodePodCIDRUpdate(t *testing.T) {
+	newPodCIDRNode := func(podCIDRs ...*net.IPNet) *corev1.Node {
+		node := node1.DeepCopy()
+		node.Spec.PodCIDR = ""
+		node.Spec.PodCIDRs = nil
+		for _, cidr := range podCIDRs {
+			if node.Spec.PodCIDR == "" {
+				node.Spec.PodCIDR = cidr.String()
+			}
+			node.Spec.PodCIDRs = append(node.Spec.PodCIDRs, cidr.String())
+		}
+		return node
+	}
+
+	tests := []struct {
+		name       string
+		updated    *corev1.Node
+		expectFunc func(c *fakeController)
+	}{
+		{
+			name:    "PodCIDR changed",
+			updated: newPodCIDRNode(podCIDR2),
+			expectFunc: func(c *fakeController) {
+				gomock.InOrder(
+					c.routeClient.EXPECT().DeleteRoutes(podCIDR1),
+					c.ofClient.EXPECT().UninstallNodeFlows("node1"),
+					c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil),
+					c.routeClient.EXPECT().AddRoutes(podCIDR2, "node1", nodeIP1, podCIDR2Gateway),
+				)
+			},
+		},
+		{
+			name:    "PodCIDR cleared",
+			updated: newPodCIDRNode(),
+			expectFunc: func(c *fakeController) {
+				gomock.InOrder(
+					c.routeClient.EXPECT().DeleteRoutes(podCIDR1),
+					c.ofClient.EXPECT().UninstallNodeFlows("node1"),
+				)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newController(t, &config.NetworkConfig{})
+			defer c.queue.ShutDown()
+			store := c.informerFactory.Core().V1().Nodes().Informer().GetStore()
+
+			require.NoError(t, store.Add(newPodCIDRNode(podCIDR1)))
+			c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+			c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+			require.NoError(t, c.syncNodeRoute("node1"))
+
+			require.NoError(t, store.Update(tt.updated))
+			tt.expectFunc(c)
+			require.NoError(t, c.syncNodeRoute("node1"))
+		})
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -556,16 +557,32 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	}
 	peerWireGuardPublicKey := node.Annotations[types.NodeWireGuardPublicAnnotationKey]
 
+	podCIDRStrs := getPodCIDRsOnNode(node)
+
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-	// Route is already added for this Node and Node MAC, transport IP
-	// and WireGuard public key are not changed.
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() &&
-		peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) &&
-		nrInfo.(*nodeRouteInfo).wireGuardPublicKey == peerWireGuardPublicKey {
-		return nil
+	if installed {
+		installedInfo := nrInfo.(*nodeRouteInfo)
+		// The order of the CIDRs does not matter much: at worst, a different order is
+		// treated as a change and the routes are re-installed.
+		samePodCIDRs := slices.EqualFunc(podCIDRStrs, installedInfo.podCIDRs, func(cidrStr string, cidr *net.IPNet) bool {
+			return cidr.String() == cidrStr
+		})
+		// Route is already added for this Node and Node MAC, transport IP, PodCIDRs and
+		// WireGuard public key are not changed.
+		if samePodCIDRs && installedInfo.nodeMAC.String() == peerNodeMAC.String() &&
+			peerNodeIPs.Equal(*installedInfo.nodeIPs) &&
+			installedInfo.wireGuardPublicKey == peerWireGuardPublicKey {
+			return nil
+		}
+		// Routes are keyed by PodCIDR, so the routes for the previous PodCIDRs would be left
+		// behind if they were not deleted first.
+		if !samePodCIDRs {
+			if err := c.deleteNodeRoute(nodeName); err != nil {
+				return err
+			}
+		}
 	}
 
-	podCIDRStrs := getPodCIDRsOnNode(node)
 	if len(podCIDRStrs) == 0 {
 		// If no valid PodCIDR is configured in Node.Spec, return immediately.
 		return nil
