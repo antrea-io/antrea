@@ -237,6 +237,10 @@ type NetworkConfig struct {
 	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
 	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
 	EnableEgress bool
+	// EnableL2Dispatch indicates that a feature sends some of its traffic to peer Nodes in the
+	// local transport subnet with the l2 dispatch: to the MAC address of the peer Node, through
+	// policy routing, without encapsulation. The features which use the l2 dispatch set it.
+	EnableL2Dispatch bool
 
 	EnableHostNetworkAcceleration bool
 	HostNetworkMode               HostNetworkMode
@@ -310,6 +314,19 @@ func (nc *NetworkConfig) NeedsEgressSymmetricPath(egressEnabled bool) bool {
 	return egressEnabled && (nc.TrafficEncapMode == TrafficEncapModeNoEncap ||
 		nc.TrafficEncapMode == TrafficEncapModeHybrid ||
 		nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard)
+}
+
+// SupportsL2Dispatch returns true if a feature uses the l2 dispatch and the traffic mode allows it. In noEncap
+// and hybrid modes, Pod traffic to the peer Nodes in the local transport subnet is routed, so their MAC addresses
+// can be reached without encapsulation.
+func (nc *NetworkConfig) SupportsL2Dispatch() bool {
+	return nc.EnableL2Dispatch && (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid)
+}
+
+// SupportsL2DispatchToPeer returns true if traffic can be sent to the peer Node with the l2 dispatch, which
+// requires the transport IP of the peer Node to be in the local transport subnet.
+func (nc *NetworkConfig) SupportsL2DispatchToPeer(peerIP net.IP, localIP *net.IPNet) bool {
+	return nc.SupportsL2Dispatch() && peerIP != nil && localIP != nil && localIP.Contains(peerIP)
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
