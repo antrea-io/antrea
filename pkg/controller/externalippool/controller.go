@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,6 +61,15 @@ var (
 	ErrExternalIPPoolNotFound = errors.New("ExternalIPPool not found")
 )
 
+// ReservedIPError indicates that an IP is reserved and unavailable for allocation.
+type ReservedIPError struct {
+	message string
+}
+
+func (e *ReservedIPError) Error() string {
+	return e.message
+}
+
 // IPAllocation contains the IP and the IP Pool which allocates it.
 type IPAllocation struct {
 	// ObjectReference is useful to track the owner of this IP allocation.
@@ -88,8 +98,10 @@ type ExternalIPAllocator interface {
 	IPPoolExists(externalIPPool string) bool
 	// IPPoolIPFamilies returns the IP families represented by the IP pool.
 	IPPoolIPFamilies(externalIPPool string) (sets.Set[corev1.IPFamily], error)
-	// IPPoolHasIP checks whether the IP pool contains the given IP.
+	// IPPoolHasIP checks whether the IP pool contains the given IP and it is not reserved.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
+	// ValidateIP checks that the IP belongs to the pool and is not reserved, without checking whether it is allocated.
+	ValidateIP(externalIPPool string, ip net.IP) error
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
 	UpdateIPAllocation(externalIPPool string, ip net.IP) error
 	// ReleaseIP releases the IP to the IP pool.
@@ -218,6 +230,11 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 		existingIPRanges.Insert(multiIPAllocator.Names()...)
 	}
 
+	var gatewayIPs []net.IP
+	for _, subnet := range ipPool.Spec.Subnets {
+		gatewayIPs = append(gatewayIPs, net.ParseIP(subnet.Gateway))
+	}
+
 	for idx := range ipPool.Spec.IPRanges {
 		ipRange := &ipPool.Spec.IPRanges[idx]
 		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
@@ -233,8 +250,8 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(ipNet.String()) {
 					return nil, nil
 				}
-				// Don't use the IPv4 network's broadcast address.
-				var reservedIPs []net.IP
+				// Don't allocate the subnet gateway or the IPv4 network's broadcast address.
+				reservedIPs := slices.Clone(gatewayIPs)
 				if utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 				}
@@ -243,7 +260,7 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil
 				}
-				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
+				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End), gatewayIPs...)
 			}
 		}()
 		if err != nil {
@@ -322,6 +339,9 @@ func (c *ExternalIPPoolController) UpdateIPAllocation(poolName string, ip net.IP
 	if !exists {
 		return ErrExternalIPPoolNotFound
 	}
+	if ipAllocator.IsReserved(ip) {
+		return c.reservedIPError(poolName, ip)
+	}
 	err := ipAllocator.AllocateIP(ip)
 	if err != nil {
 		return err
@@ -387,7 +407,35 @@ func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool 
 	if !exists {
 		return false
 	}
-	return allocator.Has(ip)
+	return allocator.Has(ip) && !allocator.IsReserved(ip)
+}
+
+// ValidateIP checks pool membership and reservations using the local allocator and informer cache.
+// An IP which is already allocated is still valid.
+func (c *ExternalIPPoolController) ValidateIP(poolName string, ip net.IP) error {
+	allocator, exists := c.getIPAllocator(poolName)
+	if !exists {
+		return fmt.Errorf("ExternalIPPool %s does not exist", poolName)
+	}
+	if allocator.IsReserved(ip) {
+		return c.reservedIPError(poolName, ip)
+	}
+	if !allocator.Has(ip) {
+		return fmt.Errorf("IP %s is not within the IP range", ip)
+	}
+	return nil
+}
+
+func (c *ExternalIPPoolController) reservedIPError(poolName string, ip net.IP) *ReservedIPError {
+	pool, err := c.externalIPPoolLister.Get(poolName)
+	if err == nil {
+		for _, subnet := range pool.Spec.Subnets {
+			if ip.Equal(net.ParseIP(subnet.Gateway)) {
+				return &ReservedIPError{message: fmt.Sprintf("IP %s is reserved as the subnet gateway in ExternalIPPool %s", ip, poolName)}
+			}
+		}
+	}
+	return &ReservedIPError{message: fmt.Sprintf("IP %s is reserved in ExternalIPPool %s", ip, poolName)}
 }
 
 func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {

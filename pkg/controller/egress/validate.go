@@ -17,6 +17,7 @@ package egress
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -35,6 +36,7 @@ import (
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/crdconversion"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
@@ -177,14 +179,23 @@ func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crd
 }
 
 func (c *EgressController) externalIPPoolHasIP(poolName string, ip net.IP) (bool, error) {
-	if c.externalIPAllocator.IPPoolHasIP(poolName, ip) {
+	if err := c.externalIPAllocator.ValidateIP(poolName, ip); err == nil {
 		return true, nil
+	} else {
+		var reservedErr *externalippool.ReservedIPError
+		if errors.As(err, &reservedErr) {
+			return false, err
+		}
 	}
 	// The informer handler may not have initialized or updated the allocator yet.
 	// Check a fresh Pool snapshot without modifying allocator state.
 	pool, err := c.crdClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 	if err != nil {
 		return false, err
+	}
+	var gatewayIPs []net.IP
+	for _, subnet := range pool.Spec.Subnets {
+		gatewayIPs = append(gatewayIPs, net.ParseIP(subnet.Gateway))
 	}
 	for _, ipRange := range pool.Spec.IPRanges {
 		allocator, err := func() (*ipallocator.SingleIPAllocator, error) {
@@ -193,16 +204,26 @@ func (c *EgressController) externalIPPoolHasIP(poolName string, ip net.IP) (bool
 				if err != nil {
 					return nil, err
 				}
-				return ipallocator.NewCIDRAllocator(cidr, nil)
+				reservedIPs := slices.Clone(gatewayIPs)
+				if cidr.IP.To4() != nil {
+					reservedIPs = append(reservedIPs, utilip.GetLocalBroadcastIP(cidr))
+				}
+				return ipallocator.NewCIDRAllocator(cidr, reservedIPs)
 			}
 			start, end := net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End)
 			if start == nil || end == nil {
 				return nil, fmt.Errorf("invalid IP range %s-%s", ipRange.Start, ipRange.End)
 			}
-			return ipallocator.NewIPRangeAllocator(start, end)
+			return ipallocator.NewIPRangeAllocator(start, end, gatewayIPs...)
 		}()
 		if err != nil {
 			return false, err
+		}
+		if allocator.IsReserved(ip) {
+			if slices.ContainsFunc(gatewayIPs, func(gateway net.IP) bool { return gateway.Equal(ip) }) {
+				return false, fmt.Errorf("IP %s is reserved as the subnet gateway in ExternalIPPool %s", ip, poolName)
+			}
+			return false, fmt.Errorf("IP %s is reserved in ExternalIPPool %s", ip, poolName)
 		}
 		if allocator.Has(ip) {
 			return true, nil
@@ -347,11 +368,8 @@ func (c *EgressController) validateV1beta1EgressRequest(operation admv1.Operatio
 	if ip == nil {
 		return false, fmt.Sprintf("IP %s is not valid", newEgress.Spec.EgressIP)
 	}
-	if !c.externalIPAllocator.IPPoolExists(newEgress.Spec.ExternalIPPool) {
-		return false, fmt.Sprintf("ExternalIPPool %s does not exist", newEgress.Spec.ExternalIPPool)
-	}
-	if !c.externalIPAllocator.IPPoolHasIP(newEgress.Spec.ExternalIPPool, ip) {
-		return false, fmt.Sprintf("IP %s is not within the IP range", newEgress.Spec.EgressIP)
+	if err := c.externalIPAllocator.ValidateIP(newEgress.Spec.ExternalIPPool, ip); err != nil {
+		return false, err.Error()
 	}
 	return true, ""
 }

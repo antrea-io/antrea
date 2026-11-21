@@ -270,13 +270,35 @@ supported in a cluster is 20, which should be sufficient for most cases. If you
 need to have more subnets, please raise an issue with your use case, and we will
 consider revising the limit based on that.
 
-**Note**: When using a CIDR in `ipRanges` that includes the `gateway` IP, Antrea
-will **not** automatically exclude the gateway from the allocatable IP range. If
-the gateway IP is allocated (e.g., as an Egress IP), it will cause networking
-issues. To avoid this, ensure that the gateway IP is not part of any CIDR
-specified in `ipRanges`, or use explicit `start` / `end` ranges that do not
-include the gateway IP. See [#7868](https://github.com/antrea-io/antrea/issues/7868)
-for more information.
+**Note**: Antrea reserves the `gateway` IP when it is included in a CIDR or an
+explicit `start` / `end` range, so it cannot be allocated. The `gateway` and
+`prefixLength` fields are immutable, and `subnetInfo` cannot be added or removed
+after the ExternalIPPool is created. The `vlan` field can still be updated.
+
+In v1beta2, the equivalent configuration is `spec.subnets`. Each configured
+gateway is reserved for both Egress and Service allocations. Subnet entries
+cannot be added or removed after creation, and their `gateway` and
+`prefixLength` fields are immutable. VLAN updates and reordering of existing
+entries remain allowed.
+
+When upgrading from a version that does not reserve the gateway IP, check for
+Egresses whose `spec.egressIP` equals their pool's `spec.subnetInfo.gateway`, and
+Services whose `status.loadBalancer.ingress[].ip` equals that gateway. For
+v1beta2 objects, compare `spec.egressIPs` and Service external IPs against the
+pool's `spec.subnets[].gateway`. Before upgrading, change affected Egresses to use an explicit, available IP other than
+the gateway. Clearing `spec.egressIP` on the old version may allocate the gateway
+again, since it is often the lowest free IP.
+
+After upgrading, the Antrea Controller cannot restore an allocation of the
+gateway IP. An affected Egress gets an `IPAllocated=False` condition and stops
+applying to its Pods, while the gateway IP remains assigned to a Node until the
+Egress is updated. To recover, clear `spec.egressIP` to request automatic
+allocation, or set it to an available IP other than the gateway. Automatic
+allocation after the upgrade excludes the gateway. With v1beta2, update or
+clear `spec.egressIPs` instead.
+
+For affected Services, see the [Service LoadBalancer upgrade
+note](service-loadbalancer.md#gateway-ip-reservation).
 
 ### NodeSelector
 

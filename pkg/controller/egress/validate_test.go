@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1141,6 +1142,210 @@ func TestValidateEgressConversionAnnotation(t *testing.T) {
 				Object:    runtime.RawExtension{Raw: marshal(t, next)}, OldObject: runtime.RawExtension{Raw: marshal(t, legacy)},
 			}})
 			assert.Equal(t, tc.allowed, response.Allowed, "%+v", response.Result)
+		})
+	}
+}
+
+func TestEgressControllerValidateEgressGateway(t *testing.T) {
+	poolWithGateway := func(cidr, start, end, gateway string, prefixLength int32) *crdv1beta2.ExternalIPPool {
+		pool := newExternalIPPool("bar", cidr, start, end)
+		pool.Spec.Subnets = []crdv1beta2.SubnetInfo{{Gateway: gateway, PrefixLength: prefixLength}}
+		return pool
+	}
+	ipv4CIDRPool := poolWithGateway("192.168.1.144/28", "", "", "192.168.1.145", 28)
+	ipv6RangePool := poolWithGateway("", "2001:db8::1", "2001:db8::e", "2001:db8::1", 124)
+	tests := []struct {
+		name      string
+		pool      *crdv1beta2.ExternalIPPool
+		ip        string
+		old       *crdv1beta2.Egress
+		detached  bool
+		allowed   bool
+		bandwidth *crdv1beta2.Bandwidth
+		legacy    bool
+		broadcast bool
+	}{
+		{
+			name: "create with IPv4 CIDR gateway",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+		},
+		{
+			name: "create with equivalent IPv6 range gateway",
+			pool: ipv6RangePool,
+			ip:   "2001:0db8:0000:0000:0000:0000:0000:0001",
+		},
+		{
+			name:   "v1beta1 create with gateway",
+			pool:   ipv4CIDRPool,
+			ip:     "192.168.1.145",
+			legacy: true,
+		},
+		{
+			name:      "create with IPv4 CIDR broadcast",
+			pool:      ipv4CIDRPool,
+			ip:        "192.168.1.159",
+			broadcast: true,
+		},
+		{
+			name: "update IP to IPv4 CIDR gateway",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+			old:  newEgress("foo", "192.168.1.146", "bar", nil, nil, nil),
+		},
+		{
+			name: "update Pool to one whose gateway matches the IP",
+			pool: ipv4CIDRPool,
+			ip:   "192.168.1.145",
+			old:  newEgress("foo", "192.168.1.145", "other", nil, nil, nil),
+		},
+		{
+			name:      "update selector and bandwidth while retaining gateway IP",
+			pool:      ipv4CIDRPool,
+			ip:        "192.168.1.145",
+			old:       newEgress("foo", "192.168.1.145", "bar", nil, nil, nil),
+			bandwidth: &crdv1beta2.Bandwidth{Rate: "500k", Burst: "10M"},
+			allowed:   true,
+		},
+		{
+			name:    "create with normal IP and subnet",
+			pool:    ipv4CIDRPool,
+			ip:      "192.168.1.146",
+			allowed: true,
+		},
+		{
+			name:    "create with automatic IP allocation",
+			pool:    ipv4CIDRPool,
+			allowed: true,
+		},
+		{
+			name:    "clear gateway IP to request automatic allocation",
+			pool:    ipv4CIDRPool,
+			old:     newEgress("foo", "192.168.1.145", "bar", nil, nil, nil),
+			allowed: true,
+		},
+		{
+			name:    "create without subnet",
+			pool:    newExternalIPPool("bar", "192.168.1.144/28", "", ""),
+			ip:      "192.168.1.145",
+			allowed: true,
+		},
+		{
+			name:     "detach gateway IP from Pool",
+			pool:     ipv4CIDRPool,
+			ip:       "192.168.1.145",
+			old:      newEgress("foo", "192.168.1.145", "bar", nil, nil, nil),
+			detached: true,
+			allowed:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				controller := newController(nil, []runtime.Object{tt.pool.DeepCopy()})
+				client := controller.crdClient.(*fakeversioned.Clientset)
+				client.PrependReactor("get", "externalippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("unexpected API GET for cached ExternalIPPool")
+				})
+				defer func() {
+					close(stopCh)
+					controller.queue.ShutDown()
+					controller.egressGroupStore.Stop()
+					controller.crdInformerFactory.Shutdown()
+					controller.informerFactory.Shutdown()
+				}()
+				controller.informerFactory.Start(stopCh)
+				controller.crdInformerFactory.Start(stopCh)
+				controller.informerFactory.WaitForCacheSync(stopCh)
+				controller.crdInformerFactory.WaitForCacheSync(stopCh)
+				go controller.externalIPAllocator.Run(stopCh)
+				require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+				controller.externalIPAllocator.RestoreIPAllocations(nil)
+				client.ClearActions()
+				poolName := tt.pool.Name
+				if tt.detached {
+					poolName = ""
+				}
+				request := &admv1.AdmissionRequest{
+					Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "egresses"},
+					Name:      "foo",
+					Operation: admv1.Create,
+					Object: runtime.RawExtension{Raw: marshal(t, newEgress("foo", tt.ip, poolName,
+						&metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, nil, tt.bandwidth))},
+				}
+				if tt.legacy {
+					request.Resource.Version = "v1beta1"
+					request.Object.Raw = marshal(t, &crdv1beta1.Egress{
+						ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+						Spec:       crdv1beta1.EgressSpec{EgressIP: tt.ip, ExternalIPPool: poolName},
+					})
+				}
+				if tt.old != nil {
+					request.Operation = admv1.Update
+					request.OldObject = runtime.RawExtension{Raw: marshal(t, tt.old)}
+				}
+				expectedResponse := &admv1.AdmissionResponse{Allowed: tt.allowed}
+				if !tt.allowed {
+					message := "IP " + tt.pool.Spec.Subnets[0].Gateway + " is reserved as the subnet gateway in ExternalIPPool " + tt.pool.Name
+					if tt.broadcast {
+						message = "IP " + tt.ip + " is reserved in ExternalIPPool " + tt.pool.Name
+					}
+					if !tt.legacy {
+						message = "failed to check IP " + tt.ip + " in ExternalIPPool " + tt.pool.Name + ": " + message
+					}
+					expectedResponse.Result = &metav1.Status{
+						Message: message,
+					}
+				}
+				assert.Equal(t, expectedResponse, controller.ValidateEgress(&admv1.AdmissionReview{Request: request}))
+				for _, action := range client.Actions() {
+					assert.False(t, action.Matches("get", "externalippools"), "cached admission must not fetch the ExternalIPPool")
+				}
+			})
+		})
+	}
+}
+
+func TestValidateEgressReservedIPBeforeAllocatorInitialization(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		ip      string
+		message string
+	}{
+		{name: "gateway", ip: "192.0.2.1", message: "IP 192.0.2.1 is reserved as the subnet gateway in ExternalIPPool pool"},
+		{name: "broadcast", ip: "192.0.2.7", message: "IP 192.0.2.7 is reserved in ExternalIPPool pool"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				pool := newExternalIPPool("pool", "192.0.2.0/29", "", "")
+				pool.Spec.Subnets = []crdv1beta2.SubnetInfo{{Gateway: "192.0.2.1", PrefixLength: 29}}
+				controller := newController(nil, []runtime.Object{pool})
+				defer func() {
+					// Initialize only during teardown so Run can shut down its queue after a successful cache sync.
+					controller.crdInformerFactory.Start(stopCh)
+					controller.crdInformerFactory.WaitForCacheSync(stopCh)
+					go controller.externalIPAllocator.Run(stopCh)
+					cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced)
+					close(stopCh)
+					controller.queue.ShutDown()
+					controller.egressGroupStore.Stop()
+					controller.crdInformerFactory.Shutdown()
+					controller.informerFactory.Shutdown()
+				}()
+				// Leave the informer stopped so admission must validate a fresh API snapshot.
+				require.False(t, controller.externalIPAllocator.IPPoolExists(pool.Name))
+				response := controller.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+					Operation: admv1.Create,
+					Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "egresses"},
+					Object:    runtime.RawExtension{Raw: marshal(t, newEgress("static", tt.ip, pool.Name, nil, nil, nil))},
+				}})
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Equal(t, "failed to check IP "+tt.ip+" in ExternalIPPool pool: "+tt.message, response.Result.Message)
+				assert.False(t, controller.externalIPAllocator.IPPoolExists(pool.Name), "admission must not initialize the Pool allocator")
+			})
 		})
 	}
 }
