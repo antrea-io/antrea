@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -757,6 +758,23 @@ func TestRestorePortConfigs(t *testing.T) {
 			},
 			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable",
 		},
+		{
+			name: "fail for some ports, the others are still set",
+			existingInterfaces: []*interfacestore.InterfaceConfig{
+				interfacestore.NewTrafficControlInterface("antrea-tap1",
+					&interfacestore.OVSPortConfig{OFPort: 10, PortUUID: "uuid1"}),
+				interfacestore.NewTrafficControlInterface("antrea-tap2",
+					&interfacestore.OVSPortConfig{OFPort: 11, PortUUID: "uuid2"}),
+				interfacestore.NewTrafficControlInterface("antrea-tap3",
+					&interfacestore.OVSPortConfig{OFPort: 12, PortUUID: "uuid3"}),
+			},
+			expectedOVSCtlCalls: func(client *ovsctltest.MockOVSCtlClientMockRecorder) {
+				client.SetPortNoFlood(10).Return(fmt.Errorf("server unavailable"))
+				client.SetPortNoFlood(11).Return(nil)
+				client.SetPortNoFlood(12).Return(fmt.Errorf("connection refused"))
+			},
+			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable\nfailed to set no-flood for port antrea-tap3: connection refused",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -773,7 +791,10 @@ func TestRestorePortConfigs(t *testing.T) {
 			if tt.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.ErrorContains(t, err, tt.expectedErr)
+				// The errors of different ports are joined, in an unspecified order.
+				for expectedErr := range strings.SplitSeq(tt.expectedErr, "\n") {
+					assert.ErrorContains(t, err, expectedErr)
+				}
 			}
 		})
 	}
@@ -1125,6 +1146,312 @@ func TestDeleteStaleFlowsWithRetry(t *testing.T) {
 
 			<-done
 			assert.False(t, result)
+		})
+	})
+}
+
+// reconnectionTest runs restoreOVSOnReconnection with mocks which fake OVS, and records the times
+// at which the steps run, relative to the start of the test. It must run in a synctest bubble.
+type reconnectionTest struct {
+	ofConnCh chan struct{}
+	stopCh   chan struct{}
+	done     chan struct{}
+	start    time.Time
+
+	mutex sync.Mutex
+	// connected is whether the fake OpenFlow connection is up.
+	connected bool
+	// flowRestoreWait is the value of the flow-restore-wait config in the fake OVSDB.
+	flowRestoreWait bool
+	// replayed is whether the last flow replay succeeded.
+	replayed bool
+	// replayTimes and portConfigTimes are the times of the calls to ReplayFlows and
+	// SetPortNoFlood. flagRemovalTimes are the times at which flow-restore-wait was removed.
+	replayTimes, portConfigTimes, flagRemovalTimes []time.Duration
+}
+
+// reconnectionTestConfig sets the faults which a reconnectionTest injects.
+type reconnectionTestConfig struct {
+	// replayErr and portConfigErr return the error of the n-th call, starting from 1, to
+	// ReplayFlows and SetPortNoFlood. If they are nil, every call succeeds.
+	replayErr, portConfigErr func(n int) error
+	// ovsdbErrUntil is the time, relative to the start of the test, until which OVSDB calls
+	// fail. The OVSDB client waits for the connection when it is down, so this is another error,
+	// e.g. a failed transaction.
+	ovsdbErrUntil time.Duration
+}
+
+func startReconnectionTest(t *testing.T, cfg reconnectionTestConfig) *reconnectionTest {
+	ctrl := mock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(ctrl)
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterfaces([]*interfacestore.InterfaceConfig{
+		interfacestore.NewTrafficControlInterface("antrea-tap1", &interfacestore.OVSPortConfig{OFPort: 10, PortUUID: "uuid1"}),
+	})
+	rt := &reconnectionTest{
+		ofConnCh: make(chan struct{}),
+		stopCh:   make(chan struct{}),
+		done:     make(chan struct{}),
+		start:    time.Now(),
+	}
+	callErr := func(errFn func(int) error, n int) error {
+		if errFn == nil {
+			return nil
+		}
+		return errFn(n)
+	}
+
+	mockOFClient.EXPECT().IsConnected().DoAndReturn(func() bool {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		return rt.connected
+	}).AnyTimes()
+	mockOFClient.EXPECT().ReplayFlows().DoAndReturn(func() error {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		assert.True(t, rt.connected, "flows should not be replayed while disconnected from OVS")
+		rt.replayTimes = append(rt.replayTimes, time.Since(rt.start))
+		err := callErr(cfg.replayErr, len(rt.replayTimes))
+		rt.replayed = err == nil
+		return err
+	}).AnyTimes()
+	mockOVSCtlClient.EXPECT().SetPortNoFlood(10).DoAndReturn(func(int) error {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		rt.portConfigTimes = append(rt.portConfigTimes, time.Since(rt.start))
+		return callErr(cfg.portConfigErr, len(rt.portConfigTimes))
+	}).AnyTimes()
+	mockOVSBridgeClient.EXPECT().GetOVSOtherConfig().DoAndReturn(func() (map[string]string, error) {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		assert.True(t, rt.replayed, "flow-restore-wait should only be removed after a successful flow replay")
+		if time.Since(rt.start) < cfg.ovsdbErrUntil {
+			return nil, errors.New("transaction failed")
+		}
+		if rt.flowRestoreWait {
+			return map[string]string{"flow-restore-wait": "true"}, nil
+		}
+		return map[string]string{}, nil
+	}).AnyTimes()
+	mockOVSBridgeClient.EXPECT().DeleteOVSOtherConfig([]string{"flow-restore-wait"}).DoAndReturn(func([]string) error {
+		rt.mutex.Lock()
+		defer rt.mutex.Unlock()
+		rt.flowRestoreWait = false
+		rt.flagRemovalTimes = append(rt.flagRemovalTimes, time.Since(rt.start))
+		return nil
+	}).AnyTimes()
+
+	initializer := &Initializer{
+		ofClient:        mockOFClient,
+		ovsBridgeClient: mockOVSBridgeClient,
+		ovsCtlClient:    mockOVSCtlClient,
+		ifaceStore:      ifaceStore,
+		stopCh:          rt.stopCh,
+	}
+	go func() {
+		defer close(rt.done)
+		initializer.restoreOVSOnReconnection(rt.ofConnCh)
+	}()
+	return rt
+}
+
+// reconnect notifies a reconnection to OVS, after an ovs-vswitchd restart which set
+// flow-restore-wait.
+func (rt *reconnectionTest) reconnect() {
+	rt.mutex.Lock()
+	rt.connected = true
+	rt.flowRestoreWait = true
+	rt.mutex.Unlock()
+	rt.ofConnCh <- struct{}{}
+}
+
+// disconnect makes the fake OpenFlow connection go down.
+func (rt *reconnectionTest) disconnect() {
+	rt.mutex.Lock()
+	defer rt.mutex.Unlock()
+	rt.connected = false
+}
+
+// advance lets restoreOVSOnReconnection run for d.
+func (rt *reconnectionTest) advance(d time.Duration) {
+	time.Sleep(d)
+	synctest.Wait()
+}
+
+// stop stops restoreOVSOnReconnection and waits for it to return.
+func (rt *reconnectionTest) stop() {
+	close(rt.stopCh)
+	<-rt.done
+}
+
+func TestRestoreOVSOnReconnection(t *testing.T) {
+	testErr := errors.New("bundle reply is timeout")
+	failFirst := func(failures int) func(int) error {
+		return func(n int) error {
+			if n <= failures {
+				return testErr
+			}
+			return nil
+		}
+	}
+	failAlways := func(int) error { return testErr }
+
+	t.Run("retries failed replay with backoff, then removes flow-restore-wait", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: failFirst(2)})
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			// The retry delay doubles after each failure, and no more replay happens after a
+			// successful one.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 3 * time.Second}, rt.replayTimes)
+			// The port configs are restored right after the first replay, even though it
+			// failed, and not again as that succeeded.
+			assert.Equal(t, []time.Duration{0}, rt.portConfigTimes)
+			// flow-restore-wait is only removed once the replay succeeds.
+			assert.Equal(t, []time.Duration{3 * time.Second}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("failed steps are retried independently", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			// OVSDB fails the first two attempts to remove flow-restore-wait, at 0s and 1s.
+			rt := startReconnectionTest(t, reconnectionTestConfig{
+				portConfigErr: failFirst(1),
+				ovsdbErrUntil: 2 * time.Second,
+			})
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			// The replay is not run again when the steps which depend on it are retried.
+			assert.Equal(t, []time.Duration{0}, rt.replayTimes)
+			// The port configs are restored on the first retry, and not again as that
+			// succeeded.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second}, rt.portConfigTimes)
+			// The removal is retried even though the port configs restoration failed in the
+			// same attempt, and with the same backoff.
+			assert.Equal(t, []time.Duration{3 * time.Second}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("no retry while disconnected", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{
+				replayErr:     failFirst(1),
+				portConfigErr: failFirst(1),
+			})
+			rt.reconnect()
+			synctest.Wait()
+			// The OpenFlow connection goes down before the first retry, which is due in 1s.
+			rt.disconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			// The steps are not retried while disconnected, and the reconnection runs them.
+			assert.Equal(t, []time.Duration{0}, rt.replayTimes)
+			assert.Equal(t, []time.Duration{0}, rt.portConfigTimes)
+			assert.Empty(t, rt.flagRemovalTimes)
+			assert.True(t, rt.flowRestoreWait)
+
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			reconnectionTime := 10 * ovsRestoreMaxRetryDelay
+			assert.Equal(t, []time.Duration{0, reconnectionTime}, rt.replayTimes)
+			assert.Equal(t, []time.Duration{0, reconnectionTime}, rt.portConfigTimes)
+			assert.Equal(t, []time.Duration{reconnectionTime}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("flow-restore-wait is kept while the replay fails", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: failAlways, portConfigErr: failAlways})
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			assert.Greater(t, len(rt.replayTimes), 1)
+			// A failed replay does not prevent restoring the port configs.
+			assert.Equal(t, rt.replayTimes, rt.portConfigTimes)
+			assert.Empty(t, rt.flagRemovalTimes)
+			assert.True(t, rt.flowRestoreWait)
+		})
+	})
+
+	t.Run("a reconnection requires the flows to be replayed again", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			// The replay fails after the second reconnection only.
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: func(n int) error {
+				if n == 2 {
+					return testErr
+				}
+				return nil
+			}})
+			rt.reconnect()
+			rt.advance(5 * time.Second)
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			assert.Equal(t, []time.Duration{0, 5 * time.Second, 6 * time.Second}, rt.replayTimes)
+			assert.Equal(t, []time.Duration{0, 5 * time.Second}, rt.portConfigTimes)
+			// The replay which succeeded before the second reconnection does not count.
+			assert.Equal(t, []time.Duration{0, 6 * time.Second}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("retry delay is capped", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: failAlways})
+			expectedDelays := []time.Duration{
+				1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second,
+				30 * time.Second, 30 * time.Second, 30 * time.Second,
+			}
+			var total time.Duration
+			for _, d := range expectedDelays {
+				total += d
+			}
+			rt.reconnect()
+			// Stop half-way between the last expected retry and the next one.
+			rt.advance(total + ovsRestoreMaxRetryDelay/2)
+			rt.stop()
+
+			var delays []time.Duration
+			for i := 1; i < len(rt.replayTimes); i++ {
+				delays = append(delays, rt.replayTimes[i]-rt.replayTimes[i-1])
+			}
+			assert.Equal(t, expectedDelays, delays)
+		})
+	})
+
+	t.Run("reconnection runs all steps immediately and resets the retry delay", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: failFirst(3)})
+			rt.reconnect()
+			rt.advance(ovsRestoreInitialRetryDelay)
+			// The next retry is due in 2s; a reconnection runs all the steps immediately instead.
+			rt.reconnect()
+			rt.advance(10 * ovsRestoreMaxRetryDelay)
+			rt.stop()
+
+			// After the reconnection, the retry delay is reset to its initial value.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second, 1 * time.Second, 2 * time.Second}, rt.replayTimes)
+			// All steps run after each reconnection, but only the failed ones after a retry.
+			assert.Equal(t, []time.Duration{0, 1 * time.Second}, rt.portConfigTimes)
+			assert.Equal(t, []time.Duration{2 * time.Second}, rt.flagRemovalTimes)
+		})
+	})
+
+	t.Run("returns when ofConnCh is closed", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rt := startReconnectionTest(t, reconnectionTestConfig{replayErr: failAlways})
+			rt.reconnect()
+			synctest.Wait()
+			close(rt.ofConnCh)
+			<-rt.done
 		})
 	})
 }
