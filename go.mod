@@ -15,10 +15,10 @@ require (
 	github.com/Microsoft/hcsshim v0.15.0
 	github.com/aws/aws-sdk-go-v2 v1.48.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.19
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.23.25
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.8
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.348.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.23.26
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.9
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.349.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.115.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cheggaaa/pb/v3 v3.3.0
 	github.com/containernetworking/cni v1.3.0
