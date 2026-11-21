@@ -1220,10 +1220,13 @@ func (c *client) ReplayFlows() error {
 	// meters, and OVS deletes with them the flows which reference them, including those which
 	// a failed attempt had already restored. Until these flows are replayed later in the same
 	// call:
-	//   - The Reject rules, the Drop rules with logging enabled and, when deny tracking is
-	//     enabled (with FlowExporter), all the Drop rules of Antrea-native policies are not
-	//     enforced, as their action flows reference a logging group (see
-	//     conjunctionActionDenyFlow).
+	//   - The Reject rules, the Drop and Pass rules with logging enabled and, when deny
+	//     tracking is enabled (with FlowExporter), all the Drop rules of Antrea-native policies
+	//     are not enforced, as their action flows reference a logging group (see
+	//     conjunctionActionDenyFlow and conjunctionActionPassFlow). Traffic matching a missing
+	//     Drop or Reject rule falls through to lower-priority rules, so it is usually allowed.
+	//     Traffic matching a missing Pass rule is evaluated by the lower-priority Antrea-native
+	//     rules instead of the K8s NetworkPolicies, so it can end up denied or allowed.
 	//   - Service traffic is disrupted, as the Service load balancing flows reference groups.
 	//   - The flows which send packets to the Agent through a packet-in meter are missing, e.g.
 	//     for NetworkPolicy logging and Reject, DNS interception for FQDN policies, Traceflow
