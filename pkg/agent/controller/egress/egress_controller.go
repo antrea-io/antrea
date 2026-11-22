@@ -825,7 +825,7 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs []string, scheduleErr error) error {
+func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs []string, egressNode string, scheduleErr error) error {
 	isLocal := len(egressIPs) > 0
 	for _, ip := range egressIPs {
 		isLocal = isLocal && c.localIPDetector.IsLocalIP(net.ParseIP(ip).String())
@@ -847,19 +847,22 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 			}
 		}
 	} else if len(egressIPs) == 0 {
-		// Select one Node to update false status among all Nodes.
-		// We don't care about the value of the Egress IP, just use it to reach a consensus among all agents
-		// about which one should do the update.
-		key := egress.Name
-		if len(egress.Spec.EgressIPs) > 0 {
-			key = slices.Min(egress.Spec.EgressIPs)
-		} else if len(egress.Status.EgressIPs) == 0 {
-			// Wait for allocation without publishing a transient assignment failure.
-			return nil
-		}
-		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(key, "")
-		if err != nil {
-			return err
+		// A known Egress Node reports its own assignment failures, including missing local
+		// addresses. Only elect a cluster-wide reporter when no Egress Node was selected.
+		nodeToUpdateStatus := egressNode
+		if nodeToUpdateStatus == "" {
+			key := egress.Name
+			if len(egress.Spec.EgressIPs) > 0 {
+				key = slices.Min(egress.Spec.EgressIPs)
+			} else if len(egress.Status.EgressIPs) == 0 {
+				// Wait for allocation without publishing a transient assignment failure.
+				return nil
+			}
+			var err error
+			nodeToUpdateStatus, err = c.cluster.SelectNodeForIP(key, "")
+			if err != nil {
+				return err
+			}
 		}
 		// Skip if the Node is not the selected one.
 		if nodeToUpdateStatus != c.nodeName {
@@ -1007,7 +1010,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 	// Do not proceed if EgressIP is empty.
 	if len(desiredEgressIPs) == 0 {
-		if err := c.updateEgressStatus(egress, nil, scheduleErr); err != nil {
+		if err := c.updateEgressStatus(egress, nil, desiredNode, scheduleErr); err != nil {
 			return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 		}
 		return nil
@@ -1015,7 +1018,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	// Reserve the complete IP group before assigning addresses. This prevents concurrent Egresses
 	// with partially overlapping IPs from installing conflicting tunnel mark flows.
 	if err := c.referenceEgressIPs(egressName, desiredEgressIPs); err != nil {
-		if statusErr := c.updateEgressStatus(egress, nil, err); statusErr != nil {
+		if statusErr := c.updateEgressStatus(egress, nil, desiredNode, err); statusErr != nil {
 			return stderrors.Join(err, statusErr)
 		}
 		return err
@@ -1040,7 +1043,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return nil
 		}
 		err = fmt.Errorf("Egress IPs %v have not reached the local state required by Node %s: %w", desiredEgressIPs, desiredNode, err)
-		return stderrors.Join(err, c.updateEgressStatus(egress, nil, err))
+		return stderrors.Join(err, c.updateEgressStatus(egress, nil, desiredNode, err))
 	}
 	eState.ipDetectionStartTime = time.Time{}
 	if err != nil {
@@ -1115,7 +1118,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 	// Update status after reconciling flows so conversion webhook failures do not interrupt Pod SNAT.
-	if err := c.updateEgressStatus(egress, desiredEgressIPs, nil); err != nil {
+	if err := c.updateEgressStatus(egress, desiredEgressIPs, desiredNode, nil); err != nil {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 	return nil

@@ -673,6 +673,8 @@ func TestPersistentAddressDetectionMismatch(t *testing.T) {
 	egress := &crdv1b2.Egress{ObjectMeta: metav1.ObjectMeta{Name: "egress"}, Spec: crdv1b2.EgressSpec{EgressIPs: ips, ExternalIPPool: fakeExternalIPPool}}
 	c := newIPGroupTestController(t, egress, &crdv1b2.ExternalIPPool{ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool}})
 	c.egressIPScheduler.schedule()
+	// The Pool selected this Node, but the cluster-wide failure reporter is another Node.
+	c.cluster = newFakeMemberlistCluster([]string{fakeNode2})
 	c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New[string]()}
 	for _, ip := range ips {
 		c.mockIPAssigner.EXPECT().AssignIP(ip, nil, true).Times(3)

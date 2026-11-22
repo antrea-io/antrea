@@ -1697,7 +1697,7 @@ func TestUpdateEgressStatusWithoutConversionWebhook(t *testing.T) {
 				crdClient: client, nodeName: fakeNode,
 				localIPDetector: &fakeLocalIPDetector{localIPs: sets.New(tt.ip)},
 			}
-			require.NoError(t, c.updateEgressStatus(egress, []string{tt.ip}, nil))
+			require.NoError(t, c.updateEgressStatus(egress, []string{tt.ip}, "", nil))
 			assert.Equal(t, 2, updates)
 			assert.Equal(t, 1, gets)
 			updated, err := client.CrdV1beta1().Egresses().Get(context.Background(), stored.Name, metav1.GetOptions{})
@@ -1715,7 +1715,7 @@ func TestUpdateEgressStatusWithoutConversionWebhook(t *testing.T) {
 			assigned := meta.FindStatusCondition(view.Status.Conditions, crdv1b2.IPAssigned)
 			require.NotNil(t, assigned)
 			assert.Equal(t, metav1.ConditionTrue, assigned.Status)
-			require.NoError(t, c.updateEgressStatus(view, []string{tt.ip}, nil))
+			require.NoError(t, c.updateEgressStatus(view, []string{tt.ip}, "", nil))
 			assert.Equal(t, 2, updates, "unchanged status must not be written again")
 		})
 	}
@@ -1734,6 +1734,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 		updateError          error
 		getErrorNum          int
 		selectedNodeForIP    string
+		egressNode           string
 		expectedUpdateCalled int
 		expectedGetCalled    int
 		expectedError        error
@@ -1906,6 +1907,40 @@ func TestUpdateEgressStatus(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Egress Node reports detection failure when another Node is the default reporter",
+			egress: &crdv1b2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA"},
+				Spec:       crdv1b2.EgressSpec{EgressIPs: []string{fakeLocalEgressIP1}, ExternalIPPool: fakeExternalIPPool},
+				Status: crdv1b2.EgressStatus{Conditions: []metav1.Condition{
+					{Type: crdv1b2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"},
+				}},
+			},
+			egressNode:           fakeNode,
+			selectedNodeForIP:    fakeNode2,
+			scheduleErr:          errEgressIPsPending,
+			expectedUpdateCalled: 1,
+			expectedEgressStatus: crdv1b2.EgressStatus{Conditions: []metav1.Condition{
+				{Type: crdv1b2.IPAssigned, Status: metav1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: waiting for local Egress IP detection"},
+				{Type: crdv1b2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"},
+			}},
+		},
+		{
+			name: "default reporter cannot publish detection failure for another Egress Node",
+			egress: &crdv1b2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA"},
+				Spec:       crdv1b2.EgressSpec{EgressIPs: []string{fakeLocalEgressIP1}, ExternalIPPool: fakeExternalIPPool},
+				Status: crdv1b2.EgressStatus{EgressNode: fakeNode2, EgressIPs: []string{fakeLocalEgressIP1}, Conditions: []metav1.Condition{
+					{Type: crdv1b2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned"},
+				}},
+			},
+			egressNode:        fakeNode2,
+			selectedNodeForIP: fakeNode,
+			scheduleErr:       errEgressIPsPending,
+			expectedEgressStatus: crdv1b2.EgressStatus{EgressNode: fakeNode2, EgressIPs: []string{fakeLocalEgressIP1}, Conditions: []metav1.Condition{
+				{Type: crdv1b2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned"},
+			}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1934,7 +1969,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 			if tt.egressIP != "" {
 				ips = []string{tt.egressIP}
 			}
-			err := c.updateEgressStatus(tt.egress, ips, tt.scheduleErr)
+			err := c.updateEgressStatus(tt.egress, ips, tt.egressNode, tt.scheduleErr)
 			if err != tt.expectedError {
 				t.Errorf("Update Egress error not match, got: %v, expected: %v", err, tt.expectedError)
 			}
