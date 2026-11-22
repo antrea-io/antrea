@@ -247,10 +247,13 @@ type Client struct {
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
 	nodeNeighbors sync.Map
-	// markToSNATIP caches the desired Egress SNAT IP by mark and address family.
-	markToSNATIP sync.Map
+	// markToSNATIPs stores each group's desired addresses as one immutable snapshot.
+	markToSNATIPs sync.Map
 	// iptablesSyncCh coalesces desired-state changes to be processed by Run.
-	iptablesSyncCh chan chan error
+	iptablesSyncCh chan struct{}
+	// iptablesSyncMutex protects completion registration and collection, never iptables I/O.
+	iptablesSyncMutex sync.Mutex
+	iptablesWaiters   []chan error
 	// iptablesStopped releases synchronous callers when the sync worker stops.
 	iptablesStopped chan struct{}
 	// iptablesInitialized is used to notify when iptables initialization is done. It is closed instead
@@ -361,7 +364,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceCIDRProvider:         serviceCIDRProvider,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		hostNetworkPortRules:        ports,
-		iptablesSyncCh:              make(chan chan error, 1),
+		iptablesSyncCh:              make(chan struct{}, 1),
 		iptablesStopped:             make(chan struct{}),
 	}
 	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
@@ -560,33 +563,32 @@ func (c *Client) Run(ctx context.Context) {
 	var retryCh <-chan time.Time
 	retryDelay := time.Second
 	for {
-		var completions []chan error
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			c.syncNetworkConfig(ctx)
 			continue
-		case done := <-c.iptablesSyncCh:
-			completions = append(completions, done)
+		case <-c.iptablesSyncCh:
 		case <-retryCh:
 		}
 		// Coalesce queued changes into one restore. SNAT callers wait for this restore,
 		// while Endpoint changes can enqueue a notification without waiting.
+		c.iptablesSyncMutex.Lock()
+		completions := c.iptablesWaiters
+		c.iptablesWaiters = nil
 	drain:
 		for {
 			select {
-			case done := <-c.iptablesSyncCh:
-				completions = append(completions, done)
+			case <-c.iptablesSyncCh:
 			default:
 				break drain
 			}
 		}
+		c.iptablesSyncMutex.Unlock()
 		err := c.syncIPTables(false)
 		for _, done := range completions {
-			if done != nil {
-				done <- err
-			}
+			done <- err
 		}
 		if err != nil {
 			klog.ErrorS(err, "Failed to sync iptables after a desired-state update", "retryDelay", retryDelay)
@@ -605,7 +607,7 @@ func (c *Client) Run(ctx context.Context) {
 // iptables-restore is running queue another sync, so an older snapshot cannot permanently overwrite them.
 func (c *Client) triggerIPTablesSync() {
 	select {
-	case c.iptablesSyncCh <- nil:
+	case c.iptablesSyncCh <- struct{}{}:
 	default:
 	}
 }
@@ -614,11 +616,10 @@ func (c *Client) triggerIPTablesSync() {
 // restore failed. A failed mutation remains in the desired cache for repair and cleanup.
 func (c *Client) waitForIPTablesSync() error {
 	done := make(chan error, 1)
-	select {
-	case c.iptablesSyncCh <- done:
-	case <-c.iptablesStopped:
-		return context.Canceled
-	}
+	c.iptablesSyncMutex.Lock()
+	c.iptablesWaiters = append(c.iptablesWaiters, done)
+	c.triggerIPTablesSync()
+	c.iptablesSyncMutex.Unlock()
 	select {
 	case err := <-done:
 		return err
@@ -1221,13 +1222,13 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 
 	snatMarkToIPv4 := map[uint32]net.IP{}
 	snatMarkToIPv6 := map[uint32]net.IP{}
-	c.markToSNATIP.Range(func(key, value interface{}) bool {
-		snatMark := key.(snatMarkKey).mark
-		snatIP := value.(net.IP)
-		if snatIP.To4() != nil {
-			snatMarkToIPv4[snatMark] = snatIP
-		} else {
-			snatMarkToIPv6[snatMark] = snatIP
+	c.markToSNATIPs.Range(func(key, value interface{}) bool {
+		for _, snatIP := range value.([]net.IP) {
+			if snatIP.To4() != nil {
+				snatMarkToIPv4[key.(uint32)] = snatIP
+			} else {
+				snatMarkToIPv6[key.(uint32)] = snatIP
+			}
 		}
 		return true
 	})
@@ -2649,18 +2650,13 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return nil
 }
 
-type snatMarkKey struct {
-	mark   uint32
-	isIPv6 bool
-}
-
-func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
-	c.markToSNATIP.Store(snatMarkKey{mark: mark, isIPv6: snatIP.To4() == nil}, snatIP)
+func (c *Client) AddSNATRules(snatIPs []net.IP, mark uint32) error {
+	c.markToSNATIPs.Store(mark, snatIPs)
 	return c.waitForIPTablesSync()
 }
 
-func (c *Client) DeleteSNATRule(mark uint32, isIPv6 bool) error {
-	c.markToSNATIP.Delete(snatMarkKey{mark: mark, isIPv6: isIPv6})
+func (c *Client) DeleteSNATRules(mark uint32) error {
+	c.markToSNATIPs.Delete(mark)
 	return c.waitForIPTablesSync()
 }
 

@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1380,7 +1381,7 @@ COMMIT
 				},
 			}
 			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(snatMarkKey{mark: mark, isIPv6: net.ParseIP(snatIP).To4() == nil}, net.ParseIP(snatIP))
+				c.markToSNATIPs.Store(mark, []net.IP{net.ParseIP(snatIP)})
 			}
 			if tt.nodeNetworkPolicyEnabled {
 				c.initNodeNetworkPolicy()
@@ -2341,7 +2342,7 @@ func newSNATRuleTestClient(t *testing.T) (*Client, *iptablestest.MockInterface) 
 		networkConfig:       &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly, IPv4Enabled: true, IPv6Enabled: true},
 		nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 		iptablesCache:       newIPTablesCache(),
-		iptablesSyncCh:      make(chan chan error, 1),
+		iptablesSyncCh:      make(chan struct{}, 1),
 		iptablesStopped:     make(chan struct{}),
 		iptablesInitialized: initialized,
 	}, mockIPTables
@@ -2357,23 +2358,23 @@ func startSNATRuleTestClient(t *testing.T, c *Client) {
 
 func TestSNATRuleDesiredState(t *testing.T) {
 	const mark = uint32(10)
-	ipv4, ipv6 := net.ParseIP("1.1.1.1"), net.ParseIP("2001:db8::1")
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("2001:db8::1")}
 	c, mockIPTables := newSNATRuleTestClient(t)
 	mockIPTables.EXPECT().Restore(gomock.Any(), false, gomock.Any()).AnyTimes()
 	startSNATRuleTestClient(t, c)
-	for _, snatIP := range []net.IP{ipv4, ipv6, ipv4} {
-		require.NoError(t, c.AddSNATRule(snatIP, mark))
-		value, exists := c.markToSNATIP.Load(snatMarkKey{mark: mark, isIPv6: snatIP.To4() == nil})
+	for range 2 {
+		require.NoError(t, c.AddSNATRules(ips, mark))
+		value, exists := c.markToSNATIPs.Load(mark)
 		require.True(t, exists)
-		assert.Equal(t, snatIP, value)
+		assert.Equal(t, ips, value)
 	}
-	require.NoError(t, c.DeleteSNATRule(mark, true))
-	_, exists := c.markToSNATIP.Load(snatMarkKey{mark: mark, isIPv6: true})
+	require.NoError(t, c.AddSNATRules(ips, mark+1))
+	require.NoError(t, c.DeleteSNATRules(mark))
+	_, exists := c.markToSNATIPs.Load(mark)
 	assert.False(t, exists)
-	_, exists = c.markToSNATIP.Load(snatMarkKey{mark: mark})
-	assert.True(t, exists, "deleting IPv6 must preserve the IPv4 rule for the shared mark")
-	require.NoError(t, c.DeleteSNATRule(mark, false))
-	require.NoError(t, c.DeleteSNATRule(mark, false), "deletion must be idempotent")
+	_, exists = c.markToSNATIPs.Load(mark + 1)
+	assert.True(t, exists, "cleanup must preserve other groups")
+	require.NoError(t, c.DeleteSNATRules(mark), "deletion must be idempotent")
 }
 
 func TestSNATRuleWaitsForRestore(t *testing.T) {
@@ -2383,7 +2384,7 @@ func TestSNATRuleWaitsForRestore(t *testing.T) {
 			c.networkConfig.IPv6Enabled = false
 			ip := net.ParseIP("192.0.2.10")
 			if deleteRule {
-				c.markToSNATIP.Store(snatMarkKey{mark: 10}, ip)
+				c.markToSNATIPs.Store(uint32(10), []net.IP{ip})
 			}
 			initial, restoring, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			gomock.InOrder(
@@ -2411,9 +2412,9 @@ func TestSNATRuleWaitsForRestore(t *testing.T) {
 			result := make(chan error, 1)
 			go func() {
 				if deleteRule {
-					result <- c.DeleteSNATRule(10, false)
+					result <- c.DeleteSNATRules(10)
 				} else {
-					result <- c.AddSNATRule(ip, 10)
+					result <- c.AddSNATRules([]net.IP{ip}, 10)
 				}
 			}()
 			select {
@@ -2434,14 +2435,13 @@ func TestSNATRuleWaitsForRestore(t *testing.T) {
 
 func TestSyncIPTablesSharedSNATMark(t *testing.T) {
 	c, mockIPTables := newSNATRuleTestClient(t)
-	c.markToSNATIP.Store(snatMarkKey{mark: 10}, net.ParseIP("192.0.2.10"))
-	c.markToSNATIP.Store(snatMarkKey{mark: 10, isIPv6: true}, net.ParseIP("2001:db8::10"))
+	c.markToSNATIPs.Store(uint32(10), []net.IP{net.ParseIP("192.0.2.10"), net.ParseIP("2001:db8::10")})
 	gomock.InOrder(
 		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(data string, _, _ bool) error {
 			assert.Contains(t, data, "--to 192.0.2.10")
 			assert.NotContains(t, data, "--to 2001:db8::10")
 			// A concurrent desired-state mutation cannot change the snapshot being restored.
-			c.markToSNATIP.Delete(snatMarkKey{mark: 10})
+			c.markToSNATIPs.Store(uint32(10), []net.IP{net.ParseIP("2001:db8::10")})
 			c.triggerIPTablesSync()
 			return nil
 		}),
@@ -2479,7 +2479,7 @@ func TestRunRetriesSNATUpdate(t *testing.T) {
 	)
 	startSNATRuleTestClient(t, c)
 	<-initial
-	require.ErrorIs(t, c.AddSNATRule(net.ParseIP("192.0.2.10"), 10), restoreErr)
+	require.ErrorIs(t, c.AddSNATRules([]net.IP{net.ParseIP("192.0.2.10")}, 10), restoreErr)
 	select {
 	case <-reconciled:
 	case <-time.After(5 * time.Second):
@@ -4035,7 +4035,7 @@ func TestEnqueue(t *testing.T) {
 				endpointResolver: tt.endpointResolver,
 				networkConfig:    tt.networkConfig,
 				iptablesCache:    newIPTablesCache(),
-				iptablesSyncCh:   make(chan chan error, 1),
+				iptablesSyncCh:   make(chan struct{}, 1),
 				nodeConfig:       &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 			}
 			c.Enqueue()
@@ -4089,7 +4089,7 @@ func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
 		endpointResolver: resolver,
 		networkConfig:    &config.NetworkConfig{IPv4Enabled: true},
 		iptablesCache:    newIPTablesCache(),
-		iptablesSyncCh:   make(chan chan error, 1),
+		iptablesSyncCh:   make(chan struct{}, 1),
 		nodeConfig:       &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 	}
 
@@ -4251,4 +4251,70 @@ func newMockNFTables(enableIPv4, enableIPv6 bool) (*nftables.Client, error) {
 	}
 
 	return mockNFTables, nil
+}
+
+func TestDualStackSNATBatch(t *testing.T) {
+	c, mockIPTables := newSNATRuleTestClient(t)
+	initial := make(chan struct{})
+	check := func(present bool, ip string) func(string, bool, bool) error {
+		return func(data string, _, _ bool) error {
+			assert.Equal(t, present, strings.Contains(data, "--to "+ip))
+			return nil
+		}
+	}
+	gomock.InOrder(
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(func(string, bool, bool) error { close(initial); return nil }),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(check(true, "192.0.2.10")),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(check(true, "2001:db8::10")),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(check(false, "192.0.2.10")),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(check(false, "2001:db8::10")),
+	)
+	startSNATRuleTestClient(t, c)
+	<-initial
+	ips := []net.IP{net.ParseIP("192.0.2.10"), net.ParseIP("2001:db8::10")}
+	require.NoError(t, c.AddSNATRules(ips, 10))
+	require.NoError(t, c.DeleteSNATRules(10))
+}
+
+func TestSNATUpdatesCoalesceDuringRestore(t *testing.T) {
+	const groups = 32
+	c, mockIPTables := newSNATRuleTestClient(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	var workers sync.WaitGroup
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer func() { unblock(); workers.Wait() }()
+	gomock.InOrder(
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(string, bool, bool) error { close(entered); <-release; return nil }),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, false).DoAndReturn(func(data string, _, _ bool) error {
+			assert.Equal(t, groups, strings.Count(data, "--to 192.0.2."))
+			return nil
+		}),
+		mockIPTables.EXPECT().Restore(gomock.Any(), false, true).DoAndReturn(func(data string, _, _ bool) error {
+			assert.Equal(t, groups, strings.Count(data, "--to 2001:db8::"))
+			return nil
+		}),
+	)
+	startSNATRuleTestClient(t, c)
+	<-entered
+	results := make(chan error, groups)
+	for mark := uint32(1); mark <= groups; mark++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			ips := []net.IP{net.ParseIP(fmt.Sprintf("192.0.2.%d", mark)), net.ParseIP(fmt.Sprintf("2001:db8::%x", mark))}
+			results <- c.AddSNATRules(ips, mark)
+		}()
+	}
+	require.Eventually(t, func() bool {
+		c.iptablesSyncMutex.Lock()
+		defer c.iptablesSyncMutex.Unlock()
+		return len(c.iptablesWaiters) == groups
+	}, time.Second, time.Millisecond, "updates must register without waiting for the previous restore")
+	unblock()
+	for range groups {
+		require.NoError(t, <-results)
+	}
 }

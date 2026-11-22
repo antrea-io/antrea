@@ -400,23 +400,37 @@ func (c *EgressController) validateEgressIPOverlap(name string, ips []string) er
 	if requested.Len() == 0 {
 		return nil
 	}
-	// Admission must see preceding creates and deletes before the informer catches up.
-	egresses, err := c.crdClient.CrdV1beta2().Egresses().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	for _, existing := range egresses.Items {
-		if existing.Name == name {
-			continue
-		}
+	partiallyOverlaps := func(egress *crdv1beta2.Egress) bool {
 		other := sets.New[string]()
-		for _, value := range existing.Spec.EgressIPs {
+		for _, value := range egress.Spec.EgressIPs {
 			if ip := net.ParseIP(value); ip != nil {
 				other.Insert(ip.String())
 			}
 		}
-		if requested.Intersection(other).Len() > 0 && !requested.Equal(other) {
-			return fmt.Errorf("Egress IPs partially overlap with Egress %s; only identical IP groups may be shared", existing.Name)
+		return requested.Intersection(other).Len() > 0 && !requested.Equal(other)
+	}
+	for ip := range requested {
+		egresses, err := c.egressIndexer.ByIndex(egressIPIndex, ip)
+		if err != nil {
+			return err
+		}
+		for _, obj := range egresses {
+			existing := obj.(*crdv1beta2.Egress)
+			if existing.Name == name || !partiallyOverlaps(existing) {
+				continue
+			}
+			// Recheck only a potential conflict so stale deletions and edits do not block reuse.
+			// Cache misses, including concurrent creates, are still guarded by Agent reservations.
+			current, err := c.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), existing.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if partiallyOverlaps(current) {
+				return fmt.Errorf("Egress IPs partially overlap with Egress %s; only identical IP groups may be shared", existing.Name)
+			}
 		}
 	}
 	return nil

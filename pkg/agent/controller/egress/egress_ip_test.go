@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +39,14 @@ import (
 )
 
 const fakeLocalEgressIPv6 = "2001:db8::10"
+
+func parseEgressTestIPs(ips []string) []net.IP {
+	parsed := make([]net.IP, 0, len(ips))
+	for _, ip := range ips {
+		parsed = append(parsed, net.ParseIP(ip))
+	}
+	return parsed
+}
 
 func newIPGroupTestController(t *testing.T, objects ...runtime.Object) *fakeController {
 	c := newFakeController(t, objects)
@@ -73,9 +83,9 @@ func TestSyncEgressIPGroup(t *testing.T) {
 			c.addEgressGroup(&cpv1b2.EgressGroup{ObjectMeta: egress.ObjectMeta,
 				GroupMembers: []cpv1b2.GroupMember{{Pod: &cpv1b2.PodReference{Namespace: "ns1", Name: "pod1"}}}})
 			parsedIPs := []net.IP{net.ParseIP(ips[0]), net.ParseIP(ips[1])}
+			c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 			for _, ip := range ips {
 				c.mockIPAssigner.EXPECT().AssignIP(ip, nil, true).Return(true, nil)
-				c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
 			}
 			c.mockOFClient.EXPECT().InstallSNATMarkFlows(parsedIPs, uint32(1))
 			c.mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
@@ -104,8 +114,8 @@ func TestSyncEgressIPGroup(t *testing.T) {
 			c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
 			c.mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 			c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+			c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 			for _, ip := range ips {
-				c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), net.ParseIP(ip).To4() == nil)
 				c.mockIPAssigner.EXPECT().UnassignIP(ip)
 			}
 			require.NoError(t, c.egressInformer.GetIndexer().Delete(stored))
@@ -163,9 +173,7 @@ func TestEgressIPGroupSharingAndOverlap(t *testing.T) {
 		require.ErrorContains(t, c.referenceEgressIPs("overlap", partial), "already used by a different IP group")
 	}
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows([]net.IP{net.ParseIP(ips[0]), net.ParseIP(ips[1])}, uint32(1))
-	for _, ip := range ips {
-		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
-	}
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 	mark, err := c.realizeEgressIPs(ips, []*crdv1b2.SubnetInfo{nil, nil})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(1), mark)
@@ -183,8 +191,8 @@ func TestEgressIPGroupSharingAndOverlap(t *testing.T) {
 	require.NoError(t, c.egressInformer.GetIndexer().Update(second))
 	c.mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(10000), uint32(20000))
 	require.NoError(t, c.realizeEgressQoS("second", c.newEgressState("second", reversed), mark, &newFakeBandwidth))
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 	for _, ip := range ips {
-		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), net.ParseIP(ip).To4() == nil)
 		c.mockIPAssigner.EXPECT().UnassignIP(ip)
 	}
 	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
@@ -198,19 +206,14 @@ func TestEgressIPGroupCleanupRetry(t *testing.T) {
 	ips := []string{fakeLocalEgressIP1, fakeLocalEgressIPv6}
 	require.NoError(t, c.referenceEgressIPs("dual", ips))
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(gomock.Any(), uint32(1))
-	for _, ip := range ips {
-		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
-	}
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 	_, err := c.realizeEgressIPs(ips, []*crdv1b2.SubnetInfo{nil, nil})
 	require.NoError(t, err)
 	deleteErr := fmt.Errorf("IPv6 deletion failed")
-	gomock.InOrder(
-		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), false),
-		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), true).Return(deleteErr),
-	)
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1)).Return(deleteErr)
 	require.ErrorIs(t, c.unrealizeEgressIPs("dual", ips, nil), deleteErr)
 	assert.Equal(t, uint32(1), c.egressIPGroups[egressIPGroupKey(ips)].mark)
-	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), true)
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 	for _, ip := range ips {
 		c.mockIPAssigner.EXPECT().UnassignIP(ip)
@@ -284,14 +287,14 @@ func TestSyncEgressIPGroupLosesOneFamily(t *testing.T) {
 			c.egressIPScheduler.schedule()
 			c.addEgressGroup(&cpv1b2.EgressGroup{ObjectMeta: egress.ObjectMeta,
 				GroupMembers: []cpv1b2.GroupMember{{Pod: &cpv1b2.PodReference{Namespace: "ns1", Name: "pod1"}}}})
+			c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
+			c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 			for _, ip := range ips {
 				if managed {
 					c.mockIPAssigner.EXPECT().AssignIP(ip, nil, true).Return(false, nil)
 				} else {
 					c.mockIPAssigner.EXPECT().UnassignIP(ip).Times(2)
 				}
-				c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
-				c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), net.ParseIP(ip).To4() == nil)
 			}
 			c.mockOFClient.EXPECT().InstallSNATMarkFlows(gomock.Any(), uint32(1))
 			c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), gomock.Any(), uint32(1))
@@ -339,10 +342,11 @@ func TestEgressIPGroupPolicyRouteRollback(t *testing.T) {
 			subnets := []*crdv1b2.SubnetInfo{{Gateway: fakeGatewayIP, PrefixLength: 16}, {Gateway: "2001:db8::1", PrefixLength: 64}}
 			require.NoError(t, c.referenceEgressIPs("dual", ips))
 			routeErr := fmt.Errorf("IPv6 policy route failed")
+			c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
+			c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 			for i, ip := range ips {
 				table := uint32(101 + i)
 				c.mockIPAssigner.EXPECT().AssignIP(ip, subnets[i], true).Return(false, nil)
-				c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
 				c.mockIPAssigner.EXPECT().GetInterfaceID(subnets[i]).Return(2, true)
 				call := c.mockRouteClient.EXPECT().AddEgressRoutes(table, 2, net.ParseIP(subnets[i].Gateway), int(subnets[i].PrefixLength))
 				if i == 1 && failRoutes {
@@ -356,7 +360,6 @@ func TestEgressIPGroupPolicyRouteRollback(t *testing.T) {
 				}
 				c.mockRouteClient.EXPECT().DeleteEgressRule(table, uint32(1), i == 1)
 				c.mockRouteClient.EXPECT().DeleteEgressRoutes(table)
-				c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), i == 1)
 			}
 			egress := &crdv1b2.Egress{ObjectMeta: metav1.ObjectMeta{Name: "dual"}}
 			_, err := c.reconcileEgressIPGroup(egress, c.newEgressState(egress.Name, ips), subnets, fakeNode)
@@ -379,8 +382,7 @@ func TestEgressIPGroupEquivalentIPv6(t *testing.T) {
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6)
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows([]net.IP{net.ParseIP(ips[0]), net.ParseIP(ips[1])}, uint32(1))
-	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ips[0]), uint32(1))
-	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ips[1]), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 	require.NoError(t, c.syncEgress(egress.Name))
 	assert.Equal(t, uint32(1), c.egressIPGroups[egressIPGroupKey([]string{fakeLocalEgressIPv6, fakeLocalEgressIP1})].mark)
 	stored, err := c.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
@@ -412,6 +414,7 @@ func TestAssignEgressIPGroupEvents(t *testing.T) {
 			c := newIPGroupTestController(t)
 			recorder := events.NewFakeRecorder(2)
 			c.record = recorder
+			require.NoError(t, c.referenceEgressIPs("egress", tt.ips))
 			node := "other-node"
 			if tt.local {
 				node = fakeNode
@@ -450,8 +453,7 @@ func TestSNATRulesPrecedeMarkFlows(t *testing.T) {
 	ips := []string{fakeLocalEgressIP1, fakeLocalEgressIPv6}
 	require.NoError(t, c.referenceEgressIPs("egress", ips))
 	gomock.InOrder(
-		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ips[0]), uint32(1)),
-		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ips[1]), uint32(1)),
+		c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1)),
 		c.mockOFClient.EXPECT().InstallSNATMarkFlows(gomock.Any(), uint32(1)),
 	)
 	_, err := c.realizeEgressIPs(ips, make([]*crdv1b2.SubnetInfo, len(ips)))
@@ -467,18 +469,18 @@ func TestFailedSNATRestoreRetainsMarkUntilCleanup(t *testing.T) {
 		c.mockIPAssigner.EXPECT().UnassignIP(ip)
 	}
 	restoreErr, deleteErr := fmt.Errorf("restore failed"), fmt.Errorf("delete failed")
-	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ips[0]), uint32(1)).Return(restoreErr)
-	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), false).Return(deleteErr)
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1)).Return(restoreErr)
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1)).Return(deleteErr)
 	_, err := c.reconcileEgressIPGroup(egress, c.newEgressState(egress.Name, ips), make([]*crdv1b2.SubnetInfo, len(ips)), "")
 	require.ErrorIs(t, err, restoreErr)
 	require.ErrorIs(t, err, deleteErr)
 	group := c.egressIPGroups[egressIPGroupKey(ips)]
 	assert.Equal(t, uint32(1), group.mark)
-	assert.True(t, group.ips[0].rulePending)
+	assert.True(t, group.rulesPending)
 	mark, err := c.markAllocator.allocate()
 	require.NoError(t, err)
 	assert.Equal(t, uint32(2), mark, "a failed deletion must not make the old mark reusable")
-	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1), false)
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1))
 	require.NoError(t, c.uninstallEgressIPGroup(group))
 	mark, err = c.markAllocator.allocate()
 	require.NoError(t, err)
@@ -494,9 +496,9 @@ func TestSharedEgressFailurePreservesOtherReference(t *testing.T) {
 	c.egressIPScheduler.schedule()
 	c.addEgressGroup(&cpv1b2.EgressGroup{ObjectMeta: first.ObjectMeta,
 		GroupMembers: []cpv1b2.GroupMember{{Pod: &cpv1b2.PodReference{Namespace: "ns1", Name: "pod1"}}}})
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 	for _, ip := range ips {
 		c.mockIPAssigner.EXPECT().UnassignIP(ip)
-		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
 	}
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(gomock.Any(), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), gomock.Any(), uint32(1))
@@ -530,9 +532,9 @@ func TestManagedEgressWaitsForAddressDetection(t *testing.T) {
 			require.NoError(t, c.syncEgress(egress.Name), "address detection lag must not be reported as an assignment error")
 			assert.Zero(t, c.egressIPGroups[egressIPGroupKey(ips)].mark)
 			c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New(ips...)}
+			c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
 			for _, ip := range ips {
 				c.mockIPAssigner.EXPECT().AssignIP(ip, nil, true).Return(false, nil)
-				c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(ip), uint32(1))
 			}
 			c.mockOFClient.EXPECT().InstallSNATMarkFlows(gomock.Any(), uint32(1))
 			require.NoError(t, c.syncEgress(egress.Name))
@@ -586,4 +588,128 @@ func TestManagedEgressWaitsForAddressRemoval(t *testing.T) {
 			assert.Zero(t, mark)
 		})
 	}
+}
+
+func TestEgressIPGroupsDoNotBlockEachOther(t *testing.T) {
+	for _, removing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("removing=%t", removing), func(t *testing.T) {
+			c := newIPGroupTestController(t)
+			first := []string{fakeLocalEgressIP1, fakeLocalEgressIPv6}
+			second := []string{fakeLocalEgressIP2, "2001:db8::20"}
+			c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New(append(slices.Clone(first), second...)...)}
+			require.NoError(t, c.referenceEgressIPs("first", first))
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			var workers sync.WaitGroup
+			unblock := func() { once.Do(func() { close(release) }) }
+			defer func() { unblock(); workers.Wait() }()
+			blocked := func() error { close(entered); <-release; return nil }
+			if removing {
+				c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(first), uint32(1))
+				c.mockOFClient.EXPECT().InstallSNATMarkFlows(parseEgressTestIPs(first), uint32(1))
+				_, err := c.realizeEgressIPs(first, make([]*crdv1b2.SubnetInfo, 2))
+				require.NoError(t, err)
+				c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1)).DoAndReturn(func(uint32) error { return blocked() })
+				c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+				for _, ip := range first {
+					c.mockIPAssigner.EXPECT().UnassignIP(ip)
+				}
+			} else {
+				c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(first), uint32(1)).DoAndReturn(func([]net.IP, uint32) error { return blocked() })
+				c.mockOFClient.EXPECT().InstallSNATMarkFlows(parseEgressTestIPs(first), uint32(1))
+			}
+			firstResult := make(chan error, 1)
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				if removing {
+					firstResult <- c.unrealizeEgressIPs("first", first, nil)
+				} else {
+					_, err := c.realizeEgressIPs(first, make([]*crdv1b2.SubnetInfo, 2))
+					firstResult <- err
+				}
+			}()
+			select {
+			case <-entered:
+			case <-time.After(time.Second):
+				t.Fatal("SNAT operation did not start")
+			}
+			lookup := make(chan string, 1)
+			workers.Add(1)
+			go func() { defer workers.Done(); ip, _ := c.GetEgressIPByMark(1, true); lookup <- ip }()
+			select {
+			case ip := <-lookup:
+				assert.Equal(t, first[1], ip)
+			case <-time.After(time.Second):
+				t.Fatal("Traceflow lookup blocked on SNAT restore")
+			}
+			c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(second), uint32(2))
+			c.mockOFClient.EXPECT().InstallSNATMarkFlows(parseEgressTestIPs(second), uint32(2))
+			secondResult := make(chan error, 1)
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				if err := c.referenceEgressIPs("second", second); err != nil {
+					secondResult <- err
+					return
+				}
+				_, err := c.realizeEgressIPs(second, make([]*crdv1b2.SubnetInfo, 2))
+				secondResult <- err
+			}()
+			select {
+			case err := <-secondResult:
+				require.NoError(t, err)
+			case <-time.After(time.Second):
+				t.Fatal("another group blocked on SNAT restore")
+			}
+			unblock()
+			require.NoError(t, <-firstResult)
+		})
+	}
+}
+
+func TestPersistentAddressDetectionMismatch(t *testing.T) {
+	ips := []string{fakeLocalEgressIP1, fakeLocalEgressIPv6}
+	egress := &crdv1b2.Egress{ObjectMeta: metav1.ObjectMeta{Name: "egress"}, Spec: crdv1b2.EgressSpec{EgressIPs: ips, ExternalIPPool: fakeExternalIPPool}}
+	c := newIPGroupTestController(t, egress, &crdv1b2.ExternalIPPool{ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool}})
+	c.egressIPScheduler.schedule()
+	c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New[string]()}
+	for _, ip := range ips {
+		c.mockIPAssigner.EXPECT().AssignIP(ip, nil, true).Times(3)
+	}
+	require.NoError(t, c.syncEgress(egress.Name), "allow a brief address notification delay")
+	state, _ := c.getEgressState(egress.Name)
+	state.ipDetectionStartTime = time.Now().Add(-6 * time.Second)
+	require.ErrorContains(t, c.syncEgress(egress.Name), "have not reached the local state")
+	stored, err := c.crdClient.CrdV1beta2().Egresses().Get(context.Background(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	condition := meta.FindStatusCondition(stored.Status.Conditions, crdv1b2.IPAssigned)
+	require.NotNil(t, condition)
+	assert.Equal(t, metav1.ConditionFalse, condition.Status)
+	assert.Equal(t, "AssignmentError", condition.Reason)
+	c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New(ips...)}
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(parseEgressTestIPs(ips), uint32(1))
+	require.NoError(t, c.syncEgress(egress.Name))
+	assert.True(t, state.ipDetectionStartTime.IsZero())
+	stored, err = c.crdClient.CrdV1beta2().Egresses().Get(context.Background(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, metav1.ConditionTrue, meta.FindStatusCondition(stored.Status.Conditions, crdv1b2.IPAssigned).Status)
+}
+
+func TestNewReferenceRestoresRulesAfterFailedCleanup(t *testing.T) {
+	c := newIPGroupTestController(t)
+	ips := []string{fakeLocalEgressIP1, fakeLocalEgressIPv6}
+	require.NoError(t, c.referenceEgressIPs("first", ips))
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(parseEgressTestIPs(ips), uint32(1))
+	_, err := c.realizeEgressIPs(ips, make([]*crdv1b2.SubnetInfo, 2))
+	require.NoError(t, err)
+	c.mockRouteClient.EXPECT().DeleteSNATRules(uint32(1)).Return(fmt.Errorf("restore failed"))
+	require.Error(t, c.unrealizeEgressIPs("first", ips, nil))
+	require.NoError(t, c.referenceEgressIPs("second", ips))
+	c.mockRouteClient.EXPECT().AddSNATRules(parseEgressTestIPs(ips), uint32(1))
+	mark, err := c.realizeEgressIPs(ips, make([]*crdv1b2.SubnetInfo, 2))
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), mark)
 }

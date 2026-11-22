@@ -62,6 +62,7 @@ const (
 	egressGroupType grouping.GroupType = "egressGroup"
 
 	externalIPPoolIndex = "externalIPPool"
+	egressIPIndex       = "egressIP"
 )
 
 // ipAllocation records the reserved IPs and the Egress configuration for which they were reserved.
@@ -130,17 +131,26 @@ func NewEgressController(crdClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	// externalIPPoolIndex will be used to get all Egresses associated with a given ExternalIPPool.
-	egressInformer.Informer().AddIndexers(cache.Indexers{externalIPPoolIndex: func(obj interface{}) (strings []string, e error) {
-		egress, ok := obj.(*egressv1beta2.Egress)
-		if !ok {
-			return nil, fmt.Errorf("obj is not Egress: %+v", obj)
-		}
-		if egress.Spec.ExternalIPPool == "" {
-			return nil, nil
-		}
-		return []string{egress.Spec.ExternalIPPool}, nil
-	}})
+	// Index by Pool for reconciliation and canonical IP for targeted overlap validation.
+	egressInformer.Informer().AddIndexers(cache.Indexers{
+		externalIPPoolIndex: func(obj interface{}) ([]string, error) {
+			egress := obj.(*egressv1beta2.Egress)
+			if egress.Spec.ExternalIPPool == "" {
+				return nil, nil
+			}
+			return []string{egress.Spec.ExternalIPPool}, nil
+		},
+		egressIPIndex: func(obj interface{}) ([]string, error) {
+			egress := obj.(*egressv1beta2.Egress)
+			var ips []string
+			for _, value := range egress.Spec.EgressIPs {
+				if ip := net.ParseIP(value); ip != nil {
+					ips = append(ips, ip.String())
+				}
+			}
+			return ips, nil
+		},
+	})
 	c.externalIPAllocator.AddEventHandler(func(ipPool string) {
 		c.enqueueEgresses(ipPool)
 	})

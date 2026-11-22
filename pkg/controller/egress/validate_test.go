@@ -1215,6 +1215,7 @@ func TestValidateEgressIPOverlap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			existing := newDualStackEgress("existing", "", tt.existing)
 			c := newController(nil, []runtime.Object{existing})
+			require.NoError(t, c.egressIndexer.Add(existing))
 			requested := newDualStackEgress("requested", "", tt.requested)
 			allowed, msg := c.validateV1beta2EgressRequest(admv1.Create, &crdv1beta2.Egress{}, requested)
 			assert.Equal(t, tt.allowed, allowed, msg)
@@ -1226,6 +1227,40 @@ func TestValidateEgressIPOverlap(t *testing.T) {
 				allowed, msg = c.validateV1beta1EgressRequest(admv1.Create, &crdv1beta1.Egress{}, legacy)
 				assert.Equal(t, tt.allowed, allowed, msg)
 			}
+		})
+	}
+}
+
+func TestValidateEgressIPOverlapUsesIndex(t *testing.T) {
+	var objects []runtime.Object
+	for i := range 1000 {
+		objects = append(objects, newDualStackEgress(fmt.Sprintf("egress-%d", i), "", []string{fmt.Sprintf("10.0.%d.%d", i/250, i%250+1)}))
+	}
+	c := newController(nil, objects)
+	for _, object := range objects {
+		require.NoError(t, c.egressIndexer.Add(object))
+	}
+	client := c.crdClient.(*fakeversioned.Clientset)
+	require.NoError(t, c.validateEgressIPOverlap("new", []string{"192.0.2.1", "2001:db8::1"}))
+	require.NoError(t, c.validateEgressIPOverlap("shared", []string{"10.0.0.1"}))
+	assert.Empty(t, client.Actions(), "disjoint allocations and complete sharing must use only the index")
+	require.ErrorContains(t, c.validateEgressIPOverlap("overlap", []string{"10.0.0.1", "2001:db8::1"}), "partially overlap")
+	require.Len(t, client.Actions(), 1)
+	assert.Equal(t, "get", client.Actions()[0].GetVerb())
+	assert.Equal(t, "egress-0", client.Actions()[0].(k8stesting.GetAction).GetName())
+}
+
+func TestValidateEgressIPOverlapStaleCandidate(t *testing.T) {
+	for _, deleted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("deleted=%t", deleted), func(t *testing.T) {
+			stale := newDualStackEgress("existing", "", []string{"192.0.2.1"})
+			var objects []runtime.Object
+			if !deleted {
+				objects = append(objects, newDualStackEgress("existing", "", []string{"192.0.2.2"}))
+			}
+			c := newController(nil, objects)
+			require.NoError(t, c.egressIndexer.Add(stale))
+			require.NoError(t, c.validateEgressIPOverlap("new", []string{"192.0.2.1", "2001:db8::1"}))
 		})
 	}
 }

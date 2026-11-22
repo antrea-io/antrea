@@ -1506,16 +1506,25 @@ func testEgressIPOverlap(t *testing.T, data *TestData) {
 	single, err := client.Create(context.Background(), create("192.0.2.21"), metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer client.Delete(context.Background(), single.Name, metav1.DeleteOptions{})
+	// Admission uses an informer index. Dry-run until the Controller has observed the preceding create.
+	waitForConflict := func(ips ...string) {
+		require.Eventually(t, func() bool {
+			_, err := client.Create(context.Background(), create(ips...), metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
+			return err != nil && strings.Contains(err.Error(), "partially overlap")
+		}, defaultTimeout, 100*time.Millisecond)
+	}
+	waitForConflict("192.0.2.21", "2001:db8::21")
 	_, err = client.Create(context.Background(), create("192.0.2.21", "2001:db8::21"), metav1.CreateOptions{})
 	require.ErrorContains(t, err, "partially overlap")
 	require.NoError(t, client.Delete(context.Background(), single.Name, metav1.DeleteOptions{}))
-	// A fresh admission snapshot permits reuse immediately after deletion.
+	// A targeted GET permits reuse even if the deleted candidate remains in the index.
 	pair, err := client.Create(context.Background(), create("192.0.2.21", "2001:db8::21"), metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer client.Delete(context.Background(), pair.Name, metav1.DeleteOptions{})
 	shared, err := client.Create(context.Background(), create("2001:db8::21", "192.0.2.21"), metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer client.Delete(context.Background(), shared.Name, metav1.DeleteOptions{})
+	waitForConflict("192.0.2.21")
 	_, err = client.Create(context.Background(), create("192.0.2.21"), metav1.CreateOptions{})
 	require.ErrorContains(t, err, "partially overlap")
 	_, err = data.CRDClient.CrdV1beta1().Egresses().Create(context.Background(), &crdv1beta1.Egress{

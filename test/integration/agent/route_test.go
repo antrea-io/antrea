@@ -536,7 +536,7 @@ func TestIpTablesSync(t *testing.T) {
 	defer cancel()
 	route.SyncInterval = 2 * time.Second
 	go routeClient.Run(ctx)
-	require.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	require.NoError(t, routeClient.AddSNATRules([]net.IP{snatIP}, mark))
 
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
@@ -654,16 +654,16 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	mark := uint32(1)
 	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
 
-	require.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	require.NoError(t, routeClient.AddSNATRules([]net.IP{snatIP}, mark))
 	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
-	// The rule must exist when AddSNATRule returns so mark flows can safely be installed.
+	// The rule must exist when AddSNATRules returns so mark flows can safely be installed.
 	// #nosec G204: ignore in test code
 	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
 	require.NoError(t, err)
 	assert.Contains(t, string(actualData), expectedRule)
 
-	require.NoError(t, routeClient.DeleteSNATRule(mark, false))
-	// The rule must be gone when DeleteSNATRule returns so the mark can safely be reused.
+	require.NoError(t, routeClient.DeleteSNATRules(mark))
+	// The rule must be gone when DeleteSNATRules returns so the mark can safely be reused.
 	// #nosec G204: ignore in test code
 	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
 	require.NoError(t, err)

@@ -104,6 +104,8 @@ type egressState struct {
 	ofPorts sets.Set[int32]
 	// The actual Pods of the Egress. Used to identify stale Pods when updating or deleting an Egress.
 	pods sets.Set[string]
+	// Start of a local address detection delay, to bound fast retries.
+	ipDetectionStartTime time.Time
 }
 
 type rateLimitMeter struct {
@@ -125,10 +127,6 @@ func (r *rateLimitMeter) Equals(rateLimit *rateLimitMeter) bool {
 // egressIPState keeps the per-IP SNAT rule and policy route state within an IP group.
 type egressIPState struct {
 	egressIP net.IP
-	// Whether its iptables rule has been applied successfully.
-	ruleConfigured bool
-	// A failed restore may have partially applied this rule and still requires cleanup.
-	rulePending bool
 	// The subnet the Egress IP is associated with.
 	subnetInfo *crdv1b2.SubnetInfo
 }
@@ -180,8 +178,9 @@ type EgressController struct {
 	// processed by a single worker at any time. So the returned EgressState has no race condition.
 	egressStatesMutex sync.RWMutex
 
+	// Protect reservations, references and mark publication; never hold this lock for datapath I/O.
 	egressIPGroups      map[string]*egressIPGroupState
-	egressIPGroupsMutex sync.Mutex
+	egressIPGroupsMutex sync.RWMutex
 
 	cluster    memberlist.Interface
 	ipAssigner ipassigner.IPAssigner
@@ -202,7 +201,8 @@ type EgressController struct {
 	// Used to allocate route table ID.
 	tableAllocator *idAllocator
 	// Each subnet has its own route table.
-	egressRouteTables map[crdv1b2.SubnetInfo]*egressRouteTable
+	egressRouteTables      map[crdv1b2.SubnetInfo]*egressRouteTable
+	egressRouteTablesMutex sync.Mutex
 
 	linkMonitor linkmonitor.Interface
 }
@@ -611,6 +611,8 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 		return nil
 	}
 
+	c.egressRouteTablesMutex.Lock()
+	defer c.egressRouteTablesMutex.Unlock()
 	subnetGateway := net.ParseIP(subnetInfo.Gateway)
 	// Get or create a route table for this subnet.
 	rt, exists := c.egressRouteTables[*subnetInfo]
@@ -652,6 +654,8 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState, mark uin
 	if ipState.subnetInfo == nil {
 		return nil
 	}
+	c.egressRouteTablesMutex.Lock()
+	defer c.egressRouteTablesMutex.Unlock()
 	rt, exists := c.egressRouteTables[*ipState.subnetInfo]
 	if !exists {
 		return nil
@@ -703,14 +707,14 @@ func (c *EgressController) realizeEgressQoS(egressName string, eState *egressSta
 		}
 		return nil
 	}
-	c.egressIPGroupsMutex.Lock()
-	defer c.egressIPGroupsMutex.Unlock()
-	group := c.egressIPGroups[egressIPGroupKey(eState.egressIPs)]
+	group := c.getEgressIPGroup(eState.egressIPs)
+	group.mutex.Lock()
+	defer group.mutex.Unlock()
 	var desiredRateLimit *rateLimitMeter
 	if mark != 0 {
 		// Shared IPs use one meter. Pick a configured bandwidth deterministically, so an
 		// Egress without bandwidth cannot remove another reference's rate limit.
-		for _, name := range sets.List(group.egressNames) {
+		for _, name := range c.egressIPGroupNames(group) {
 			candidate := bandwidth
 			if name != egressName {
 				egress, err := c.egressLister.Get(name)
@@ -1026,10 +1030,19 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 	mark, err := c.reconcileEgressIPGroup(egress, eState, subnetInfos, desiredNode)
 	if stderrors.Is(err, errEgressIPsPending) {
-		// Assignment and address detection use separate event streams.
-		c.queue.AddAfter(egressName, 100*time.Millisecond)
-		return nil
+		// Give independent address notifications a short grace period, then use the normal
+		// error backoff and report a persistent mismatch instead of polling forever.
+		if eState.ipDetectionStartTime.IsZero() {
+			eState.ipDetectionStartTime = time.Now()
+		}
+		if time.Since(eState.ipDetectionStartTime) < 5*time.Second {
+			c.queue.AddAfter(egressName, time.Second)
+			return nil
+		}
+		err = fmt.Errorf("Egress IPs %v have not reached the local state required by Node %s: %w", desiredEgressIPs, desiredNode, err)
+		return stderrors.Join(err, c.updateEgressStatus(egress, nil, err))
 	}
+	eState.ipDetectionStartTime = time.Time{}
 	if err != nil {
 		return err
 	}
@@ -1291,8 +1304,8 @@ func (c *EgressController) deleteEgressGroup(group *cpv1b2.EgressGroup) {
 
 // GetEgressIPByMark returns the Egress IP associated with the snatMark.
 func (c *EgressController) GetEgressIPByMark(mark uint32, isIPv6 bool) (string, error) {
-	c.egressIPGroupsMutex.Lock()
-	defer c.egressIPGroupsMutex.Unlock()
+	c.egressIPGroupsMutex.RLock()
+	defer c.egressIPGroupsMutex.RUnlock()
 	for _, group := range c.egressIPGroups {
 		if mark == 0 || group.mark != mark {
 			continue
