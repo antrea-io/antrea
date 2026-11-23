@@ -394,6 +394,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			node := &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeName,
+					UID:  "initialized-node-uid",
 				},
 				Spec: corev1.NodeSpec{
 					PodCIDR: tt.podCIDR,
@@ -415,6 +416,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			ifaceStore := interfacestore.NewInterfaceStore()
 			_, podCIDR, _ := net.ParseCIDR(tt.podCIDR)
 			expectedNodeConfig := config.NodeConfig{
+				UID:                        node.UID,
 				Name:                       nodeName,
 				Type:                       config.K8sNode,
 				OVSBridge:                  ovsBridge,

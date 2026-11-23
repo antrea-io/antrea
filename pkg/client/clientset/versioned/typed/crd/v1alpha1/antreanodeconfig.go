@@ -37,6 +37,8 @@ type AntreaNodeConfigsGetter interface {
 type AntreaNodeConfigInterface interface {
 	Create(ctx context.Context, antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, opts v1.CreateOptions) (*crdv1alpha1.AntreaNodeConfig, error)
 	Update(ctx context.Context, antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, opts v1.UpdateOptions) (*crdv1alpha1.AntreaNodeConfig, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, opts v1.UpdateOptions) (*crdv1alpha1.AntreaNodeConfig, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1alpha1.AntreaNodeConfig, error)

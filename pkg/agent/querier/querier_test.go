@@ -22,6 +22,7 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
@@ -87,6 +88,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			name: "networkPolicyOnly-mode non-partial",
 			nodeConfig: &config.NodeConfig{
 				Name:                       "foo",
+				UID:                        "initialized-node-uid",
 				OVSBridge:                  "br-int",
 				NodeTransportInterfaceName: "eth0",
 				NodeTransportInterfaceMTU:  1500,
@@ -99,7 +101,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			partial: false,
 			expectedAgentInfo: &v1beta1.AntreaAgentInfo{
 				ObjectMeta:  v1.ObjectMeta{Name: "foo"},
-				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo"},
+				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo", UID: "initialized-node-uid"},
 				NodeSubnets: []string{},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    ovsVersion,
@@ -145,6 +147,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			name: "encap-mode non-partial",
 			nodeConfig: &config.NodeConfig{
 				Name:                       "foo",
+				UID:                        "initialized-node-uid",
 				OVSBridge:                  "br-int",
 				PodIPv4CIDR:                getIPNet("20.20.20.0/24"),
 				PodIPv6CIDR:                getIPNet("2001:ab03:cd04:55ef::/64"),
@@ -160,7 +163,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			partial: false,
 			expectedAgentInfo: &v1beta1.AntreaAgentInfo{
 				ObjectMeta:  v1.ObjectMeta{Name: "foo"},
-				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo"},
+				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo", UID: "initialized-node-uid"},
 				NodeSubnets: []string{"20.20.20.0/24", "2001:ab03:cd04:55ef::/64"},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    ovsVersion,
@@ -227,6 +230,30 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			tt.expectedAgentInfo.AgentConditions = nil
 			agentInfo.AgentConditions = nil
 			assert.Equal(t, tt.expectedAgentInfo, agentInfo)
+			for _, identity := range []struct {
+				name     string
+				nodeType config.NodeType
+				uid      types.UID
+			}{
+				{name: "startup Kubernetes Node", uid: "initialized-node-uid"},
+				{name: "missing Kubernetes Node UID"},
+				{name: "ExternalNode", nodeType: config.ExternalNode},
+			} {
+				t.Run(identity.name, func(t *testing.T) {
+					nodeConfig := *tt.nodeConfig
+					nodeConfig.Type, nodeConfig.UID = identity.nodeType, identity.uid
+					aq.nodeConfig = &nodeConfig
+					for _, partial := range []bool{false, true} {
+						agentInfo.NodeRef.UID = "another-agent-node-uid"
+						aq.GetAgentInfo(agentInfo, partial)
+						expectedUID := identity.uid
+						if identity.nodeType == config.ExternalNode && partial {
+							expectedUID = "another-agent-node-uid"
+						}
+						assert.Equal(t, expectedUID, agentInfo.NodeRef.UID, "partial=%t", partial)
+					}
+				})
+			}
 		})
 	}
 }

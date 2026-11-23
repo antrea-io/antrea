@@ -109,7 +109,67 @@ spec:
                               interested receivers. Defaults to false.
                             type: boolean
                             default: false
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                desiredNodes:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                realizedNodes:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                  - type
+                  items:
+                    type: object
+                    required:
+                    - type
+                    - status
+                    - reason
+                    - message
+                    - lastTransitionTime
+                    properties:
+                      type:
+                        type: string
+                        maxLength: 128
+                      status:
+                        type: string
+                        enum:
+                        - 'True'
+                        - 'False'
+                        - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                        maxLength: 128
+                      message:
+                        type: string
+                        maxLength: 512
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+      subresources:
+        status: {}
       additionalPrinterColumns:
+        - jsonPath: .status.conditions[?(@.type=="Ready")].status
+          name: Ready
+          type: string
+        - jsonPath: .status.desiredNodes
+          name: Desired
+          type: integer
+        - jsonPath: .status.realizedNodes
+          name: Realized
+          type: integer
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date

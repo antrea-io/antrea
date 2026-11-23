@@ -1150,6 +1150,7 @@ func (i *Initializer) initK8sNodeLocalConfig(ctx context.Context, nodeName strin
 	}
 
 	i.nodeConfig = &config.NodeConfig{
+		UID:                        node.UID,
 		Name:                       nodeName,
 		Type:                       config.K8sNode,
 		OVSBridge:                  i.ovsBridge,

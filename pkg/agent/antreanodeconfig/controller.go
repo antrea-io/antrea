@@ -20,15 +20,13 @@
 package antreanodeconfig
 
 import (
-	"cmp"
 	"fmt"
 	"reflect"
-	"slices"
+	"sync/atomic"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -40,6 +38,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1alpha1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	nodeconfigutil "antrea.io/antrea/v2/pkg/util/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )
 
@@ -68,7 +67,9 @@ type Controller struct {
 	queue workqueue.TypedRateLimitingInterface[string]
 
 	// lastNotified is only read/written by the snapshot worker goroutine(s).
-	lastNotified *Snapshot
+	lastNotified    *Snapshot
+	currentSnapshot atomic.Pointer[Snapshot]
+	snapshotUpdates chan struct{}
 }
 
 // NewController constructs a Controller and registers informer handlers.
@@ -81,6 +82,7 @@ func NewController(
 	notifier channel.Notifier,
 ) *Controller {
 	c := &Controller{
+		snapshotUpdates:  make(chan struct{}, 1),
 		nodeName:         nodeName,
 		ancLister:        ancInformer.Lister(),
 		nodeLister:       nodeInformer.Lister(),
@@ -110,6 +112,16 @@ func NewController(
 	)
 
 	return c
+}
+
+// GetAntreaNodeConfigSnapshot returns an independent copy of the current selection.
+func (c *Controller) GetAntreaNodeConfigSnapshot() *Snapshot {
+	return c.currentSnapshot.Load().DeepCopy()
+}
+
+// AntreaNodeConfigSnapshotUpdates signals a change in the current selection.
+func (c *Controller) AntreaNodeConfigSnapshotUpdates() <-chan struct{} {
+	return c.snapshotUpdates
 }
 
 func (c *Controller) enqueueSnapshot() {
@@ -201,6 +213,11 @@ func (c *Controller) syncSnapshot() error {
 	}
 
 	c.lastNotified = payload
+	c.currentSnapshot.Store(next)
+	select {
+	case c.snapshotUpdates <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -243,44 +260,9 @@ func antreaNodeConfigForSnapshot(node *corev1.Node, all []*crdv1alpha1.AntreaNod
 	if listErr != nil {
 		return nil
 	}
-	matched := selectAntreaNodeConfigsForNode(node, all)
+	matched := nodeconfigutil.MatchingConfigs(node, all)
 	if len(matched) == 0 {
 		return nil
 	}
 	return matched[0]
-}
-
-// selectAntreaNodeConfigsForNode returns AntreaNodeConfig objects whose nodeSelector
-// matches the given Node's labels, sorted by creationTimestamp ascending (oldest
-// first; name is used as a stable tiebreaker when timestamps are equal).
-// Configs with an invalid nodeSelector are skipped with a log line.
-func selectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
-	if node == nil {
-		return nil
-	}
-	nodeLabels := labels.Set(node.Labels)
-	var matching []*crdv1alpha1.AntreaNodeConfig
-	for _, cfg := range configs {
-		if cfg == nil {
-			continue
-		}
-		sel, err := metav1.LabelSelectorAsSelector(&cfg.Spec.NodeSelector)
-		if err != nil {
-			klog.ErrorS(err, "Skipping AntreaNodeConfig with invalid nodeSelector", "config", cfg.Name)
-			continue
-		}
-		if sel.Matches(nodeLabels) {
-			matching = append(matching, cfg)
-		}
-	}
-	slices.SortFunc(matching, func(a, b *crdv1alpha1.AntreaNodeConfig) int {
-		if a.CreationTimestamp.Before(&b.CreationTimestamp) {
-			return -1
-		}
-		if b.CreationTimestamp.Before(&a.CreationTimestamp) {
-			return 1
-		}
-		return cmp.Compare(a.Name, b.Name)
-	})
-	return matching
 }
