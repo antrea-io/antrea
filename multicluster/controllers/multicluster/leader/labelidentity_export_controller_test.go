@@ -188,6 +188,55 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 	}
 }
 
+func TestParseLabelIdentityExportNamespacedName(t *testing.T) {
+	tests := []struct {
+		name         string
+		resourceName string
+		expClusterID string
+		expLabelHash string
+		expErr       string
+	}{
+		{
+			name:         "valid name",
+			resourceName: common.LocalClusterID + "-" + labelHash,
+			expClusterID: common.LocalClusterID,
+			expLabelHash: labelHash,
+		},
+		{
+			name:         "name without delimiter",
+			resourceName: "malformed",
+			expErr:       "invalid LabelIdentityExport name format: malformed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clusterID, labelHash, err := parseLabelIdentityExportNamespacedName(types.NamespacedName{Name: tt.resourceName})
+			if tt.expErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.expErr)
+			}
+			assert.Equal(t, tt.expClusterID, clusterID)
+			assert.Equal(t, tt.expLabelHash, labelHash)
+		})
+	}
+}
+
+func TestLabelIdentityResourceExportReconcileMalformedName(t *testing.T) {
+	r := NewLabelIdentityExportReconciler(
+		fake.NewClientBuilder().WithScheme(common.TestScheme).Build(), common.TestScheme, common.LeaderNamespace)
+
+	_, err := r.Reconcile(common.TestCtx, ctrl.Request{NamespacedName: types.NamespacedName{
+		Namespace: common.LeaderNamespace,
+		Name:      "malformed",
+	}})
+
+	require.NoError(t, err)
+	assert.Empty(t, r.clusterToLabels)
+	assert.Empty(t, r.labelsToClusters)
+}
+
 // synctest.Test is used so that the time.Sleep calls inside wait.Until
 // (the 1-second period between labelQueueWorker invocations) use the fake
 // clock instead of the real wall clock. Once all 40 queue items have been
