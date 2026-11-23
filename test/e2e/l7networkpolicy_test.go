@@ -185,6 +185,36 @@ func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string,
 	}
 }
 
+// getL7ConntrackZonePackets returns the number of packets matched by the flows of ConntrackZoneTable on the given Node
+// whose dump contains the given text, and fails the test if there is no such flow.
+func getL7ConntrackZonePackets(t *testing.T, data *TestData, nodeName, flowText string) int {
+	stdout, _, err := data.RunCommandFromAntreaPodOnNode(nodeName, []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=ConntrackZone"})
+	require.NoError(t, err)
+	packets := 0
+	found := false
+	for _, line := range strings.Split(stdout, "\n") {
+		if !strings.Contains(line, flowText) {
+			continue
+		}
+		found = true
+		matches := regexp.MustCompile(`n_packets=(\d+)`).FindStringSubmatch(line)
+		require.NotNil(t, matches, "Expected n_packets in flow %q", line)
+		n, err := strconv.Atoi(matches[1])
+		require.NoError(t, err)
+		packets += n
+	}
+	require.True(t, found, "Expected a flow containing %q in ConntrackZoneTable on Node %s", flowText, nodeName)
+	return packets
+}
+
+// checkL7RequestFlows verifies that, on the Node where the L7 NetworkPolicy is enforced, request packets of Service
+// connections were matched by the flow with a CT action with NAT, and request packets of non-Service connections by
+// the flow without one.
+func checkL7RequestFlows(t *testing.T, data *TestData, nodeName string) {
+	assert.Greater(t, getL7ConntrackZonePackets(t, data, nodeName, "ct_mark=0x90/0x90"), 0, "Expected request packets of Service connections to be redirected with a CT action with NAT")
+	assert.Greater(t, getL7ConntrackZonePackets(t, data, nodeName, "ct_mark=0x80/0x90"), 0, "Expected request packets of non-Service connections to be redirected without a CT action with NAT")
+}
+
 func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 	clientPodName := "test-l7-http-client-selected"
 	clientPodLabels := map[string]string{"test-l7-http-e2e": "client"}
@@ -248,6 +278,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// will be rejected.
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, false)
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
+		// An ingress L7 NetworkPolicy is enforced on the Node of the server Pod.
+		checkL7RequestFlows(t, data, nodeName(0))
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -277,6 +309,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// will be rejected.
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, false)
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
+		// An egress L7 NetworkPolicy is enforced on the Node of the client Pod.
+		checkL7RequestFlows(t, data, nodeName(0))
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -426,6 +460,19 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
 	serverIPs := podIPs.AsSlice()
 
+	// Create a Service whose backend is the above server Pod, to check that the engine sees the connections through
+	// the Service with the server Pod as their destination, the same as the connections to the Pod IP.
+	mutator := func(service *corev1.Service) {
+		service.Spec.IPFamilyPolicy = ptr.To(corev1.IPFamilyPolicyPreferDualStack)
+	}
+	svc, err := data.CreateServiceWithAnnotations("svc-agnhost-logging", data.testNamespace, p8080, p8080, corev1.ProtocolTCP, serverPodLabels, false, false, corev1.ServiceTypeClusterIP, nil, nil, mutator)
+	require.NoError(t, err)
+	var serviceIPs []*net.IP
+	for _, clusterIP := range svc.Spec.ClusterIPs {
+		serviceIP := net.ParseIP(clusterIP)
+		serviceIPs = append(serviceIPs, &serviceIP)
+	}
+
 	antreaPodName, err := data.getAntreaPodOnNode(l7LoggingNode)
 	require.NoError(t, err, "Error occurred when trying to get the antrea-agent Pod running on Node %s", l7LoggingNode)
 
@@ -454,37 +501,56 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 		},
 	}
 	// Create one L7 NetworkPolicy that allows HTTP path 'hostname', and probe twice
-	// where HTTP path 'hostname' is allowed yet 'clientip' will be rejected.
+	// where HTTP path 'hostname' is allowed yet 'clientip' will be rejected. Probe the server Pod through its Pod IPs
+	// first and then through the Service, in the order the log entries are expected below.
 	createL7NetworkPolicy(t, data, true, policyAllowPathHostname, 1, clientPodLabels, serverPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsPathHostname)
 	time.Sleep(networkPolicyDelay)
 	probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
+	probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
 
-	// Define log matchers for expected L7 NetworkPolicies log entries.
+	// Define log matchers for expected L7 NetworkPolicies log entries. The destination of an entry is always the
+	// server Pod, while the Host header of the request tells a connection through the Service from one to the Pod IP.
+	// The Host header is also what tells the alert of one from the alert of the other, as the packet of an alert is
+	// the request.
 	var l7LogMatchers []*L7LogEntry
-	for _, ip := range serverIPs {
-		clientMatcher := &L7LogEntry{
-			EventType:           "alert",
-			DestIP:              ip.String(),
-			DestPort:            8080,
-			Protocol:            "TCP",
-			AppProtocol:         "http",
-			expectedPacketRegex: regexp.MustCompile(fmt.Sprintf("%s|HTTP|GET|%s", ip.String(), "/clientip")),
-			Alert: &L7LogAlertEntry{
-				Action:    "blocked",
-				Signature: fmt.Sprintf("Reject by AntreaNetworkPolicy:%s/%s", data.testNamespace, policyAllowPathHostname),
-			},
+	for _, targetIPs := range [][]*net.IP{serverIPs, serviceIPs} {
+		for _, targetIP := range targetIPs {
+			serverIP := serverIPOfFamily(serverIPs, targetIP)
+			host := net.JoinHostPort(targetIP.String(), "8080")
+			clientMatcher := &L7LogEntry{
+				EventType:           "alert",
+				DestIP:              serverIP.String(),
+				DestPort:            8080,
+				Protocol:            "TCP",
+				AppProtocol:         "http",
+				expectedPacketRegex: regexp.MustCompile(fmt.Sprintf("(?s)GET /clientip HTTP.*Host: %s", regexp.QuoteMeta(host))),
+				Alert: &L7LogAlertEntry{
+					Action:    "blocked",
+					Signature: fmt.Sprintf("Reject by AntreaNetworkPolicy:%s/%s", data.testNamespace, policyAllowPathHostname),
+				},
+			}
+			hostMatcher := &L7LogEntry{
+				EventType: "http",
+				DestIP:    serverIP.String(),
+				DestPort:  8080,
+				Protocol:  "TCP",
+				Http:      &L7LogHttpEntry{Hostname: targetIP.String(), Port: 8080, Url: "/hostname"},
+			}
+			l7LogMatchers = append(l7LogMatchers, clientMatcher, hostMatcher)
 		}
-		hostMatcher := &L7LogEntry{
-			EventType: "http",
-			DestIP:    ip.String(),
-			DestPort:  8080,
-			Protocol:  "TCP",
-			Http:      &L7LogHttpEntry{Hostname: ip.String(), Port: 8080, Url: "/hostname"},
-		}
-		l7LogMatchers = append(l7LogMatchers, clientMatcher, hostMatcher)
 	}
 
 	checkL7LoggingResult(t, data, antreaPodName, l7LogFile, l7LogMatchers)
+}
+
+// serverIPOfFamily returns the server IP of the same IP family as the given IP.
+func serverIPOfFamily(serverIPs []*net.IP, ip *net.IP) *net.IP {
+	for _, serverIP := range serverIPs {
+		if (serverIP.To4() != nil) == (ip.To4() != nil) {
+			return serverIP
+		}
+	}
+	return nil
 }
 
 // Partial entries of L7 NetworkPolicy logging necessary for testing.
