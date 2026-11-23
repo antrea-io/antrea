@@ -40,6 +40,16 @@ func (in AntreaNetworkPolicyStatsList) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in ClusterNetworkPolicyStats) OpenAPIModelName() string {
+	return "io.antrea.stats.v1alpha1.ClusterNetworkPolicyStats"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in ClusterNetworkPolicyStatsList) OpenAPIModelName() string {
+	return "io.antrea.stats.v1alpha1.ClusterNetworkPolicyStatsList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in MulticastGroup) OpenAPIModelName() string {
 	return "io.antrea.stats.v1alpha1.MulticastGroup"
 }

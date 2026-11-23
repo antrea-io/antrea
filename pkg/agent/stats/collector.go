@@ -48,6 +48,9 @@ type statsCollection struct {
 	antreaClusterNetworkPolicyStats map[types.UID]map[string]*statsv1alpha1.TrafficStats
 	// antreaNetworkPolicyStats is a mapping from Antrea NetworkPolicy UIDs to their traffic stats.
 	antreaNetworkPolicyStats map[types.UID]map[string]*statsv1alpha1.TrafficStats
+	// clusterNetworkPolicyStats is a mapping from Kubernetes ClusterNetworkPolicy
+	// (policy.networking.k8s.io) UIDs to their traffic stats.
+	clusterNetworkPolicyStats map[types.UID]map[string]*statsv1alpha1.TrafficStats
 	// multicastGroups is a map that encodes the list of Pods that has joined the multicast group.
 	multicastGroups map[string][]cpv1beta.PodReference
 }
@@ -129,6 +132,7 @@ func (m *Collector) collect() *statsCollection {
 	npStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	acnpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
 	annpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
+	cnpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
 
 	for ofID, ruleStats := range ruleStatsMap {
 		rule := m.networkPolicyQuerier.GetRuleByFlowID(ofID)
@@ -147,6 +151,8 @@ func (m *Collector) collect() *statsCollection {
 			addRuleStatsUp(acnpStatsMap, ruleStats, rule)
 		case cpv1beta.AntreaNetworkPolicy:
 			addRuleStatsUp(annpStatsMap, ruleStats, rule)
+		case cpv1beta.K8sClusterNetworkPolicy:
+			addRuleStatsUp(cnpStatsMap, ruleStats, rule)
 		}
 	}
 	var multicastGroupMap map[string][]cpv1beta.PodReference
@@ -157,6 +163,7 @@ func (m *Collector) collect() *statsCollection {
 		networkPolicyStats:              npStatsMap,
 		antreaClusterNetworkPolicyStats: acnpStatsMap,
 		antreaNetworkPolicyStats:        annpStatsMap,
+		clusterNetworkPolicyStats:       cnpStatsMap,
 		multicastGroups:                 multicastGroupMap,
 	}
 }
@@ -217,24 +224,25 @@ func isIdenticalMulticastGroupMap(a, b map[string][]cpv1beta.PodReference) bool 
 	return true
 }
 
-func (m *Collector) calculateNPStats(curStatsCollection *statsCollection) (npStats, acnpStats, annpStats []cpv1beta.NetworkPolicyStats) {
+func (m *Collector) calculateNPStats(curStatsCollection *statsCollection) (npStats, acnpStats, annpStats, cnpStats []cpv1beta.NetworkPolicyStats) {
 	npStats = calculateDiff(curStatsCollection.networkPolicyStats, m.lastStatsCollection.networkPolicyStats)
 	acnpStats = calculateRuleDiff(curStatsCollection.antreaClusterNetworkPolicyStats, m.lastStatsCollection.antreaClusterNetworkPolicyStats)
 	annpStats = calculateRuleDiff(curStatsCollection.antreaNetworkPolicyStats, m.lastStatsCollection.antreaNetworkPolicyStats)
-	return npStats, acnpStats, annpStats
+	cnpStats = calculateRuleDiff(curStatsCollection.clusterNetworkPolicyStats, m.lastStatsCollection.clusterNetworkPolicyStats)
+	return npStats, acnpStats, annpStats, cnpStats
 }
 
 func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollection) *cpv1beta.NodeStatsSummary {
 	var multicastGroups []cpv1beta.MulticastGroupInfo
 	multicastGroupsUpdated := false
-	npStats, acnpStats, annpStats := m.calculateNPStats(curStatsCollection)
+	npStats, acnpStats, annpStats, cnpStats := m.calculateNPStats(curStatsCollection)
 	if m.multicastEnabled {
 		multicastGroupsUpdated = !isIdenticalMulticastGroupMap(curStatsCollection.multicastGroups, m.lastStatsCollection.multicastGroups)
 		acnpStats, annpStats = m.mergeStatsWithIGMPReports(acnpStats, annpStats)
 		multicastGroups = m.convertMulticastGroups(curStatsCollection.multicastGroups)
 	}
 	// Semantically, reporting networkpolicy statistics with zero length is equal to reporting the same multicastGroupInfo.
-	if len(npStats) == 0 && len(acnpStats) == 0 && len(annpStats) == 0 && !multicastGroupsUpdated {
+	if len(npStats) == 0 && len(acnpStats) == 0 && len(annpStats) == 0 && len(cnpStats) == 0 && !multicastGroupsUpdated {
 		return nil
 	}
 	return &cpv1beta.NodeStatsSummary{
@@ -244,6 +252,7 @@ func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollectio
 		NetworkPolicies:              npStats,
 		AntreaClusterNetworkPolicies: acnpStats,
 		AntreaNetworkPolicies:        annpStats,
+		ClusterNetworkPolicies:       cnpStats,
 		Multicast:                    multicastGroups,
 	}
 }

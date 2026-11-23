@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,10 @@ func (c *FakeStatsV1alpha1) AntreaClusterNetworkPolicyStats() v1alpha1.AntreaClu
 
 func (c *FakeStatsV1alpha1) AntreaNetworkPolicyStats(namespace string) v1alpha1.AntreaNetworkPolicyStatsInterface {
 	return newFakeAntreaNetworkPolicyStats(c, namespace)
+}
+
+func (c *FakeStatsV1alpha1) ClusterNetworkPolicyStatses() v1alpha1.ClusterNetworkPolicyStatsInterface {
+	return newFakeClusterNetworkPolicyStatses(c)
 }
 
 func (c *FakeStatsV1alpha1) MulticastGroups() v1alpha1.MulticastGroupInterface {

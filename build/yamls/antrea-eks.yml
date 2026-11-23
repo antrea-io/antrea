@@ -5801,6 +5801,7 @@ rules:
       - networkpolicystats
       - antreaclusternetworkpolicystats
       - antreanetworkpolicystats
+      - clusternetworkpolicystats
     verbs:
       - get
       - list

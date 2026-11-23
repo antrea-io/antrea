@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,27 @@ message AntreaNetworkPolicyStatsList {
 
   // List of AntreaNetworkPolicyStats.
   repeated AntreaNetworkPolicyStats items = 2;
+}
+
+// ClusterNetworkPolicyStats is the statistics of a Kubernetes ClusterNetworkPolicy
+// (policy.networking.k8s.io). Statistics of the Antrea-native ClusterNetworkPolicy CRD
+// (crd.antrea.io) are exposed as AntreaClusterNetworkPolicyStats instead.
+message ClusterNetworkPolicyStats {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // The traffic stats of the ClusterNetworkPolicy.
+  optional TrafficStats trafficStats = 2;
+
+  // The traffic stats of the ClusterNetworkPolicy, from rule perspective.
+  repeated RuleTrafficStats ruleTrafficStats = 3;
+}
+
+// ClusterNetworkPolicyStatsList is a list of ClusterNetworkPolicyStats.
+message ClusterNetworkPolicyStatsList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  // List of ClusterNetworkPolicyStats.
+  repeated ClusterNetworkPolicyStats items = 2;
 }
 
 // MulticastGroup contains the mapping between multicast group and Pods.
