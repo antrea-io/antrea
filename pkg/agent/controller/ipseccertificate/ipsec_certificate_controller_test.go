@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -63,7 +64,6 @@ func newFakeController(t *testing.T) *fakeController {
 	mockController := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(mockController)
 	fakeClient := fake.NewSimpleClientset()
-	listCSRAction := k8stesting.NewRootListAction(certificatesv1.SchemeGroupVersion.WithResource("certificatesigningrequests"), certificatesv1.SchemeGroupVersion.WithKind("CertificateSigningRequest"), metav1.ListOptions{})
 
 	// add an reactor to fill the Name and UID in the Create request.
 	fakeClient.PrependReactor("create", "certificatesigningrequests", k8stesting.ReactionFunc(
@@ -79,37 +79,20 @@ func newFakeController(t *testing.T) *fakeController {
 	)
 	// add an reactor to honor the fieldsSelector in the List request.
 	fakeClient.PrependReactor("list", "certificatesigningrequests", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		var csrList *certificatesv1.CertificateSigningRequestList
-		// list CSRs using the original reactors.
-		for _, reactor := range fakeClient.Fake.ReactionChain[1:] {
-			if !reactor.Handles(listCSRAction) {
-				continue
-			}
-			handled, ret, err := reactor.React(listCSRAction)
-			if !handled {
-				continue
-			}
-			if err != nil {
-				return false, nil, err
-			}
-			csrList = ret.(*certificatesv1.CertificateSigningRequestList)
-		}
 		actionList, ok := action.(k8stesting.ListActionImpl)
 		if !ok {
 			return true, nil, fmt.Errorf("unexpected action type, expected %T, got %T", k8stesting.ListActionImpl{}, action)
 		}
-		listFieldsSelector := actionList.GetListRestrictions().Fields
-		var filtered []certificatesv1.CertificateSigningRequest
-		for _, c := range csrList.Items {
-			csrSpecificFieldsSet := make(fields.Set)
-			csrSpecificFieldsSet["metadata.name"] = c.Name
-			if listFieldsSelector.Matches(csrSpecificFieldsSet) {
-				filtered = append(filtered, c)
-			}
+		obj, err := fakeClient.Tracker().List(actionList.GetResource(), actionList.GetKind(), actionList.GetNamespace(), actionList.ListOptions)
+		if err != nil {
+			return true, nil, err
 		}
-		return true, &certificatesv1.CertificateSigningRequestList{
-			Items: filtered,
-		}, nil
+		csrList := obj.(*certificatesv1.CertificateSigningRequestList)
+		listFieldsSelector := actionList.GetListRestrictions().Fields
+		csrList.Items = slices.DeleteFunc(csrList.Items, func(c certificatesv1.CertificateSigningRequest) bool {
+			return !listFieldsSelector.Matches(fields.Set{"metadata.name": c.Name})
+		})
+		return true, csrList, nil
 	})
 	// add a reactor to honor the fieldsSelector in the Watch request.
 	fakeClient.PrependWatchReactor(
@@ -311,8 +294,10 @@ func TestController_RotateCertificates(t *testing.T) {
 		)
 		defer watcher.Stop()
 		require.NoError(t, err)
-		// start a fake signer in background to sign CSRs.
-		signCh := make(chan struct{})
+		// start a fake signer in background to sign CSRs. It sends the NotBefore time of each
+		// issued certificate to signCh, so that the test never reads the controller's
+		// certificateKeyPair, which the controller replaces when rotating the certificate.
+		signCh := make(chan time.Time)
 		go func() {
 			defer close(signCh)
 			counter := 0
@@ -322,8 +307,7 @@ func TestController_RotateCertificates(t *testing.T) {
 					csr, ok := ev.Object.(*certificatesv1.CertificateSigningRequest)
 					assert.True(t, ok)
 					// issue a certificate with lifetime of 10 seconds.
-					signCSR(t, fakeController, csr, time.Second*10)
-					signCh <- struct{}{}
+					signCh <- signCSR(t, fakeController, csr, time.Second*10)
 					counter++
 					if counter == 2 {
 						return
@@ -343,17 +327,15 @@ func TestController_RotateCertificates(t *testing.T) {
 			close(stopCh)
 			<-controllerDone
 		}()
-		<-signCh
+		notBefore := <-signCh
 		// Wait for the controller to finish syncing the first certificate.
 		synctest.Wait()
 		require.True(t, fakeController.HasSynced())
-		require.NotNil(t, fakeController.certificateKeyPair)
 
 		// the rotation interval is determined by nextRotationDeadline as notBefore + (notAfter -
 		// notBefore) * k, where k is >= 0.7 and <= 0.9. We would therefore expect the rotation
 		// interval to be between [7, 9] seconds.
 		// Verify that CSR should not be signed before the minimum rotation deadline (7s).
-		notBefore := fakeController.certificateKeyPair.certificate[0].NotBefore
 		time.Sleep(time.Until(notBefore.Add(time.Millisecond * 6999)))
 		select {
 		case <-signCh:
@@ -397,7 +379,7 @@ func createCertificate(
 	publicKey crypto.PublicKey,
 	currentTime time.Time,
 	expirationDuration time.Duration,
-) []byte {
+) ([]byte, *x509.Certificate) {
 	template := newIPsecCertTemplate(t, nodeName, currentTime, currentTime.Add(expirationDuration))
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, publicKey, caKey)
 	require.NoError(t, err)
@@ -406,7 +388,7 @@ func createCertificate(
 	assert.Len(t, certs, 1)
 	encoded, err := certutil.EncodeCertificates(certs...)
 	require.NoError(t, err)
-	return encoded
+	return encoded, certs[0]
 }
 
 func signCSR(
@@ -414,14 +396,14 @@ func signCSR(
 	controller *fakeController,
 	csr *certificatesv1.CertificateSigningRequest,
 	expirationDuration time.Duration,
-) {
+) time.Time {
 	assert.Empty(t, csr.Status.Certificate)
 	block, remain := pem.Decode(csr.Spec.Request)
 	assert.Empty(t, remain)
 	req, err := x509.ParseCertificateRequest(block.Bytes)
 	assert.NoError(t, err)
 
-	newCert := createCertificate(t, req.Subject.CommonName, controller.caCert,
+	newCert, cert := createCertificate(t, req.Subject.CommonName, controller.caCert,
 		controller.caKey, req.PublicKey, controller.clock.Now(), expirationDuration)
 	toUpdate := csr.DeepCopy()
 	toUpdate.Status.Conditions = append(toUpdate.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
@@ -438,6 +420,7 @@ func signCSR(
 		UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	assert.NoError(t, err)
 	t.Logf("Sign CSR %q successfully", csr.Name)
+	return cert.NotBefore
 }
 
 func Test_jitteryDuration(t *testing.T) {
