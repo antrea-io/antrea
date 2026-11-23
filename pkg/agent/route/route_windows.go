@@ -115,6 +115,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	egressEnabled bool, // ignored
 	serviceExternalIPEnabled bool, // ignored
+	bgpPolicyEnabled bool, // ignored
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
