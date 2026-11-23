@@ -87,7 +87,7 @@ func newPacketCapture(fileServerURL string) *crdv1alpha1.PacketCapture {
 		Spec:       crdv1alpha1.PacketCaptureSpec{},
 	}
 	if fileServerURL != "" {
-		pc.Spec.FileServer = &crdv1alpha1.PacketCaptureFileServer{URL: fileServerURL}
+		pc.Spec.FileServer = &crdv1alpha1.PacketCaptureFileServer{URL: fileServerURL, HostPublicKey: append([]byte("\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20"), make([]byte, 32)...)}
 	}
 	return pc
 }
@@ -123,6 +123,22 @@ func TestValidate(t *testing.T) {
 			userInfo:         unauthorizedUserInfo,
 			pc:               newPacketCapture(""),
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:      "SFTP without host public key is rejected",
+			operation: admv1.Create,
+			pc: &crdv1alpha1.PacketCapture{Spec: crdv1alpha1.PacketCaptureSpec{
+				FileServer: &crdv1alpha1.PacketCaptureFileServer{URL: trustedURL},
+			}},
+			expectedResponse: &admv1.AdmissionResponse{Result: &metav1.Status{Message: "invalid host public key: ssh: short read"}},
+		},
+		{
+			name:      "SFTP with malformed host public key is rejected",
+			operation: admv1.Create,
+			pc: &crdv1alpha1.PacketCapture{Spec: crdv1alpha1.PacketCaptureSpec{
+				FileServer: &crdv1alpha1.PacketCaptureFileServer{URL: trustedURL, HostPublicKey: []byte("abc")},
+			}},
+			expectedResponse: &admv1.AdmissionResponse{Result: &metav1.Status{Message: "invalid host public key: ssh: short read"}},
 		},
 		{
 			name:             "file server with authorized user is allowed",

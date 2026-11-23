@@ -124,6 +124,19 @@ requires that permission as well. An update which leaves both fields untouched d
 kubectl create secret generic support-bundle-secret  --from-literal=username='your-sftp-username'  --from-literal=password='your-sftp-password'
 ```
 
+For SFTP uploads, set `hostPublicKey` to the base64-encoded public key in SSH wire
+format. Obtain it from a trusted server administrator or a verified `known_hosts` entry;
+the second field of an OpenSSH public key line is the required value. For example:
+
+```bash
+SFTP_HOST_PUBLIC_KEY=$(awk '{print $2}' /path/to/verified/ssh_host_ed25519_key.pub)
+```
+
+Before upgrading to a version that requires host key verification, update manifests and
+existing SFTP SupportBundleCollection resources to include the verified key. Started or
+completed collections cannot be updated; recreate them with the key if another collection
+is needed. Uploads without a key will fail after the upgrade.
+
 Then we can apply the following YAML files. The first one is to collect support
 bundle on K8s Nodes "worker1" and "worker2": "worker1" is specified by the name,
 and "worker2" is specified by matching label "role: workers". The second one is to
@@ -148,8 +161,7 @@ spec:
     url: sftp://yourtestdomain.com:22/root/test
     # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
     # Get this key from your SSH server configuration, or from a known_hosts file.
-    # If omitted, any host key will be accepted, which is insecure and not recommended.
-    # hostPublicKey: ...
+    hostPublicKey: ${SFTP_HOST_PUBLIC_KEY}
   authentication:
     authType: "BasicAuthentication"
     authSecret:
@@ -176,8 +188,7 @@ spec:
     url: yourtestdomain.com:22/root/test # Scheme sftp can be omitted. The url of "$controlplane_node_ip:30010/upload" is used if deployed with sftp-deployment.yml.
     # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
     # Get this key from your SSH server configuration, or from a known_hosts file.
-    # If omitted, any host key will be accepted, which is insecure and not recommended.
-    # hostPublicKey: ...
+    hostPublicKey: ${SFTP_HOST_PUBLIC_KEY}
   authentication:
     authType: "BasicAuthentication"
     authSecret:

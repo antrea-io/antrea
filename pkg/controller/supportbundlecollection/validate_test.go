@@ -90,6 +90,7 @@ func newAuthSecretConfig(name string, authType crdv1alpha1.BundleServerAuthType,
 		secretName:      authSecretName,
 		secretNamespace: secretNamespace,
 		fileServerURL:   fileServerURL,
+		hostPublicKey:   append([]byte("\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20"), make([]byte, 32)...),
 	}
 }
 
@@ -286,6 +287,24 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					{Type: crdv1alpha1.CollectionCompleted, Status: metav1.ConditionTrue},
 				},
 			},
+			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:             "create SFTP without host public key",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{name: name, authType: crdv1alpha1.BasicAuthentication,
+				fileServerURL: "sftp://example.com:22/upload"},
+			expectedResponse: &adminv1.AdmissionResponse{Result: &metav1.Status{Message: "invalid host public key: ssh: short read"}},
+		}, {
+			name:             "create SFTP without scheme or host public key",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{name: name, authType: crdv1alpha1.BasicAuthentication,
+				fileServerURL: "example.com:22/upload"},
+			expectedResponse: &adminv1.AdmissionResponse{Result: &metav1.Status{Message: "invalid host public key: ssh: short read"}},
+		}, {
+			name:             "create HTTPS without host public key",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{name: name, authType: crdv1alpha1.BasicAuthentication,
+				fileServerURL: "https://example.com/upload"},
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
 		}, {
 			name:             "create with host public key",

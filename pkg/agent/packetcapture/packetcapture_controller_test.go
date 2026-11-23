@@ -125,6 +125,10 @@ var (
 	}
 )
 
+func testHostPublicKey() []byte {
+	return append([]byte("\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20"), make([]byte, 32)...)
+}
+
 func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 	result := &crdv1alpha1.PacketCapture{
 		ObjectMeta: metav1.ObjectMeta{Name: name, UID: types.UID(fmt.Sprintf("uid-%s", name))},
@@ -150,7 +154,8 @@ func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 				Protocol: &icmpProto,
 			},
 			FileServer: &crdv1alpha1.PacketCaptureFileServer{
-				URL: testFTPUrl,
+				URL:           testFTPUrl,
+				HostPublicKey: testHostPublicKey(),
 			},
 			Timeout:      &testCaptureTimeout,
 			CapturePoint: crdv1alpha1.CapturePointDestination,
@@ -388,7 +393,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 						Protocol: &icmpProto,
 					},
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
-						URL: "sftp://127.0.0.1:22/aaa",
+						URL:           "sftp://127.0.0.1:22/aaa",
+						HostPublicKey: testHostPublicKey(),
 					},
 					Timeout:      &testCaptureTimeout,
 					CapturePoint: crdv1alpha1.CapturePointDestination,
@@ -454,7 +460,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 						Protocol: &invalidProto,
 					},
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
-						URL: "sftp://127.0.0.1:22/aaa",
+						URL:           "sftp://127.0.0.1:22/aaa",
+						HostPublicKey: testHostPublicKey(),
 					},
 					Timeout: &testCaptureTimeout,
 				},
@@ -998,9 +1005,10 @@ func TestUploadPackets(t *testing.T) {
 			expectedErr:     "host key mismatch",
 		},
 		{
-			name:            "ignore host key",
+			name:            "missing host key",
 			serverHostKey:   hostKey1,
 			expectedHostKey: nil,
+			expectedErr:     "invalid host public key",
 		},
 		{
 			name:            "invalid key format",

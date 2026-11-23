@@ -177,8 +177,7 @@ type BundleFileServer struct {
 	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
 	URL string `json:"url"`
 	// HostPublicKey specifies the only host public key that will be accepted when connecting to
-	// the file server. If omitted, any host key will be accepted, which is not recommended.
-	// For SFTP, the key must be formatted for use in the SSH wire protocol according to RFC 4253, section 6.6.
+	// the SFTP server. It is required for SFTP and must use the SSH wire format defined in RFC 4253, section 6.6.
 	HostPublicKey []byte `json:"hostPublicKey,omitempty"`
 }
 
@@ -502,8 +501,7 @@ type PacketCaptureFileServer struct {
 	// e.g., https://api.example.com:8443/v1/packets/. Currently only `sftp` protocol is supported.
 	URL string `json:"url"`
 	// HostPublicKey specifies the only host public key that will be accepted when connecting to
-	// the file server. If omitted, any host key will be accepted, which is not recommended.
-	// For SFTP, the key must be formatted for use in the SSH wire protocol according to RFC 4253, section 6.6.
+	// the SFTP server. It is required for SFTP and must use the SSH wire format defined in RFC 4253, section 6.6.
 	HostPublicKey []byte `json:"hostPublicKey,omitempty"`
 }
 

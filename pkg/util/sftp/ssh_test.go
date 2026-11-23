@@ -48,10 +48,14 @@ func TestGetSSHClientConfig(t *testing.T) {
 			expectedErr: "invalid host public key",
 		},
 		{
-			name:            "ignore host key",
-			hostKey:         nil,
-			rsaKeyValid:     true,
-			ed25519KeyValid: true,
+			name:        "missing host key",
+			hostKey:     nil,
+			expectedErr: "invalid host public key",
+		},
+		{
+			name:        "empty host key",
+			hostKey:     []byte{},
+			expectedErr: "invalid host public key",
 		},
 		{
 			name:                      "rsa key only",
