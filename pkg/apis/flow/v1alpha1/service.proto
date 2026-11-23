@@ -280,4 +280,19 @@ message GetFlowsResponse {
   // resuming client learns whether its own token was honored: an epoch
   // different from the one it sent means it was not.
   ResumeToken resume_token = 3;
+  // Request features this server implements. Sent only in the first response
+  // of a stream, before any flows. Each entry is a case-sensitive protobuf
+  // field path. The currently defined entries are:
+  //   GetFlowsRequest.cluster_wide
+  //   GetFlowsRequest.namespaces
+  //   GetFlowsRequest.resume
+  //   FlowFilter.network_policy_outcomes
+  //
+  // The original GetFlowsRequest fields (filters, since, max_count, follow)
+  // are the baseline and need no entry. A client should rely on an extension
+  // only if its entry is present. An empty list, including from a server
+  // built before this field existed, makes no claim about extension support.
+  // Clients should ignore entries they do not recognize. Capabilities apply
+  // to this stream only: another stream may reach a different server.
+  repeated string supported_request_features = 4;
 }
