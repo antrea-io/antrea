@@ -503,6 +503,10 @@ func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) ([]string, st
 	if !allowed {
 		return warnings, reason, allowed
 	}
+	reason, allowed = v.validateRuleAction(ingress, egress)
+	if !allowed {
+		return warnings, reason, allowed
+	}
 	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)
 	if !allowed {
 		return warnings, reason, allowed
@@ -795,6 +799,21 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 	if ok := v.tierExists(tier); !ok {
 		reason := fmt.Sprintf("tier %s does not exist", tier)
 		return reason, false
+	}
+	return "", true
+}
+
+// validateRuleAction validates that an action is specified for each policy rule.
+func (v *antreaPolicyValidator) validateRuleAction(ingress, egress []crdv1beta1.Rule) (string, bool) {
+	for _, rule := range ingress {
+		if rule.Action == nil {
+			return "action must be specified for policy rules", false
+		}
+	}
+	for _, rule := range egress {
+		if rule.Action == nil {
+			return "action must be specified for policy rules", false
+		}
 	}
 	return "", true
 }

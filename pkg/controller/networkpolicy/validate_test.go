@@ -121,6 +121,226 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			expectedReason: "`Pass` action should not be set for Baseline Tier policy rules",
 		},
 		{
+			name: "acnp-ingress-baseline-nil-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-ingress-baseline-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Baseline",
+					Ingress: []crdv1beta1.Rule{
+						{
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo2": "bar2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name: "acnp-ingress-application-nil-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-ingress-application-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Application",
+					Ingress: []crdv1beta1.Rule{
+						{
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo2": "bar2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name: "acnp-egress-baseline-nil-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-egress-baseline-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Baseline",
+					Egress: []crdv1beta1.Rule{
+						{
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo2": "bar2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name: "acnp-egress-multicast-nil-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-egress-multicast-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Application",
+					Egress: []crdv1beta1.Rule{
+						{
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "224.0.0.0/4",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name: "acnp-multicast-igmp-nil-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-multicast-igmp-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Application",
+					Ingress: []crdv1beta1.Rule{
+						{
+							Protocols: []crdv1beta1.NetworkPolicyProtocol{
+								{
+									IGMP: &crdv1beta1.IGMPProtocol{
+										IGMPType: &query,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name:         "acnp-l7protocols-nil-action",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-l7protocols-nil-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Application",
+					Ingress: []crdv1beta1.Rule{
+						{
+							L7Protocols: []crdv1beta1.L7Protocol{
+								{
+									HTTP: &crdv1beta1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "action must be specified for policy rules",
+		},
+		{
+			name: "acnp-ingress-valid-action",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-ingress-valid-action",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Tier: "Application",
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo2": "bar2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "",
+		},
+		{
 			name: "acnp-egress-baseline-pass-action",
 			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1872,7 +2092,8 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 					},
 					Ingress: []crdv1beta1.Rule{
 						{
-							Name: "ingressType8",
+							Action: &allowAction,
+							Name:   "ingressType8",
 							Protocols: []crdv1beta1.NetworkPolicyProtocol{
 								{
 									ICMP: &crdv1beta1.ICMPProtocol{
@@ -1885,7 +2106,8 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 					},
 					Egress: []crdv1beta1.Rule{
 						{
-							Name: "egressWithICMP",
+							Action: &allowAction,
+							Name:   "egressWithICMP",
 							Protocols: []crdv1beta1.NetworkPolicyProtocol{
 								{
 									ICMP: &crdv1beta1.ICMPProtocol{},
