@@ -31,6 +31,7 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
@@ -52,7 +53,29 @@ var (
 
 // NewREST returns a REST object that will work against API services.
 func NewREST(nodeInformer coreinformers.NodeInformer) *REST {
-	return newRESTWithClock(clock.RealClock{}, nodeInformer.Lister())
+	r := newRESTWithClock(clock.RealClock{}, nodeInformer.Lister())
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		DeleteFunc: r.deleteNodeLatencyStats,
+	})
+	return r
+}
+
+func (r *REST) deleteNodeLatencyStats(obj interface{}) {
+	name, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get deleted Node name")
+		return
+	}
+	summary, exists, err := r.indexer.GetByKey(name)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get Node latency stats", "node", name)
+		return
+	}
+	if exists {
+		if err := r.indexer.Delete(summary); err != nil {
+			klog.ErrorS(err, "Failed to delete Node latency stats", "node", name)
+		}
+	}
 }
 
 func newRESTWithClock(clock clock.Clock, nodeLister corelisters.NodeLister) *REST {

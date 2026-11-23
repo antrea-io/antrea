@@ -28,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -290,6 +292,29 @@ func TestRESTCreateRejectsUnknownReportingNode(t *testing.T) {
 	assert.True(t, errors.IsNotFound(err))
 	_, err = r.Get(context.Background(), summary.Name, nil)
 	assert.True(t, errors.IsNotFound(err))
+}
+
+func TestRESTRemovesStatsWhenNodeDeleted(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
+	factory := informers.NewSharedInformerFactory(client, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+	r := NewREST(nodeInformer)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	factory.Start(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, nodeInformer.Informer().HasSynced))
+
+	_, err := r.Create(ctx, &statsv1alpha1.NodeLatencyStats{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}, nil, nil)
+	require.NoError(t, err)
+	_, err = r.Get(ctx, "node1", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, client.CoreV1().Nodes().Delete(ctx, "node1", metav1.DeleteOptions{}))
+	require.Eventually(t, func() bool {
+		_, err := r.Get(ctx, "node1", nil)
+		return errors.IsNotFound(err)
+	}, time.Second, 10*time.Millisecond)
 }
 
 func newNodeLister(t *testing.T, nodeNames ...string) corelisters.NodeLister {
