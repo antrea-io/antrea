@@ -830,8 +830,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	// default tunnel port. So for now, we just reject configurations that
 	// request a GRE tunnel when the Node network supports IPv6.
 	// See https://github.com/antrea-io/antrea/issues/3150
-	if (i.networkConfig.TrafficEncapMode.SupportsEncap() ||
-		i.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && i.networkConfig.EnableEgress) &&
+	if (i.networkConfig.TrafficEncapMode.SupportsEncap() || i.networkConfig.NeedsTunnelInNoEncapMode()) &&
 		i.networkConfig.TunnelType == ovsconfig.GRETunnel &&
 		i.nodeConfig.NodeIPv6Addr != nil {
 		return fmt.Errorf("GRE tunnel type is not supported for IPv6 overlay")
@@ -1258,8 +1257,7 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
 	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() ||
-		i.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && i.networkConfig.EnableEgress {
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() || i.networkConfig.NeedsTunnelInNoEncapMode() {
 		// See comment for ovsTunnelMaxMTU constant above.
 		mtu = min(mtu, ovsTunnelMaxMTU)
 	}

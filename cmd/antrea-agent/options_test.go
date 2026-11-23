@@ -88,6 +88,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 		antreaProxyConfig               agentconfig.AntreaProxyConfig
 		expectedErr                     string
 		expectedDefaultLoadBalancerMode config.LoadBalancerMode
+		expectedEnableDSR               bool
 	}{
 		{
 			name:             "default",
@@ -118,14 +119,60 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			expectedErr:      "LoadBalancerMode DSR requires feature gate LoadBalancerModeDSR to be enabled",
 		},
 		{
+			name:       "DSR enabled in noEncap mode",
+			enabledDSR: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				ProxyAll:                true,
+				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			},
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:       "DSR enabled in hybrid mode",
+			enabledDSR: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				ProxyAll:                true,
+				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			},
+			trafficEncapMode:                config.TrafficEncapModeHybrid,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:       "DSR feature gate with proxyAll and NAT as the default mode",
+			enabledDSR: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				ProxyAll:                true,
+				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
+			},
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeNAT,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:       "DSR feature gate without proxyAll",
+			enabledDSR: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
+			},
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeNAT,
+		},
+		{
 			name:       "unsupported encap mode",
 			enabledDSR: true,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
 				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
 			},
-			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedErr:      "LoadBalancerMode DSR requires encap mode",
+			trafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+			expectedErr:      "LoadBalancerMode DSR is not applicable to the networkPolicyOnly mode",
 		},
 		{
 			name:             "invalid LoadBalancerMode",
@@ -173,6 +220,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 				require.ErrorContains(t, err, tt.expectedErr)
 			}
 			assert.Equal(t, tt.expectedDefaultLoadBalancerMode, o.defaultLoadBalancerMode)
+			assert.Equal(t, tt.expectedEnableDSR, o.enableDSR)
 		})
 	}
 }
