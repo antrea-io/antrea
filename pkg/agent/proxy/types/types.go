@@ -41,6 +41,8 @@ type ServiceInfo struct {
 	IsNested bool
 	// The load balancer mode specified in annotations.
 	LoadBalancerMode *config.LoadBalancerMode
+	// The DSR dispatch specified in annotations.
+	DSRDispatch *config.DSRDispatch
 }
 
 func getLoadBalancerMode(service *corev1.Service) *config.LoadBalancerMode {
@@ -55,11 +57,25 @@ func getLoadBalancerMode(service *corev1.Service) *config.LoadBalancerMode {
 	return nil
 }
 
+func getDSRDispatch(service *corev1.Service) *config.DSRDispatch {
+	if dispatchStr, exists := service.Annotations[types.ServiceDSRDispatchAnnotationKey]; exists {
+		ok, dispatch := config.GetDSRDispatchFromStr(dispatchStr)
+		if !ok {
+			klog.ErrorS(nil, "The Service's DSR dispatch annotation is invalid", "Service", klog.KObj(service),
+				"dispatch", dispatchStr)
+			return nil
+		}
+		return &dispatch
+	}
+	return nil
+}
+
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServicePortInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServicePortInfo: baseInfo}
 	info.IsNested = mccommon.IsMulticlusterService(service)
 	info.LoadBalancerMode = getLoadBalancerMode(service)
+	info.DSRDispatch = getDSRDispatch(service)
 	if utilnet.IsIPv6(baseInfo.ClusterIP()) {
 		info.OFProtocol = openflow.ProtocolTCPv6
 		switch port.Protocol {

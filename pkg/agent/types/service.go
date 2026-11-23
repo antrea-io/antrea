@@ -17,6 +17,7 @@ package types
 import (
 	"net"
 
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
@@ -37,6 +38,9 @@ type ServiceConfig struct {
 	IsNested bool
 	// IsDSR indicates that whether the Service works in Direct Server Return mode.
 	IsDSR bool
+	// DSRDispatch is the dispatch which the Service selects with its annotation for the DSR mode. It is nil when the
+	// Service uses the default dispatch. It is only meaningful when IsDSR is true.
+	DSRDispatch *config.DSRDispatch
 }
 
 func (c *ServiceConfig) TrafficPolicyGroupID() openflow.GroupIDType {
