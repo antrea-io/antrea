@@ -254,14 +254,17 @@ type BGPPeerResponse struct {
 	Peer  string `json:"peer,omitempty"`
 	ASN   int32  `json:"asn,omitempty"`
 	State string `json:"state,omitempty"`
+	// BFDSessionState is the state of the BFD session towards the peer. It's empty when BFD is not enabled for the
+	// peer.
+	BFDSessionState string `json:"bfdSessionState,omitempty"`
 }
 
 func (r BGPPeerResponse) GetTableHeader() []string {
-	return []string{"PEER", "ASN", "STATE"}
+	return []string{"PEER", "ASN", "STATE", "BFD"}
 }
 
 func (r BGPPeerResponse) GetTableRow(_ int) []string {
-	return []string{r.Peer, strconv.Itoa(int(r.ASN)), r.State}
+	return []string{r.Peer, strconv.Itoa(int(r.ASN)), r.State, r.BFDSessionState}
 }
 
 func (r BGPPeerResponse) SortRows() bool {
