@@ -1736,8 +1736,15 @@ func TestGetFlows_HandshakeAndSequenceNumbers(t *testing.T) {
 		assert.Zero(t, handshake.GetDroppedCount())
 		assert.NotEmpty(t, handshake.GetResumeToken().GetStreamEpoch())
 		assert.EqualValues(t, -1, handshake.GetResumeToken().GetSequenceNumber(), "nothing accounted for before the first flow")
+		assert.Equal(t, []string{
+			"GetFlowsRequest.cluster_wide",
+			"GetFlowsRequest.namespaces",
+			"GetFlowsRequest.resume",
+			"FlowFilter.network_policy_outcomes",
+		}, handshake.GetSupportedRequestFeatures())
 
 		assert.Equal(t, handshake.GetResumeToken().GetStreamEpoch(), data.GetResumeToken().GetStreamEpoch(), "epoch is stable across a stream's lifetime")
+		assert.Empty(t, data.GetSupportedRequestFeatures())
 		require.Len(t, data.GetFlows(), 2)
 		assert.EqualValues(t, 1, data.GetResumeToken().GetSequenceNumber(), "positions 0 and 1 both accounted for")
 	})
@@ -2882,8 +2889,9 @@ func TestRun_StopEndsStreamsOfReadingClients(t *testing.T) {
 		client := flowpb.NewFlowStreamServiceClient(srv.newClient(t))
 		stream, err := client.GetFlows(t.Context(), &flowpb.GetFlowsRequest{Follow: true})
 		require.NoError(t, err)
-		_, err = stream.Recv()
+		handshake, err := stream.Recv()
 		require.NoError(t, err)
+		assert.Contains(t, handshake.GetSupportedRequestFeatures(), "FlowFilter.network_policy_outcomes")
 
 		buf.Produce(newFlow("before-stop", &flowpb.Kubernetes{}))
 		start := time.Now()

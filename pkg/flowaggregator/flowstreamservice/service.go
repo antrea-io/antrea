@@ -437,12 +437,19 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	)
 
 	// The stream is live. This first response confirms that authentication and authorization
-	// succeeded, and carries the stream epoch, from which a resuming client learns whether its
-	// resume was honored. Clients recognize it as the first response on the stream. Flows is always
-	// empty here, and nothing has been read yet: the token names the position just before where the
-	// consumer starts, and dropped_count is left 0 for the same reason rather than as a measurement.
+	// succeeded, and carries the stream epoch and supported request features. A resuming client
+	// learns from the epoch whether its resume was honored. Clients recognize it as the first
+	// response on the stream. Flows is always empty here, and nothing has been read yet: the token
+	// names the position just before where the consumer starts, and dropped_count is left 0 for
+	// the same reason rather than as a measurement.
 	if err := stream.Send(&flowpb.GetFlowsResponse{
 		ResumeToken: &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: resumePos},
+		SupportedRequestFeatures: []string{
+			"GetFlowsRequest.cluster_wide",
+			"GetFlowsRequest.namespaces",
+			"GetFlowsRequest.resume",
+			"FlowFilter.network_policy_outcomes",
+		},
 	}); err != nil {
 		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
 		return err
