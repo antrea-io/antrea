@@ -471,6 +471,40 @@ func TestUpdateGroup(t *testing.T) {
 			assert.Equal(t, tt.expectedGroup, actualGroup)
 		})
 	}
+
+	// Regression test: ipBlocksUpdated() previously returned whether the old and new IPBlocks
+	// were equal instead of whether they differed, so an IPBlocks-only change was mistaken for no
+	// change and silently dropped. This needs its own starting Group, already in IPBlocks mode on
+	// both sides, since processGroup returns early on IPBlocks and never sets Selector, so reusing
+	// testG (selector-based) would also flip selectorUpdated() and mask the regression.
+	t.Run("g-update-ip-block-only-change", func(t *testing.T) {
+		ipBlockCIDR1 := "10.0.0.0/24"
+		ipBlockCIDR2 := "10.0.1.0/24"
+		controlplaneIPNet2, _ := cidrStrToIPNet(ipBlockCIDR2)
+		_, ipNet2, _ := net.ParseCIDR(ipBlockCIDR2)
+		baseG := crdv1beta1.Group{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+			Spec: crdv1beta1.GroupSpec{
+				IPBlocks: []crdv1beta1.IPBlock{
+					{CIDR: ipBlockCIDR1},
+				},
+			},
+		}
+		updatedG := &crdv1beta1.Group{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+			Spec: crdv1beta1.GroupSpec{
+				IPBlocks: []crdv1beta1.IPBlock{
+					{CIDR: ipBlockCIDR2},
+				},
+			},
+		}
+		npc.addGroup(&baseG)
+		npc.updateGroup(&baseG, updatedG)
+		actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
+		actualGroup := actualGroupObj.(*antreatypes.Group)
+		assert.Equal(t, []controlplane.IPBlock{{CIDR: *controlplaneIPNet2}}, actualGroup.IPBlocks, "internal Group's IPBlocks should reflect the update")
+		assert.Equal(t, []*net.IPNet{ipNet2}, actualGroup.IPNets, "internal Group's IPNets should reflect the update")
+	})
 }
 
 func TestDeleteG(t *testing.T) {
