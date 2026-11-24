@@ -329,6 +329,12 @@ func TestReportHeartbeatFiltering(t *testing.T) {
 	after := before.DeepCopy()
 	after.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(time.Minute))
 	assert.False(t, reportNeedsSync(before, after, now.Add(time.Minute)))
+	futureHeartbeat := before.DeepCopy()
+	futureHeartbeat.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(2 * time.Minute))
+	recoveredHeartbeat := futureHeartbeat.DeepCopy()
+	recoveredHeartbeat.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now)
+	assert.True(t, reportNeedsSync(futureHeartbeat, recoveredHeartbeat, now),
+		"Recovery from a future-skewed heartbeat must refresh readiness promptly")
 	for _, tt := range []struct {
 		name   string
 		change func(*crdv1beta1.AntreaAgentInfo)

@@ -222,7 +222,7 @@ check `Ready=True` for that same generation to determine whether it has been rea
 
 The Agent reports secondary network realization directly in `AntreaAgentInfo.secondaryNetwork`,
 including when the bridge is configured statically without AntreaNodeConfig enabled.
-`source` identifies the configuration used for reconciliation: `AgentConfig` for a static
+`configSource` identifies the configuration used for reconciliation: `AgentConfig` for a static
 Agent bridge, or `AntreaNodeConfig` for an ANC. It is omitted when no configuration source
 is available. The selected ANC name and UID are reported separately in
 `AntreaAgentInfo.antreaNodeConfig`. Its `Ready` Condition describes realization of the
@@ -249,7 +249,7 @@ current Node UID, ANC UID, and generation. Nodes without a report still count to
 `desiredNodes`; they do not count toward `realizedNodes`.
 
 Static bridge readiness and ANC readiness are independent. A successfully reconciled
-static bridge reports secondary network `Ready=True` with `source: AgentConfig`. If a
+static bridge reports secondary network `Ready=True` with `configSource: AgentConfig`. If a
 matching ANC is overridden by that static configuration, the Controller reports ANC
 `Ready=False` with reason `OverriddenByStaticConfig` instead of counting the Node as realized.
 ANC `Ready` covers the Nodes for which this ANC takes precedence. Overlapping node selectors
@@ -339,7 +339,7 @@ antreaNodeConfig:
     reason: Reconciled
     message: ""
 secondaryNetwork:
-  source: AntreaNodeConfig
+  configSource: AntreaNodeConfig
   currentBridge: br1
   desiredBridge: br1
   conditions:

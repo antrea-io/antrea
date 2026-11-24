@@ -93,24 +93,59 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	}
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	monitor.syncAgentCRD(ctx)
+	retryDelay := time.Second
+	retryTimer := time.NewTimer(time.Hour)
+	if !retryTimer.Stop() {
+		<-retryTimer.C
+	}
+	var retry <-chan time.Time
+	syncAndScheduleRetry := func() {
+		if monitor.syncAgentCRD(ctx) {
+			retryDelay = time.Second
+			retry = nil
+			if !retryTimer.Stop() {
+				select {
+				case <-retryTimer.C:
+				default:
+				}
+			}
+			return
+		}
+		if !retryTimer.Stop() {
+			select {
+			case <-retryTimer.C:
+			default:
+			}
+		}
+		retryTimer.Reset(retryDelay)
+		retry = retryTimer.C
+		if retryDelay < time.Minute/2 {
+			retryDelay *= 2
+		} else {
+			retryDelay = time.Minute
+		}
+	}
+	defer retryTimer.Stop()
+	syncAndScheduleRetry()
 	for {
 		select {
 		case <-featureUpdates:
 		case <-targetUpdates:
 		case <-ticker.C:
+		case <-retry:
+			retry = nil
 		case <-stopCh:
 			return
 		}
-		monitor.syncAgentCRD(ctx)
+		syncAndScheduleRetry()
 	}
 }
 
-func (monitor *agentMonitor) syncAgentCRD(ctx context.Context) {
+func (monitor *agentMonitor) syncAgentCRD(ctx context.Context) bool {
 	var err error
 	if monitor.agentCRD != nil {
 		if monitor.agentCRD, err = monitor.updateAgentCRD(ctx, true); err == nil {
-			return
+			return true
 		}
 		klog.ErrorS(err, "Failed to partially update agent monitoring CRD")
 		monitor.agentCRD = nil
@@ -120,14 +155,16 @@ func (monitor *agentMonitor) syncAgentCRD(ctx context.Context) {
 	if err != nil {
 		klog.ErrorS(err, "Failed to get agent monitoring CRD")
 		monitor.agentCRD = nil
-		return
+		return false
 	}
 
 	monitor.agentCRD, err = monitor.updateAgentCRD(ctx, false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to entirely update agent monitoring CRD")
 		monitor.agentCRD = nil
+		return false
 	}
+	return true
 }
 
 // getAgentCRD is used to check the existence of agent monitoring CRD.
@@ -196,7 +233,7 @@ func (monitor *agentMonitor) updateAgentCRD(ctx context.Context, partial bool) (
 		}
 		monitor.agentCRD.SecondaryNetwork = report
 	}
-	monitor.assembleAntreaNodeConfigStatus(snapshot, featureResult, previousANC)
+	monitor.assembleAntreaNodeConfigStatus(snapshot, featureResult, previousReady, previousANC)
 	monitor.agentCRD.APICABundle = monitor.apiCertData
 	klog.V(2).InfoS("Updating agent monitoring CRD", "name", klog.KObj(monitor.agentCRD), "partial", partial)
 	return monitor.client.CrdV1beta1().AntreaAgentInfos().Update(ctx, monitor.agentCRD, metav1.UpdateOptions{})

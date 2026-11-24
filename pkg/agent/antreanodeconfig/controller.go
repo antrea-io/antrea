@@ -208,12 +208,14 @@ func (c *Controller) syncSnapshot() error {
 		return nil
 	}
 
+	previous := c.currentSnapshot.Load()
+	c.currentSnapshot.Store(next)
 	if !c.notifier.Notify(payload) {
+		c.currentSnapshot.Store(previous)
 		return fmt.Errorf("notifier rejected AntreaNodeConfig snapshot update")
 	}
 
 	c.lastNotified = payload
-	c.currentSnapshot.Store(next)
 	select {
 	case c.snapshotUpdates <- struct{}{}:
 	default:

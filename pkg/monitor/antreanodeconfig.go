@@ -24,7 +24,7 @@ import (
 )
 
 func (monitor *agentMonitor) assembleAntreaNodeConfigStatus(snapshot *antreanodeconfig.Snapshot,
-	result *agenttypes.SecondaryNetworkStatus, previous *v1beta1.AntreaNodeConfigStatus) {
+	result *agenttypes.SecondaryNetworkStatus, previousReady *metav1.Condition, previous *v1beta1.AntreaNodeConfigStatus) {
 	monitor.agentCRD.AntreaNodeConfig = nil
 	report := monitor.agentCRD.SecondaryNetwork
 	var ready *metav1.Condition
@@ -42,7 +42,7 @@ func (monitor *agentMonitor) assembleAntreaNodeConfigStatus(snapshot *antreanode
 
 	// A public feature result with ANC source belongs to the common target. Its
 	// internal UID must match too: generations restart when an ANC is recreated.
-	if report != nil && report.Source == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
+	if report != nil && report.ConfigSource == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
 		(target == nil || result == nil || result.ConfigUID != target.UID || ready == nil ||
 			ready.ObservedGeneration != generation) {
 		condition := metav1.Condition{Type: "Ready", Status: metav1.ConditionUnknown,
@@ -50,13 +50,14 @@ func (monitor *agentMonitor) assembleAntreaNodeConfigStatus(snapshot *antreanode
 		if !available {
 			condition.Message = "AntreaNodeConfig snapshot is unavailable"
 		}
-		if ready != nil {
-			report.Conditions = []metav1.Condition{*ready}
+		report.Conditions = nil
+		if previousReady != nil {
+			report.Conditions = []metav1.Condition{*previousReady}
 		}
 		meta.SetStatusCondition(&report.Conditions, condition)
 		report.CurrentBridge, report.DesiredBridge = "", ""
 		if target == nil {
-			report.Source = ""
+			report.ConfigSource = ""
 		}
 		ready = meta.FindStatusCondition(report.Conditions, "Ready")
 	}
@@ -66,12 +67,12 @@ func (monitor *agentMonitor) assembleAntreaNodeConfigStatus(snapshot *antreanode
 
 	contribution := metav1.Condition{Status: metav1.ConditionUnknown, ObservedGeneration: generation}
 	switch {
-	case report != nil && report.Source == v1beta1.SecondaryNetworkConfigSourceAgentConfig:
+	case report != nil && report.ConfigSource == v1beta1.SecondaryNetworkConfigSourceAgentConfig:
 		contribution.Status, contribution.Reason = metav1.ConditionFalse, "OverriddenByStaticConfig"
 	case ready != nil && ready.Status == metav1.ConditionFalse &&
 		(ready.Reason == "FeatureDisabled" || ready.Reason == "UnsupportedNode"):
 		contribution.Status = metav1.ConditionFalse
-	case report != nil && report.Source == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
+	case report != nil && report.ConfigSource == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
 		result != nil && result.ConfigUID == target.UID && ready != nil && ready.ObservedGeneration == generation:
 		contribution = *ready
 	}

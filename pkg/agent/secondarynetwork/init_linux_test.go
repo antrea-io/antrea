@@ -487,7 +487,7 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 			assert.Equal(t, desired, c.effectiveBridgeCfg)
 			report := c.GetSecondaryNetworkStatus()
 			require.NotNil(t, report)
-			assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.Source)
+			assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.ConfigSource)
 			assert.Empty(t, report.ConfigUID)
 			assert.Equal(t, brNew, report.CurrentBridge)
 			assert.Equal(t, brNew, report.DesiredBridge)

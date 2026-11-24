@@ -19,7 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -221,11 +223,11 @@ func TestSyncAgentSecondaryNetworkStatusSchema(t *testing.T) {
 		{name: "disabled ignores provider", report: readySecondaryNetworkReport()},
 		{name: "enabled nil provider", enabled: true, nilProvider: true},
 		{name: "enabled nil report", enabled: true},
-		{name: "missing feature", enabled: true, report: &v1beta1.SecondaryNetworkStatus{Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}},
+		{name: "missing feature", enabled: true, report: &v1beta1.SecondaryNetworkStatus{ConfigSource: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}},
 		{name: "nil conditions", enabled: true, report: &v1beta1.SecondaryNetworkStatus{}},
 		{name: "empty conditions", enabled: true, report: &v1beta1.SecondaryNetworkStatus{Conditions: []metav1.Condition{}}},
 		{name: "other condition without Ready", enabled: true, report: &v1beta1.SecondaryNetworkStatus{
-			Source:        v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
+			ConfigSource:  v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
 			CurrentBridge: "br-unconfirmed",
 			Conditions:    []metav1.Condition{{Type: "Other", Status: metav1.ConditionTrue, ObservedGeneration: 9}},
 		}},
@@ -293,7 +295,7 @@ func TestSyncAgentSecondaryNetworkStatusSchema(t *testing.T) {
 
 func readySecondaryNetworkReport() *v1beta1.SecondaryNetworkStatus {
 	return &v1beta1.SecondaryNetworkStatus{
-		Source:        v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
+		ConfigSource:  v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
 		CurrentBridge: "br-current",
 		Conditions: []metav1.Condition{{Type: string(v1beta1.SecondaryNetworkConditionReady), Status: metav1.ConditionTrue,
 			ObservedGeneration: 2, Reason: "Reconciled", LastTransitionTime: metav1.Now()}},
@@ -329,6 +331,28 @@ func TestSyncAgentSecondaryNetworkStatusNodeIdentity(t *testing.T) {
 			assert.Equal(t, metav1.ConditionUnknown, report.Conditions[0].Status)
 		})
 	}
+}
+
+func TestAgentMonitorRetriesFailedPublication(t *testing.T) {
+	info := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"}}
+	client := fakeclientset.NewSimpleClientset(info)
+	var updates atomic.Int32
+	client.PrependReactor("update", "antreaagentinfos", func(cgtesting.Action) (bool, runtime.Object, error) {
+		if updates.Add(1) == 1 {
+			return true, nil, errors.New("temporary API failure")
+		}
+		return false, nil, nil
+	})
+	monitor := newAgentMonitor(client, t)
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() { defer close(done); monitor.Run(stop) }()
+	defer func() { close(stop); <-done }()
+
+	require.Eventually(t, func() bool { return updates.Load() >= 2 }, 3*time.Second, 10*time.Millisecond)
+	current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.NotEmpty(t, current.AgentConditions)
+	assert.False(t, current.AgentConditions[0].LastHeartbeatTime.IsZero())
 }
 
 func TestPublishCurrentSecondaryNetworkReport(t *testing.T) {
@@ -374,7 +398,7 @@ func TestPublishCurrentSecondaryNetworkReport(t *testing.T) {
 		assert.Zero(t, ready.ObservedGeneration)
 	}
 	static := &v1beta1.SecondaryNetworkStatus{
-		Source:        v1beta1.SecondaryNetworkConfigSourceAgentConfig,
+		ConfigSource:  v1beta1.SecondaryNetworkConfigSourceAgentConfig,
 		CurrentBridge: "br-static", DesiredBridge: "br-static",
 		Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Reconciled"}},
 	}
@@ -393,7 +417,7 @@ func TestSecondaryNetworkReportWithoutNodeIdentity(t *testing.T) {
 	for _, nodeType := range []config.NodeType{config.K8sNode, config.ExternalNode} {
 		t.Run(nodeType.String(), func(t *testing.T) {
 			info := &v1beta1.AntreaAgentInfo{ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"},
-				SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}}
+				SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{ConfigSource: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}}
 			client := fakeclientset.NewSimpleClientset(info)
 			monitor := newAgentMonitor(client, t)
 			monitor.querier.GetNodeConfig().Type = nodeType
@@ -401,7 +425,7 @@ func TestSecondaryNetworkReportWithoutNodeIdentity(t *testing.T) {
 			current, err := client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Nil(t, current.SecondaryNetwork)
-			desired := &v1beta1.SecondaryNetworkStatus{Source: v1beta1.SecondaryNetworkConfigSourceAgentConfig}
+			desired := &v1beta1.SecondaryNetworkStatus{ConfigSource: v1beta1.SecondaryNetworkConfigSourceAgentConfig}
 			monitor.SetSecondaryNetworkStatusProvider(&testSecondaryNetworkProvider{report: desired})
 			monitor.syncAgentCRD(context.Background())
 			current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})

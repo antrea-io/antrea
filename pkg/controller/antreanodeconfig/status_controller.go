@@ -21,7 +21,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -78,7 +78,9 @@ func NewStatusController(client clientset.Interface, ancInformer crdinformers.An
 		DeleteFunc: func(interface{}) { c.selectionVersion.Add(1); c.enqueueAll() },
 		UpdateFunc: func(old, current interface{}) {
 			before, after := old.(*crdv1alpha1.AntreaNodeConfig), current.(*crdv1alpha1.AntreaNodeConfig)
-			if before.Generation != after.Generation || !reflect.DeepEqual(before.Spec, after.Spec) || !reflect.DeepEqual(before.DeletionTimestamp, after.DeletionTimestamp) {
+			if before.UID != after.UID || !before.CreationTimestamp.Equal(&after.CreationTimestamp) ||
+				before.Generation != after.Generation || !reflect.DeepEqual(before.Spec, after.Spec) ||
+				!reflect.DeepEqual(before.DeletionTimestamp, after.DeletionTimestamp) {
 				c.selectionVersion.Add(1)
 				c.enqueueAll()
 			}
@@ -126,7 +128,8 @@ func reportNeedsSync(before, after *crdv1beta1.AntreaAgentInfo, now time.Time) b
 	// heartbeat must refresh readiness without waiting for the periodic resync.
 	return before.NodeRef.UID != after.NodeRef.UID ||
 		!reflect.DeepEqual(before.AntreaNodeConfig, after.AntreaNodeConfig) ||
-		now.Sub(agentHeartbeat(before).Time) > agentReportTimeout
+		now.Sub(agentHeartbeat(before).Time) > agentReportTimeout ||
+		agentHeartbeat(before).After(now.Add(time.Minute))
 }
 
 func agentHeartbeat(info *crdv1beta1.AntreaAgentInfo) metav1.Time {
@@ -177,7 +180,7 @@ func (c *StatusController) enqueueReport(info *crdv1beta1.AntreaAgentInfo) {
 	// invalidates the configuration currently selecting that Node.
 	node, err := c.nodeLister.Get(info.Name)
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to get Node for Agent configuration report", "node", info.Name)
 		}
 		return
@@ -216,7 +219,7 @@ func (c *StatusController) processNextItem(ctx context.Context) bool {
 		return false
 	}
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			c.queue.Forget(key)
 			return true
 		}

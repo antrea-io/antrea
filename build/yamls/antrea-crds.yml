@@ -55,7 +55,6 @@ spec:
                         type: string
                       message:
                         type: string
-                        maxLength: 0
                       lastTransitionTime:
                         type: string
                         format: date-time
@@ -64,7 +63,7 @@ spec:
               required:
               - conditions
               properties:
-                source:
+                configSource:
                   type: string
                   enum:
                   - AgentConfig

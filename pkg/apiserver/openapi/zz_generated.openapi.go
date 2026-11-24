@@ -2978,13 +2978,13 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 					},
 					"secondaryNetwork": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SecondaryNetwork reports secondary network realization for either static Agent configuration or AntreaNodeConfig.",
+							Description: "SecondaryNetwork reports secondary network realization status for either static Agent configuration or AntreaNodeConfig.",
 							Ref:         ref(v1beta1.SecondaryNetworkStatus{}.OpenAPIModelName()),
 						},
 					},
 					"antreaNodeConfig": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AntreaNodeConfig reports realization of the selected configuration on this Node.",
+							Description: "AntreaNodeConfig reports the realization status of the AntreaNodeConfig applied to this Node.",
 							Ref:         ref(v1beta1.AntreaNodeConfigStatus{}.OpenAPIModelName()),
 						},
 					},
@@ -3193,7 +3193,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaNodeConfigStatus(ref common.ReferenceCall
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "AntreaNodeConfigStatus describes realization of the selected AntreaNodeConfig on a Node.",
+				Description: "AntreaNodeConfigStatus describes the realization status of an AntreaNodeConfig applied to a Node.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"name": {
@@ -5931,9 +5931,9 @@ func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCall
 				Description: "SecondaryNetworkStatus describes secondary network configuration realization on a Node.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"source": {
+					"configSource": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Source identifies the configuration used for this reconciliation, if any.",
+							Description: "ConfigSource identifies the configuration used for this reconciliation, if any.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5954,7 +5954,7 @@ func schema_pkg_apis_crd_v1beta1_SecondaryNetworkStatus(ref common.ReferenceCall
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is the AntreaNodeConfig generation when Source is AntreaNodeConfig, or zero otherwise.",
+							Description: "Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is the AntreaNodeConfig generation when ConfigSource is AntreaNodeConfig, or zero otherwise.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

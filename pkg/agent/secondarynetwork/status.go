@@ -15,6 +15,8 @@
 package secondarynetwork
 
 import (
+	"errors"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -40,10 +42,10 @@ func (c *Controller) updateSecondaryNetworkStatus(snap *antreanodeconfig.Snapsho
 	var generation int64
 	staticConfig := c.secNetConfig != nil && len(c.secNetConfig.OVSBridges) > 0
 	if staticConfig {
-		report.Source = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
+		report.ConfigSource = crdv1beta1.SecondaryNetworkConfigSourceAgentConfig
 	} else if snap != nil && snap.AntreaNodeConfig != nil {
 		cfg := snap.AntreaNodeConfig
-		report.Source = crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig
+		report.ConfigSource = crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig
 		report.ConfigUID = cfg.UID
 		generation = cfg.Generation
 	}
@@ -68,7 +70,7 @@ func (c *Controller) updateSecondaryNetworkStatus(snap *antreanodeconfig.Snapsho
 	case err != nil:
 		condition.Status, condition.Reason, condition.Message = metav1.ConditionFalse, "ReconcileFailed", err.Error()
 	}
-	if available && err == errStaleBridgeInUse {
+	if available && errors.Is(err, errStaleBridgeInUse) {
 		condition.Reason = "BridgeInUse"
 		condition.Message = "Waiting for Pod secondary interfaces to be removed before deleting the bridge"
 	}

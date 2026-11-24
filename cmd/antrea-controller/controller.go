@@ -141,8 +141,6 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta2().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
-	antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
-	antreaAgentInfoInformer := crdInformerFactory.Crd().V1beta1().AntreaAgentInfos()
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
@@ -221,6 +219,8 @@ func run(o *Options) error {
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, client.CoreV1().Nodes(), nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
 	var nodeConfigStatusController *antreanodeconfig.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
+		antreaAgentInfoInformer := crdInformerFactory.Crd().V1beta1().AntreaAgentInfos()
 		nodeConfigStatusController = antreanodeconfig.NewStatusController(crdClient,
 			antreaNodeConfigInformer, antreaAgentInfoInformer, nodeInformer)
 	}

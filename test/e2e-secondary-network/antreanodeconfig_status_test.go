@@ -306,7 +306,7 @@ func TestAntreaNodeConfigStaticOverride(t *testing.T) {
 		}
 		for _, info := range infos.Items {
 			feature := info.SecondaryNetwork
-			if feature == nil || feature.Source != crdv1beta1.SecondaryNetworkConfigSourceAgentConfig {
+			if feature == nil || feature.ConfigSource != crdv1beta1.SecondaryNetworkConfigSourceAgentConfig {
 				continue
 			}
 			featureReady := meta.FindStatusCondition(feature.Conditions, "Ready")

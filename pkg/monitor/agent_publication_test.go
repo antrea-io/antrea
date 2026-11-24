@@ -66,7 +66,7 @@ func TestAgentPublicationCancel(t *testing.T) {
 	t.Cleanup(server.Close)
 	client, err := clientset.NewForConfig(&rest.Config{Host: server.URL})
 	require.NoError(t, err)
-	provider := &testSecondaryNetworkProvider{report: &v1beta1.SecondaryNetworkStatus{Source: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}}
+	provider := &testSecondaryNetworkProvider{report: &v1beta1.SecondaryNetworkStatus{ConfigSource: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig}}
 	monitor := newAgentMonitor(fakeclientset.NewSimpleClientset(), t)
 	monitor.SetSecondaryNetworkStatusProvider(provider)
 	monitor.client = client

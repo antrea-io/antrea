@@ -69,11 +69,11 @@ func TestSecondaryNetworkStatus(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, ready.Status)
 			assert.Equal(t, tt.wantReason, ready.Reason)
 			if tt.static != nil {
-				assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.Source)
+				assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.ConfigSource)
 				assert.Empty(t, report.ConfigUID)
 				assert.Zero(t, ready.ObservedGeneration)
 			} else if tt.snapshot != nil && tt.snapshot.AntreaNodeConfig != nil {
-				assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig, report.Source)
+				assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig, report.ConfigSource)
 				assert.Equal(t, cfg.UID, report.ConfigUID)
 				assert.Equal(t, cfg.Generation, ready.ObservedGeneration)
 			}
@@ -163,12 +163,12 @@ func TestSecondaryNetworkStatusTracksCurrentSelection(t *testing.T) {
 	c.secNetConfig = &agentconfig.SecondaryNetworkConfig{OVSBridges: []agentconfig.OVSBridgeConfig{{BridgeName: "static"}}}
 	c.updateSecondaryNetworkStatus(antreanodeconfig.NewSnapshot(cfg, nil), nil, nil)
 	static := c.GetSecondaryNetworkStatus()
-	assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, static.Source)
+	assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, static.ConfigSource)
 	assert.Empty(t, static.ConfigUID, "Static results must not inherit the previous ANC identity")
 	assert.Zero(t, meta.FindStatusCondition(static.Conditions, "Ready").ObservedGeneration)
 	c.secNetConfig = nil
 	c.updateSecondaryNetworkStatus(antreanodeconfig.NewSnapshot(cfg, nil), nil, nil)
-	assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig, c.GetSecondaryNetworkStatus().Source)
+	assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig, c.GetSecondaryNetworkStatus().ConfigSource)
 	assert.Equal(t, cfg.UID, c.GetSecondaryNetworkStatus().ConfigUID)
 
 	c.updateSecondaryNetworkStatus(antreanodeconfig.NewSnapshot(nil, nil), nil, nil)

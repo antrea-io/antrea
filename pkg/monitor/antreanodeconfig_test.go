@@ -101,8 +101,12 @@ func TestAntreaNodeConfigPublication(t *testing.T) {
 		status        metav1.ConditionStatus
 		reason        string
 		featureStatus metav1.ConditionStatus
+		featureReason string
 	}{
-		{name: "ready", status: metav1.ConditionTrue, reason: "Reconciled", featureStatus: metav1.ConditionTrue},
+		{
+			name: "ready", status: metav1.ConditionTrue, reason: "Reconciled",
+			featureStatus: metav1.ConditionTrue, featureReason: "Reconciled",
+		},
 		{name: "reconcile failure", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
 			p.report.Conditions[0].Status = metav1.ConditionFalse
 			p.report.Conditions[0].Reason = "BridgeInUse"
@@ -116,11 +120,11 @@ func TestAntreaNodeConfigPublication(t *testing.T) {
 		}, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionUnknown},
 		{name: "missing feature", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) { p.report = nil }, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionUnknown},
 		{name: "static success", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
-			p.report.Source = v1beta1.SecondaryNetworkConfigSourceAgentConfig
+			p.report.ConfigSource = v1beta1.SecondaryNetworkConfigSourceAgentConfig
 			p.report.Conditions[0].ObservedGeneration = 0
 		}, status: metav1.ConditionFalse, reason: "OverriddenByStaticConfig", featureStatus: metav1.ConditionTrue},
 		{name: "static failure", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
-			p.report.Source = v1beta1.SecondaryNetworkConfigSourceAgentConfig
+			p.report.ConfigSource = v1beta1.SecondaryNetworkConfigSourceAgentConfig
 			p.report.Conditions[0].ObservedGeneration = 0
 			p.report.Conditions[0].Status = metav1.ConditionFalse
 		}, status: metav1.ConditionFalse, reason: "OverriddenByStaticConfig", featureStatus: metav1.ConditionFalse},
@@ -147,7 +151,10 @@ func TestAntreaNodeConfigPublication(t *testing.T) {
 			}
 			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 			require.NoError(t, indexer.Add(node))
-			monitor.querier = &testSecondaryNetworkQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
+			monitor.querier = &testSecondaryNetworkQuerier{
+				AgentQuerier: monitor.querier,
+				nodeLister:   corelisters.NewNodeLister(indexer),
+			}
 			monitor.SetAntreaNodeConfigSnapshotProvider(target)
 			if !tt.disabled {
 				monitor.SetSecondaryNetworkStatusProvider(feature)
@@ -159,6 +166,9 @@ func TestAntreaNodeConfigPublication(t *testing.T) {
 			assert.Equal(t, original, feature.report, "Publication must not mutate feature results")
 			require.NotNil(t, published.SecondaryNetwork)
 			assert.Equal(t, tt.featureStatus, published.SecondaryNetwork.Conditions[0].Status)
+			if tt.featureReason != "" {
+				assert.Equal(t, tt.featureReason, published.SecondaryNetwork.Conditions[0].Reason)
+			}
 			if tt.noTarget {
 				assert.Nil(t, published.AntreaNodeConfig)
 				return
@@ -206,6 +216,39 @@ func TestSelectionUpdatePublishesBeforeFeatureCompletion(t *testing.T) {
 	}, time.Second, time.Millisecond)
 }
 
+func TestStaleFeatureResultDoesNotResetUnknownTransitionTime(t *testing.T) {
+	ctx := context.Background()
+	lastTransition := metav1.NewTime(time.Now().Add(-time.Minute))
+	info := &v1beta1.AntreaAgentInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"},
+		SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{
+			ConfigSource: v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
+			Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionUnknown,
+				Reason: "ConfigurationUnavailable", LastTransitionTime: lastTransition}},
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(info)
+	monitor := newAgentMonitor(client, t)
+	monitor.querier.GetNodeConfig().UID = "node-uid"
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	require.NoError(t, indexer.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: info.Name, UID: "node-uid"}}))
+	monitor.querier = &testSecondaryNetworkQuerier{
+		AgentQuerier: monitor.querier,
+		nodeLister:   corelisters.NewNodeLister(indexer),
+	}
+	monitor.SetAntreaNodeConfigSnapshotProvider(&testANCProvider{snapshot: currentANCSnapshot()})
+	stale := readySecondaryNetworkReport()
+	stale.Conditions[0].ObservedGeneration = 1
+	monitor.SetSecondaryNetworkStatusProvider(&testSecondaryNetworkProvider{report: stale})
+
+	monitor.syncAgentCRD(ctx)
+	firstTransition := meta.FindStatusCondition(monitor.agentCRD.SecondaryNetwork.Conditions, "Ready").LastTransitionTime
+	monitor.syncAgentCRD(ctx)
+	secondTransition := meta.FindStatusCondition(monitor.agentCRD.SecondaryNetwork.Conditions, "Ready").LastTransitionTime
+	assert.Equal(t, lastTransition, firstTransition)
+	assert.Equal(t, firstTransition, secondTransition)
+}
+
 func TestAntreaNodeConfigSchema(t *testing.T) {
 	data, err := os.ReadFile("../../build/charts/antrea/crds/antreaagentinfo.yaml")
 	require.NoError(t, err)
@@ -216,7 +259,7 @@ func TestAntreaNodeConfigSchema(t *testing.T) {
 	validator, _, err := validation.NewSchemaValidator(&schema)
 	require.NoError(t, err)
 	info := &v1beta1.AntreaAgentInfo{AntreaNodeConfig: &v1beta1.AntreaNodeConfigStatus{Name: "config", UID: "uid", Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Reconciled", ObservedGeneration: 2, LastTransitionTime: metav1.Now()}}}}
-	for _, message := range []string{"", "must remain in feature conditions"} {
+	for _, message := range []string{"", "future condition message"} {
 		info.AntreaNodeConfig.Conditions[0].Message = message
 		data, err := json.Marshal(info)
 		require.NoError(t, err)
@@ -226,7 +269,7 @@ func TestAntreaNodeConfigSchema(t *testing.T) {
 		if message == "" {
 			assert.Empty(t, errors)
 		} else {
-			assert.NotEmpty(t, errors)
+			assert.Empty(t, errors, "the schema should allow newer Agents to add a message")
 		}
 	}
 }
