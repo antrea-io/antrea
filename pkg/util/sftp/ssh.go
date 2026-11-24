@@ -36,27 +36,18 @@ func getAlgorithmsForHostKey(key ssh.PublicKey) []string {
 	}
 }
 
-// GetSSHClientConfig returns a standard SSH client configuration which is used by Antrea for SFTP
-// upload. If hostKey is nil (not recommended), the config will accept any host public key.
+// GetSSHClientConfig returns an SSH client configuration for SFTP uploads.
+// hostKey must contain the server's SSH public key in wire format.
 func GetSSHClientConfig(user string, password string, hostKey []byte) (*ssh.ClientConfig, error) {
-	// #nosec G106: users should provie hostKey, accepting arbitrary keys is not recommended.
-	hostKeyCallback := ssh.InsecureIgnoreHostKey()
-	var hostKeyAlgorithms []string
-	if hostKey != nil {
-		key, err := ssh.ParsePublicKey(hostKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid host public key: %w", err)
-		}
-		hostKeyCallback = ssh.FixedHostKey(key)
-		// With a single fixed key, it makes sense to set this in case the server supports
-		// multiple keys (e.g., ed25519 and rsa).
-		hostKeyAlgorithms = getAlgorithmsForHostKey(key)
+	key, err := ssh.ParsePublicKey(hostKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid host public key: %w", err)
 	}
 	return &ssh.ClientConfig{
 		User:              user,
 		Auth:              []ssh.AuthMethod{ssh.Password(password)},
-		HostKeyCallback:   hostKeyCallback,
-		HostKeyAlgorithms: hostKeyAlgorithms,
+		HostKeyCallback:   ssh.FixedHostKey(key),
+		HostKeyAlgorithms: getAlgorithmsForHostKey(key),
 		Timeout:           1 * time.Second,
 	}, nil
 }

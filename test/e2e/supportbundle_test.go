@@ -236,8 +236,10 @@ func TestSupportBundleCollection(t *testing.T) {
 	t.Run("with ssh host key", func(t *testing.T) {
 		testSupportBundleCollection(t, data, "sbc-0", nodeNames, clientPod, svc.Spec.ClusterIP, pubKeys[0].Marshal(), expectedStatusSuccess)
 	})
-	t.Run("without ssh host key", func(t *testing.T) {
-		testSupportBundleCollection(t, data, "sbc-1", nodeNames, clientPod, svc.Spec.ClusterIP, nil, expectedStatusSuccess)
+	t.Run("without ssh host key is rejected", func(t *testing.T) {
+		sbc := newTestSupportBundleCollection("sbc-1", nodeNames, svc.Spec.ClusterIP, nil)
+		_, err := data.CRDClient.CrdV1alpha1().SupportBundleCollections().Create(t.Context(), sbc, metav1.CreateOptions{})
+		require.ErrorContains(t, err, "invalid host public key")
 	})
 	t.Run("with invalid ssh host key", func(t *testing.T) {
 		expectedStatus := crdv1alpha1.SupportBundleCollectionStatus{
@@ -286,28 +288,7 @@ func testSupportBundleCollection(
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPod, toolboxContainerName, cmd)
 	require.NoErrorf(t, err, "failed to create upload directory with sftp, stdout: %s, stderr: %s", stdout, stderr)
 
-	sbc := &crdv1alpha1.SupportBundleCollection{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: bundleName,
-		},
-		Spec: crdv1alpha1.SupportBundleCollectionSpec{
-			Nodes: &crdv1alpha1.BundleNodes{
-				NodeNames: nodeNames,
-			},
-			ExpirationMinutes: 300,
-			FileServer: crdv1alpha1.BundleFileServer{
-				URL:           fmt.Sprintf("%s:22/%s/%s", sftpServerIP, sftpUploadDir, bundleName),
-				HostPublicKey: pubKey,
-			},
-			Authentication: crdv1alpha1.BundleServerAuthConfiguration{
-				AuthType: "BasicAuthentication",
-				AuthSecret: &v1.SecretReference{
-					Name:      "support-bundle-secret",
-					Namespace: antreaNamespace,
-				},
-			},
-		},
-	}
+	sbc := newTestSupportBundleCollection(bundleName, nodeNames, sftpServerIP, pubKey)
 	_, err = data.CRDClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer data.CRDClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
@@ -337,6 +318,36 @@ func testSupportBundleCollection(
 		expectedFiles[idx] = fmt.Sprintf("%s_%s.tar.gz", nodeNames[idx], bundleName)
 	}
 	assert.ElementsMatch(t, expectedFiles, files, "files uploaded by Antrea to sftp server do not match expectations")
+}
+
+func newTestSupportBundleCollection(
+	bundleName string,
+	nodeNames []string,
+	sftpServerIP string,
+	pubKey []byte,
+) *crdv1alpha1.SupportBundleCollection {
+	return &crdv1alpha1.SupportBundleCollection{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bundleName,
+		},
+		Spec: crdv1alpha1.SupportBundleCollectionSpec{
+			Nodes: &crdv1alpha1.BundleNodes{
+				NodeNames: nodeNames,
+			},
+			ExpirationMinutes: 300,
+			FileServer: crdv1alpha1.BundleFileServer{
+				URL:           fmt.Sprintf("%s:22/%s/%s", sftpServerIP, sftpUploadDir, bundleName),
+				HostPublicKey: pubKey,
+			},
+			Authentication: crdv1alpha1.BundleServerAuthConfiguration{
+				AuthType: "BasicAuthentication",
+				AuthSecret: &v1.SecretReference{
+					Name:      "support-bundle-secret",
+					Namespace: antreaNamespace,
+				},
+			},
+		},
+	}
 }
 
 func (data *TestData) waitForSupportBundleCollection(

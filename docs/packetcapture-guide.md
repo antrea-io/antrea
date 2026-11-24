@@ -57,6 +57,13 @@ If no `fileServer` field is present in the CR, the captured packets file will be
 antrea-agent Pod (the one on the same Node with the source or destination Pod in the CR). The result
 path information will be available in `.status.FilePath`.
 
+SFTP uploads require `hostPublicKey`, the base64-encoded SSH wire-format public key.
+Obtain the key from a trusted server administrator or a verified `known_hosts` entry;
+the second field of an OpenSSH public key line is the required value. Before upgrading to
+a version that requires host key verification, update existing PacketCapture resources
+and manifests that use SFTP to include the verified key. Uploads without it will fail
+after the upgrade; recreate a capture with the key if it cannot be updated.
+
 And here is an example of `PacketCapture` CR:
 
 ```yaml
@@ -69,7 +76,7 @@ spec:
     url: sftp://127.0.0.1:22/upload # Define your own sftp url here.
     # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
     # Get this key from your SSH server configuration, or from a known_hosts file.
-    # If omitted, any host key will be accepted, which is insecure and not recommended.
+    # This field is required for SFTP uploads.
     hostPublicKey: AAAAC3NzaC1lZDI1NTE5AAAAIBCUI6Yi9KbkiPXK2MzqYYtlluw7v_WQz071JZPdZEKr # Replace with your own.
   timeout: 60
   captureConfig:

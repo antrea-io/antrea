@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 	admv1 "k8s.io/api/admission/v1"
@@ -78,7 +79,9 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 			}
 			return fmt.Errorf("spec.authentication.authType %q is not supported, only %q is supported", bundle.Spec.Authentication.AuthType, crdv1alpha1.BasicAuthentication)
 		}
-		if bundle.Spec.FileServer.HostPublicKey != nil {
+		fileServerChanged := oldBundle == nil || !reflect.DeepEqual(oldBundle.Spec.FileServer, bundle.Spec.FileServer)
+		if bundle.Spec.FileServer.HostPublicKey != nil ||
+			(fileServerChanged && !strings.HasPrefix(strings.ToLower(bundle.Spec.FileServer.URL), "https://")) {
 			if _, err := ssh.ParsePublicKey(bundle.Spec.FileServer.HostPublicKey); err != nil {
 				return fmt.Errorf("invalid host public key: %w", err)
 			}

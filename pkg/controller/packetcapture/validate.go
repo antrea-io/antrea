@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"golang.org/x/crypto/ssh"
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,6 +93,9 @@ func (v *Validator) validate(pc, oldPC *crdv1alpha1.PacketCapture, userInfo auth
 	// unrelated updates (e.g. adding a label) fail for a user who cannot read the Secret.
 	if oldPC != nil && reflect.DeepEqual(oldPC.Spec.FileServer, pc.Spec.FileServer) {
 		return nil
+	}
+	if _, err := ssh.ParsePublicKey(pc.Spec.FileServer.HostPublicKey); err != nil {
+		return fmt.Errorf("invalid host public key: %w", err)
 	}
 	status, err := validation.AuthorizeSecretGet(v.client, userInfo, v.fileServerAuthNamespace, apis.AntreaPacketCaptureFileServerAuthSecretName)
 	if err != nil {
