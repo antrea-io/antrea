@@ -18,6 +18,12 @@ source logging
 source daemon_status
 
 CONTAINER_NAME="antrea-ipsec"
+# Match the antrea-ipsec container mount and the path used by antrea-agent /
+# container_liveness_probe. Without this, ovs-ctl may use a compile-time
+# default (e.g. /usr/local/var/run/openvswitch) and ovs-monitor-ipsec will not
+# write its pidfile where Antrea expects it.
+OVS_RUNDIR="${OVS_RUNDIR:-/var/run/openvswitch}"
+export OVS_RUNDIR
 
 set -euo pipefail
 

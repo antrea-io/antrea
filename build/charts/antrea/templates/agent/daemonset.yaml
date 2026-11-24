@@ -347,6 +347,15 @@ spec:
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           resources: {{- .Values.agent.antreaIPsec.resources | toYaml | nindent 12 }}
           command: ["start_ovs_ipsec"]
+          env:
+            # Ensure ovs-ctl / ovs-monitor-ipsec use the mounted OVS rundir.
+            # antrea-agent waits for /var/run/openvswitch/ovs-monitor-ipsec.pid.
+            - name: OVS_RUNDIR
+              value: /var/run/openvswitch
+            {{- range $k, $v := .Values.agent.antreaIPsec.extraEnv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
           livenessProbe:
             exec:
               command:

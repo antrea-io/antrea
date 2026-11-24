@@ -27,6 +27,7 @@ Kubernetes: `>= 1.23.0-0`
 | agent.antreaAgent.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-agent container. |
 | agent.antreaAgent.securityContext.capabilities | list | `[]` | Capabilities for the antrea-agent container. |
 | agent.antreaAgent.securityContext.privileged | bool | `true` | Whether to run the antrea-agent container as privileged. Currently we require this to be true (for sysctl configurations), but we may support running as non-privileged in the future. |
+| agent.antreaIPsec.extraEnv | object | `{}` | Extra environment variables to be injected into antrea-ipsec. |
 | agent.antreaIPsec.resources | object | `{"requests":{"cpu":"50m"}}` | Resource requests and limits for the antrea-ipsec container (when IPsec is enabled). |
 | agent.antreaIPsec.securityContext.capabilities | list | `["NET_ADMIN"]` | Capabilities for the antrea-ipsec container. |
 | agent.antreaIPsec.securityContext.privileged | bool | `false` | Whether to run the antrea-ipsec container as privileged. |

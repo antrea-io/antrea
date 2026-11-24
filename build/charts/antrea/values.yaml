@@ -378,6 +378,8 @@ agent:
         - SYS_ADMIN
         - IPC_LOCK
   antreaIPsec:
+    # -- Extra environment variables to be injected into antrea-ipsec.
+    extraEnv: {}
     # -- Resource requests and limits for the antrea-ipsec container (when IPsec
     # is enabled).
     resources:
