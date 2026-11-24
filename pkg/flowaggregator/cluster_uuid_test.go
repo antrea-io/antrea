@@ -17,14 +17,18 @@ package flowaggregator
 import (
 	"testing"
 	"testing/synctest"
+	"uuid"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/v2/pkg/clusteridentity"
 )
 
 func TestGetClusterUUID(t *testing.T) {
+	t.Setenv(antreaNamespaceEnvKey, "")
 	synctest.Test(t, func(t *testing.T) {
 		client := fake.NewSimpleClientset()
 		clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
@@ -42,5 +46,34 @@ func TestGetClusterUUID(t *testing.T) {
 
 		_, err := GetClusterUUID(t.Context(), client)
 		require.NoError(t, err, "cluster UUID not available")
+	})
+}
+
+func TestGetClusterUUIDCustomNamespace(t *testing.T) {
+	const namespace = "antrea-system"
+	t.Setenv(antreaNamespaceEnvKey, namespace)
+
+	expectedUUID := uuid.NewV4()
+	client := fake.NewSimpleClientset(
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusteridentity.DefaultClusterIdentityConfigMapName,
+				Namespace: metav1.NamespaceSystem,
+			},
+			Data: map[string]string{"uuid": uuid.NewV4().String()},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusteridentity.DefaultClusterIdentityConfigMapName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{"uuid": expectedUUID.String()},
+		},
+	)
+
+	synctest.Test(t, func(t *testing.T) {
+		clusterUUID, err := GetClusterUUID(t.Context(), client)
+		require.NoError(t, err)
+		require.Equal(t, expectedUUID, clusterUUID)
 	})
 }

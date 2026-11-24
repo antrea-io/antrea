@@ -17,30 +17,40 @@ package flowaggregator
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 	"uuid"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/v2/pkg/clusteridentity"
 )
 
+const antreaNamespaceEnvKey = "ANTREA_NAMESPACE"
+
 // GetClusterUUID retrieves the cluster UUID (if available, with a timeout of 10s).
-// Otherwise, it returns an empty cluster UUID and error. The cluster UUID should
+// It looks for the ConfigMap in the namespace specified by
+// ANTREA_NAMESPACE, which defaults to kube-system.
+// On failure, it returns an empty cluster UUID and error. The cluster UUID should
 // be available if Antrea is deployed to the cluster ahead of the flow aggregator,
 // which is the expectation since when deploying flow aggregator as a Pod,
 // networking needs to be configured by the CNI plugin.
 func GetClusterUUID(ctx context.Context, k8sClient kubernetes.Interface) (uuid.UUID, error) {
 	const retryInterval = time.Second
 	const timeout = 10 * time.Second
-	const defaultAntreaNamespace = "kube-system"
+
+	namespace := os.Getenv(antreaNamespaceEnvKey)
+	if namespace == "" {
+		namespace = metav1.NamespaceSystem
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
-		defaultAntreaNamespace,
+		namespace,
 		clusteridentity.DefaultClusterIdentityConfigMapName,
 		k8sClient,
 	)
@@ -53,7 +63,7 @@ func GetClusterUUID(ctx context.Context, k8sClient kubernetes.Interface) (uuid.U
 		clusterUUID = clusterIdentity.UUID
 		return true, nil
 	}); err != nil {
-		return clusterUUID, fmt.Errorf("unable to retrieve cluster UUID from ConfigMap '%s/%s': %w", defaultAntreaNamespace, clusteridentity.DefaultClusterIdentityConfigMapName, err)
+		return clusterUUID, fmt.Errorf("unable to retrieve cluster UUID from ConfigMap '%s/%s': %w", namespace, clusteridentity.DefaultClusterIdentityConfigMapName, err)
 	}
 	return clusterUUID, nil
 }
