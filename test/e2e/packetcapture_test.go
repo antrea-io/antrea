@@ -252,6 +252,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				packetCaptureDestinationPod(data.testNamespace, udpServerPodName),
 				packetCaptureTimeout(ptr.To[int32](15)),
 				packetCaptureFirstN(500),
+				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 10,
@@ -286,6 +287,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, nonExistingPodName),
+				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
@@ -402,6 +404,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
+				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
