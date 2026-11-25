@@ -1025,7 +1025,7 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 			},
 			expectedStatus: v1beta2.EgressStatus{
 				Conditions: []metav1.Condition{
-					{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+					{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 				},
 			},
 		},
@@ -1040,7 +1040,7 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 			inputErr: fmt.Errorf("no available IP"),
 			expectedStatus: v1beta2.EgressStatus{
 				Conditions: []metav1.Condition{
-					{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIPs from ExternalIPPool: no available IP"},
+					{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: no available IP"},
 				},
 			},
 		},
@@ -1056,7 +1056,7 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 			inputErr: fmt.Errorf("IP already used"),
 			expectedStatus: v1beta2.EgressStatus{
 				Conditions: []metav1.Condition{
-					{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIPs from ExternalIPPool: IP already used"},
+					{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: IP already used"},
 				},
 			},
 		},
@@ -1076,7 +1076,7 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 			},
 			expectedStatus: v1beta2.EgressStatus{
 				Conditions: []metav1.Condition{
-					{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+					{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 				},
 			},
 		},

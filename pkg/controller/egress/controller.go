@@ -562,12 +562,16 @@ func (c *EgressController) enqueueEgresses(poolName string) {
 func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta2.Egress, err error) {
 	var desiredCondition *metav1.Condition
 	if egress.Spec.ExternalIPPool != "" {
+		ipLabel, successMessage := "EgressIP", "EgressIP is successfully allocated"
+		if requiresDualStackEgress(egress) {
+			ipLabel, successMessage = "EgressIPs", "EgressIPs are successfully allocated"
+		}
 		if err == nil {
 			desiredCondition = &metav1.Condition{
 				Type:               egressv1beta2.IPAllocated,
 				Status:             metav1.ConditionTrue,
 				Reason:             "Allocated",
-				Message:            "EgressIPs are successfully allocated",
+				Message:            successMessage,
 				LastTransitionTime: metav1.Now(),
 			}
 		} else {
@@ -575,7 +579,7 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta2.
 				Type:               egressv1beta2.IPAllocated,
 				Status:             metav1.ConditionFalse,
 				Reason:             "AllocationError",
-				Message:            fmt.Sprintf("Cannot allocate EgressIPs from ExternalIPPool: %v", err),
+				Message:            fmt.Sprintf("Cannot allocate %s from ExternalIPPool: %v", ipLabel, err),
 				LastTransitionTime: metav1.Now(),
 			}
 		}

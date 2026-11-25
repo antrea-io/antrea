@@ -16,7 +16,7 @@ package egress
 
 import (
 	"context"
-	stderrors "errors"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,6 +71,9 @@ const (
 	// How long to wait before retrying the processing of an Egress change.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
+	// Allow independent address notifications to arrive before reporting a detection failure.
+	egressIPDetectionGracePeriod   = 5 * time.Second
+	egressIPDetectionRetryInterval = time.Second
 	// Default number of workers processing an Egress change.
 	defaultWorkers = 4
 	// Disable resyncing.
@@ -129,14 +132,17 @@ type egressIPState struct {
 	egressIP net.IP
 	// The subnet the Egress IP is associated with.
 	subnetInfo *crdv1b2.SubnetInfo
+	// Whether the policy routes and rule have all been installed successfully.
+	policyRouteInstalled bool
 }
 
-// egressRouteTable stores the route table ID created for a subnet and the marks that are referencing it.
+// egressRouteTable tracks the shared routes and marks for a subnet.
 type egressRouteTable struct {
 	// The route table ID.
 	tableID uint32
 	// The marks referencing the table. Once it's empty, the route table should be deleted.
-	marks sets.Set[uint32]
+	marks           sets.Set[uint32]
+	routesInstalled bool
 }
 
 // egressBinding keeps the Egresses applying to a Pod.
@@ -599,7 +605,8 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 	if !c.supportSeparateSubnet {
 		return nil
 	}
-	if crdv1b2.CompareSubnetInfo(ipState.subnetInfo, subnetInfo, false) {
+	if crdv1b2.CompareSubnetInfo(ipState.subnetInfo, subnetInfo, false) &&
+		(subnetInfo == nil || ipState.policyRouteInstalled) {
 		return nil
 	}
 	// Deletes stale policy route first.
@@ -616,33 +623,37 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 	subnetGateway := net.ParseIP(subnetInfo.Gateway)
 	// Get or create a route table for this subnet.
 	rt, exists := c.egressRouteTables[*subnetInfo]
-	if !exists {
+	var devID int
+	if !exists || !rt.routesInstalled {
 		// Resolve the interface before reserving a route table ID.
-		devID, ok := c.ipAssigner.GetInterfaceID(subnetInfo)
+		var ok bool
+		devID, ok = c.ipAssigner.GetInterfaceID(subnetInfo)
 		if !ok {
 			return fmt.Errorf("interface for subnet %v not found", subnetInfo)
 		}
+	}
+	if !exists {
 		tableID, err := c.tableAllocator.allocate()
 		if err != nil {
 			return fmt.Errorf("error allocating table for subnet %v due to exceeding max allowed subnets %d: %w", subnetInfo, maxSubnetsPerNodes, err)
 		}
 		rt = &egressRouteTable{tableID: tableID, marks: sets.New[uint32]()}
 		c.egressRouteTables[*subnetInfo] = rt
-		// Record ownership before programming routes. Group rollback must be able to clean
-		// a partially created route table as well as a failed IP rule.
-		rt.marks.Insert(mark)
-		ipState.subnetInfo = subnetInfo
-		if err := c.routeClient.AddEgressRoutes(tableID, devID, subnetGateway, int(subnetInfo.PrefixLength)); err != nil {
-			return fmt.Errorf("error creating route table for subnet %v: %w", subnetInfo, err)
+	}
+	// Record ownership before programming routes so rollback can clean a partial install.
+	rt.marks.Insert(mark)
+	ipState.subnetInfo = subnetInfo
+	if !rt.routesInstalled {
+		if err := c.routeClient.AddEgressRoutes(rt.tableID, devID, subnetGateway, int(subnetInfo.PrefixLength)); err != nil {
+			return fmt.Errorf("error installing routes for subnet %v: %w", subnetInfo, err)
 		}
-	} else {
-		rt.marks.Insert(mark)
-		ipState.subnetInfo = subnetInfo
+		rt.routesInstalled = true
 	}
 	// Add an IP rule to make the marked Egress traffic look up the table.
 	if err := c.routeClient.AddEgressRule(rt.tableID, mark, subnetGateway.To4() == nil); err != nil {
 		return fmt.Errorf("error adding ip rule for mark %v: %w", mark, err)
 	}
+	ipState.policyRouteInstalled = true
 	return nil
 }
 
@@ -656,8 +667,11 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState, mark uin
 	}
 	c.egressRouteTablesMutex.Lock()
 	defer c.egressRouteTablesMutex.Unlock()
+	// A failed removal may have deleted the rule, so a later install must not skip it.
+	ipState.policyRouteInstalled = false
 	rt, exists := c.egressRouteTables[*ipState.subnetInfo]
 	if !exists {
+		ipState.subnetInfo = nil
 		return nil
 	}
 	subnetGateway := net.ParseIP(ipState.subnetInfo.Gateway)
@@ -667,6 +681,8 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState, mark uin
 	rt.marks.Delete(mark)
 	// Delete the route table if it is not used by any Egress.
 	if rt.marks.Len() == 0 {
+		// Even a failed deletion may have removed some of the routes.
+		rt.routesInstalled = false
 		if err := c.routeClient.DeleteEgressRoutes(rt.tableID); err != nil {
 			return fmt.Errorf("error deleting route table for subnet %v: %w", ipState.subnetInfo, err)
 		}
@@ -718,7 +734,7 @@ func (c *EgressController) realizeEgressQoS(egressName string, eState *egressSta
 			candidate := bandwidth
 			if name != egressName {
 				egress, err := c.egressLister.Get(name)
-				if errors.IsNotFound(err) {
+				if apierrors.IsNotFound(err) {
 					continue
 				}
 				if err != nil {
@@ -836,13 +852,17 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 		desiredStatus.EgressNode = c.nodeName
 		desiredStatus.EgressIPs = slices.Clone(egressIPs)
 		if isEgressSchedulable(egress) {
+			message := "EgressIP is successfully assigned to EgressNode"
+			if len(egressIPs) > 1 {
+				message = "EgressIPs are successfully assigned to EgressNode"
+			}
 			desiredStatus.Conditions = []metav1.Condition{
 				{
 					Type:               crdv1b2.IPAssigned,
 					Status:             metav1.ConditionTrue,
 					LastTransitionTime: metav1.Now(),
 					Reason:             "Assigned",
-					Message:            "EgressIP is successfully assigned to EgressNode",
+					Message:            message,
 				},
 			}
 		}
@@ -875,13 +895,21 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 		// controller to process it another time, so we avoid generating a transient state here, which may lead to some
 		// back-off retries due to updating conflict.
 		if scheduleErr != nil {
+			ipCount := max(len(egress.Spec.EgressIPs), len(egress.Spec.IPFamilies))
+			if ipCount == 0 {
+				ipCount = len(egress.Status.EgressIPs)
+			}
+			ipLabel := "IP"
+			if ipCount > 1 {
+				ipLabel = "IPs"
+			}
 			desiredStatus.Conditions = []metav1.Condition{
 				{
 					Type:               crdv1b2.IPAssigned,
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             "AssignmentError",
-					Message:            fmt.Sprintf("Failed to assign the IP to EgressNode: %v", scheduleErr),
+					Message:            fmt.Sprintf("Failed to assign the %s to EgressNode: %v", ipLabel, scheduleErr),
 				},
 			}
 		}
@@ -896,6 +924,10 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 		if compareEgressStatus(&toUpdate.Status, desiredStatus) {
 			return nil
 		}
+		// Check the current object's status before replacing it, including after a conflict refresh.
+		// A v1beta1 status write cannot add a second IP because it retains the stored conversion annotation.
+		useV1beta2 := len(desiredStatus.EgressIPs) > 1 || len(toUpdate.Spec.EgressIPs) > 1 ||
+			len(toUpdate.Spec.IPFamilies) > 1 || len(toUpdate.Status.EgressIPs) > 1
 		// Must make a copy here as we will append more conditions. If it's appended to desiredStatus directly, there
 		// would be duplicate conditions when the function retries.
 		statusToUpdate := desiredStatus.DeepCopy()
@@ -907,11 +939,9 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 		}
 		toUpdate.Status = *statusToUpdate
 
-		// Multiple IPs require the v1beta2 status representation. Storage conversion preserves
-		// the complete status after the status subresource has reset metadata to the old object.
-		if len(egress.Spec.EgressIPs) > 1 || len(egress.Spec.IPFamilies) > 1 || len(egress.Status.EgressIPs) > 1 {
+		if useV1beta2 {
 			_, updateErr = c.crdClient.CrdV1beta2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
-			if errors.IsConflict(updateErr) {
+			if apierrors.IsConflict(updateErr) {
 				if toUpdate, getErr = c.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
 					return getErr
 				}
@@ -927,7 +957,7 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIPs 
 		}
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
 		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), legacy, metav1.UpdateOptions{})
-		if updateErr != nil && errors.IsConflict(updateErr) {
+		if updateErr != nil && apierrors.IsConflict(updateErr) {
 			if legacy, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
 				return getErr
 			}
@@ -969,7 +999,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	egress, err := c.egressLister.Get(egressName)
 	if err != nil {
 		// The Egress has been removed, clean it up.
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			eState, exist := c.getEgressState(egressName)
 			// The Egress hasn't been installed, do nothing.
 			if !exist {
@@ -1019,7 +1049,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	// with partially overlapping IPs from installing conflicting tunnel mark flows.
 	if err := c.referenceEgressIPs(egressName, desiredEgressIPs); err != nil {
 		if statusErr := c.updateEgressStatus(egress, nil, desiredNode, err); statusErr != nil {
-			return stderrors.Join(err, statusErr)
+			return errors.Join(err, statusErr)
 		}
 		return err
 	}
@@ -1032,18 +1062,12 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 	mark, err := c.reconcileEgressIPGroup(egress, eState, subnetInfos, desiredNode)
-	if stderrors.Is(err, errEgressIPsPending) {
-		// Give independent address notifications a short grace period, then use the normal
-		// error backoff and report a persistent mismatch instead of polling forever.
-		if eState.ipDetectionStartTime.IsZero() {
-			eState.ipDetectionStartTime = time.Now()
-		}
-		if time.Since(eState.ipDetectionStartTime) < 5*time.Second {
-			c.queue.AddAfter(egressName, time.Second)
-			return nil
-		}
-		err = fmt.Errorf("Egress IPs %v have not reached the local state required by Node %s: %w", desiredEgressIPs, desiredNode, err)
-		return stderrors.Join(err, c.updateEgressStatus(egress, nil, desiredNode, err))
+	if errors.Is(err, errEgressIPsPending) {
+		c.queue.AddAfter(egressName, egressIPDetectionRetryInterval)
+		return nil
+	}
+	if errors.Is(err, errEgressIPDetectionTimeout) {
+		return errors.Join(err, c.updateEgressStatus(egress, nil, desiredNode, err))
 	}
 	eState.ipDetectionStartTime = time.Time{}
 	if err != nil {

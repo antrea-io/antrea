@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -28,7 +29,10 @@ import (
 	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 )
 
-var errEgressIPsPending = errors.New("waiting for local Egress IP detection")
+var (
+	errEgressIPsPending         = errors.New("waiting for local Egress IP detection")
+	errEgressIPDetectionTimeout = errors.New("local Egress IP detection timed out")
+)
 
 // egressIPGroupState owns the resources shared by all Egresses with the same IPs.
 // A group uses one mark across IP families and one OpenFlow transaction for its mark flows.
@@ -72,12 +76,12 @@ func (c *EgressController) referenceEgressIPs(egressName string, ips []string) e
 	for _, ip := range ips {
 		parsed := net.ParseIP(ip)
 		if parsed == nil {
-			return fmt.Errorf("invalid Egress IP %s", ip)
+			return fmt.Errorf("error reserving Egress IP %s: invalid IP address", ip)
 		}
 		for _, group := range c.egressIPGroups {
 			for _, existing := range group.ips {
 				if parsed.Equal(existing.egressIP) {
-					return fmt.Errorf("Egress IP %s is already used by a different IP group", ip)
+					return fmt.Errorf("error reserving Egress IP %s: already used by a different IP group", ip)
 				}
 			}
 		}
@@ -134,7 +138,7 @@ func (c *EgressController) assignEgressIPs(egress *crdv1b2.Egress, ips []string,
 			if err != nil {
 				for _, assignedIP := range assignedIPs {
 					if _, rollbackErr := c.ipAssigner.UnassignIP(assignedIP); rollbackErr != nil {
-						err = errors.Join(err, fmt.Errorf("rolling back assignment of IP %s: %w", assignedIP, rollbackErr))
+						err = errors.Join(err, fmt.Errorf("error rolling back assignment of IP %s: %w", assignedIP, rollbackErr))
 					}
 				}
 				return err
@@ -173,33 +177,29 @@ func (c *EgressController) recordIPAssignmentEvent(egress *crdv1b2.Egress, ips [
 	c.record.Eventf(egress, nil, corev1.EventTypeNormal, reason, "NodeAssignment", "%s Egress %s with %s %s %s Node %s", verb, egress.Name, ipLabel, strings.Join(ips, ", "), preposition, c.nodeName)
 }
 
-// reconcileEgressIPGroup removes the old Pod flows and group resources on an assignment or
-// realization failure. Retain the reservation and unfinished cleanup state for the next retry.
+// reconcileEgressIPGroup removes stale Pod flows on failure and rolls back the group if it has
+// no other references. Retain the reservation and unfinished cleanup state for the next retry.
 func (c *EgressController) reconcileEgressIPGroup(egress *crdv1b2.Egress, state *egressState, subnets []*crdv1b2.SubnetInfo, node string) (mark uint32, err error) {
 	defer func() {
 		if err == nil || errors.Is(err, errEgressIPsPending) {
 			return
 		}
 		if cleanupErr := c.uninstallPodFlows(egress.Name, state, state.ofPorts, state.pods); cleanupErr != nil {
-			err = errors.Join(err, fmt.Errorf("removing stale Pod flows: %w", cleanupErr))
+			err = errors.Join(err, fmt.Errorf("error removing stale Pod flows: %w", cleanupErr))
 			return
 		}
 		group := c.getEgressIPGroup(state.egressIPs)
 		group.mutex.Lock()
 		defer group.mutex.Unlock()
-		names := c.egressIPGroupNames(group)
-		if len(names) > 1 {
-			// Another Egress may still have Pod flows using this mark. Keep its
-			// datapath and reservation intact and let each reference reconcile itself.
-			for _, name := range names {
-				if name != egress.Name {
-					c.queue.Add(name)
-				}
-			}
+		c.egressIPGroupsMutex.RLock()
+		shared := group.egressNames.Len() > 1
+		c.egressIPGroupsMutex.RUnlock()
+		if shared {
+			// Preserve the shared datapath. The worker retries the failed Egress with backoff.
 			return
 		}
 		if cleanupErr := c.uninstallEgressIPGroup(group); cleanupErr != nil {
-			err = errors.Join(err, fmt.Errorf("rolling back Egress IP datapath: %w", cleanupErr))
+			err = errors.Join(err, fmt.Errorf("error rolling back Egress IP datapath: %w", cleanupErr))
 		}
 	}()
 	if err := c.assignEgressIPs(egress, state.egressIPs, subnets, node); err != nil {
@@ -208,7 +208,14 @@ func (c *EgressController) reconcileEgressIPGroup(egress *crdv1b2.Egress, state 
 	if node != "" {
 		for _, ip := range state.egressIPs {
 			if c.localIPDetector.IsLocalIP(net.ParseIP(ip).String()) != (node == c.nodeName) {
-				return 0, errEgressIPsPending
+				if state.ipDetectionStartTime.IsZero() {
+					state.ipDetectionStartTime = time.Now()
+				}
+				if time.Since(state.ipDetectionStartTime) < egressIPDetectionGracePeriod {
+					return 0, errEgressIPsPending
+				}
+				return 0, fmt.Errorf("error detecting Egress IPs %v for scheduled Node %s: %w",
+					state.egressIPs, node, errEgressIPDetectionTimeout)
 			}
 		}
 	}
@@ -227,7 +234,7 @@ func (c *EgressController) realizeEgressIPs(ips []string, subnets []*crdv1b2.Sub
 		}
 	}
 	if localCount > 0 && localCount != len(ips) {
-		return 0, fmt.Errorf("Egress IPs %v must be assigned together to the same Node", ips)
+		return 0, fmt.Errorf("error realizing Egress IPs %v: they must be assigned together to the same Node", ips)
 	}
 	if localCount == 0 {
 		if err := c.uninstallEgressIPGroup(group); err != nil {
@@ -238,7 +245,7 @@ func (c *EgressController) realizeEgressIPs(ips []string, subnets []*crdv1b2.Sub
 	if group.mark == 0 {
 		mark, err := c.markAllocator.allocate()
 		if err != nil {
-			return 0, fmt.Errorf("allocating mark for Egress IPs %v: %w", ips, err)
+			return 0, fmt.Errorf("error allocating mark for Egress IPs %v: %w", ips, err)
 		}
 		c.egressIPGroupsMutex.Lock()
 		group.mark = mark
@@ -252,7 +259,7 @@ func (c *EgressController) realizeEgressIPs(ips []string, subnets []*crdv1b2.Sub
 		// A failed restore may have applied one family. Retain ownership until batch cleanup succeeds.
 		group.rulesPending = true
 		if err := c.routeClient.AddSNATRules(parsedIPs, group.mark); err != nil {
-			return 0, fmt.Errorf("installing SNAT rules for IPs %v: %w", ips, err)
+			return 0, fmt.Errorf("error installing SNAT rules for IPs %v: %w", ips, err)
 		}
 		group.rulesConfigured = true
 		group.rulesPending = false
@@ -265,13 +272,13 @@ func (c *EgressController) realizeEgressIPs(ips []string, subnets []*crdv1b2.Sub
 				continue
 			}
 			if err := c.installPolicyRoute(ipState, subnets[i], group.mark); err != nil {
-				return 0, fmt.Errorf("installing policy route for IP %s: %w", ip, err)
+				return 0, fmt.Errorf("error installing policy route for IP %s: %w", ip, err)
 			}
 		}
 	}
 	if !group.flowsInstalled {
 		if err := c.ofClient.InstallSNATMarkFlows(parsedIPs, group.mark); err != nil {
-			return 0, fmt.Errorf("installing SNAT mark flows for IPs %v: %w", ips, err)
+			return 0, fmt.Errorf("error installing SNAT mark flows for IPs %v: %w", ips, err)
 		}
 		group.flowsInstalled = true
 	}
@@ -340,16 +347,23 @@ func (c *EgressController) unrealizeEgressIPs(egressName string, ips []string, e
 		}
 		return nil
 	}
+	return c.cleanupUnreferencedEgressIPGroup(key, group, ips, egress)
+}
+
+func (c *EgressController) cleanupUnreferencedEgressIPGroup(key string, group *egressIPGroupState, ips []string, egress *crdv1b2.Egress) error {
 	group.mutex.Lock()
 	defer group.mutex.Unlock()
-	// A reference may have been added while this worker waited for the group.
-	if len(c.egressIPGroupNames(group)) > 0 {
+	// A reference may have been added, or the group may have been replaced while we waited.
+	c.egressIPGroupsMutex.RLock()
+	canCleanup := c.egressIPGroups[key] == group && group.egressNames.Len() == 0
+	c.egressIPGroupsMutex.RUnlock()
+	if !canCleanup {
 		return nil
 	}
 	if err := c.uninstallEgressIPGroup(group); err != nil {
 		return err
 	}
-	// Keep the reservation while unassigning. New references wait for this group's I/O.
+	// A new reference can reserve the group now, but it must take this mutex before assigning IPs.
 	var unassignedIPs []string
 	defer func() { c.recordIPAssignmentEvent(egress, unassignedIPs, false) }()
 	for _, value := range ips {
@@ -363,7 +377,7 @@ func (c *EgressController) unrealizeEgressIPs(egressName string, ips []string, e
 		}
 	}
 	c.egressIPGroupsMutex.Lock()
-	if group.egressNames.Len() == 0 {
+	if c.egressIPGroups[key] == group && group.egressNames.Len() == 0 {
 		delete(c.egressIPGroups, key)
 	}
 	c.egressIPGroupsMutex.Unlock()

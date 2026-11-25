@@ -1912,16 +1912,20 @@ func TestUpdateEgressStatus(t *testing.T) {
 			egress: &crdv1b2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA"},
 				Spec:       crdv1b2.EgressSpec{EgressIPs: []string{fakeLocalEgressIP1}, ExternalIPPool: fakeExternalIPPool},
-				Status: crdv1b2.EgressStatus{Conditions: []metav1.Condition{
-					{Type: crdv1b2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"},
-				}},
+				Status: crdv1b2.EgressStatus{
+					EgressNode: fakeNode,
+					EgressIPs:  []string{fakeLocalEgressIP1, fakeLocalEgressIPv6},
+					Conditions: []metav1.Condition{
+						{Type: crdv1b2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"},
+					},
+				},
 			},
 			egressNode:           fakeNode,
 			selectedNodeForIP:    fakeNode2,
-			scheduleErr:          errEgressIPsPending,
+			scheduleErr:          errEgressIPDetectionTimeout,
 			expectedUpdateCalled: 1,
 			expectedEgressStatus: crdv1b2.EgressStatus{Conditions: []metav1.Condition{
-				{Type: crdv1b2.IPAssigned, Status: metav1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: waiting for local Egress IP detection"},
+				{Type: crdv1b2.IPAssigned, Status: metav1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: local Egress IP detection timed out"},
 				{Type: crdv1b2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"},
 			}},
 		},
@@ -1936,7 +1940,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 			},
 			egressNode:        fakeNode2,
 			selectedNodeForIP: fakeNode,
-			scheduleErr:       errEgressIPsPending,
+			scheduleErr:       errEgressIPDetectionTimeout,
 			expectedEgressStatus: crdv1b2.EgressStatus{EgressNode: fakeNode2, EgressIPs: []string{fakeLocalEgressIP1}, Conditions: []metav1.Condition{
 				{Type: crdv1b2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned"},
 			}},

@@ -555,7 +555,11 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			expectedConditions := []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+			}
+			if len(families) == 2 {
+				expectedConditions[0].Message = "EgressIPs are successfully assigned to EgressNode"
+				expectedConditions[1].Message = "EgressIPs are successfully allocated"
 			}
 			assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedConditions, egress.Status.Conditions), "Unexpected Egress conditions: %v", egress.Status.Conditions)
 			for i, network := range tt.networks {
@@ -615,7 +619,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 			},
 		},
 		{
@@ -631,7 +635,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedTotal:     15,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 			},
 		},
 		{
@@ -651,7 +655,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 			},
 		},
 		{
@@ -667,7 +671,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedTotal:     2,
 			expectedConditions: []metav1.Condition{
 				{Type: v1beta2.IPAssigned, Status: metav1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
-				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
 			},
 		},
 	}
@@ -681,6 +685,13 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			dual.ipRanges = append(slices.Clone(single.ipRanges), v1beta2.IPRange{CIDR: "2021:100::/124"})
 			dual.families = families
 			dual.expectedEgressIPs = []string{single.expectedEgressIPs[0], "2021:100::1"}
+			dual.expectedConditions = slices.Clone(single.expectedConditions)
+			if dual.expectedConditions[0].Status == metav1.ConditionTrue {
+				dual.expectedConditions[0].Message = "EgressIPs are successfully assigned to EgressNode"
+			} else {
+				dual.expectedConditions[0].Message = "Failed to assign the IPs to EgressNode: no Node available"
+			}
+			dual.expectedConditions[1].Message = "EgressIPs are successfully allocated"
 			if families[0] == v1.IPv6Protocol {
 				slices.Reverse(dual.expectedEgressIPs)
 			}
