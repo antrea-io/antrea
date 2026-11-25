@@ -288,7 +288,19 @@ func (c *Controller) updatePod(oldObj interface{}, obj interface{}) {
 }
 
 func (c *Controller) deletePod(obj interface{}) {
-	pod := obj.(*v1.Pod)
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
+			return
+		}
+		pod, ok = deletedState.Obj.(*v1.Pod)
+		if !ok {
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Pod object", "obj", deletedState.Obj)
+			return
+		}
+	}
 	if pod.Spec.HostNetwork {
 		return
 	}
@@ -369,7 +381,19 @@ func (c *Controller) updateTC(oldObj interface{}, obj interface{}) {
 }
 
 func (c *Controller) deleteTC(obj interface{}) {
-	tc := obj.(*v1alpha2.TrafficControl)
+	tc, ok := obj.(*v1alpha2.TrafficControl)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
+			return
+		}
+		tc, ok = deletedState.Obj.(*v1alpha2.TrafficControl)
+		if !ok {
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-TrafficControl object", "obj", deletedState.Obj)
+			return
+		}
+	}
 	klog.V(2).InfoS("Processing TrafficControl DELETE event", "TrafficControl", klog.KObj(tc))
 	c.queue.Add(tc.Name)
 }
