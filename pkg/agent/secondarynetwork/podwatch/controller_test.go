@@ -41,9 +41,13 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	ktesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
@@ -256,6 +260,9 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 	deletedPodOwner := &crdv1beta1.PodOwner{
 		Name: "deleted-pod", Namespace: testNamespace, ContainerID: "deleted-container", IFName: "eth1",
 	}
+	deletedPodOwner2 := &crdv1beta1.PodOwner{
+		Name: "deleted-pod", Namespace: testNamespace, ContainerID: "deleted-container", IFName: "eth2",
+	}
 	primaryOwner := &crdv1beta1.PodOwner{
 		Name: podName, Namespace: testNamespace, ContainerID: containerID,
 	}
@@ -270,6 +277,7 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 			{IPAddress: "10.2.2.11", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: staleOwner}},
 			{IPAddress: "10.2.2.12", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: deletedPodOwner}},
 			{IPAddress: "10.2.2.13", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: primaryOwner}},
+			{IPAddress: "10.2.2.14", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: deletedPodOwner2}},
 		}},
 	}
 
@@ -279,8 +287,16 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace},
 		Spec:       corev1.PodSpec{NodeName: testNode},
 	}
-	pc.kubeClient = fake.NewSimpleClientset(localPod)
+	kubeClient := fake.NewSimpleClientset(localPod)
+	var podGets []string
+	kubeClient.PrependReactor("get", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		podGets = append(podGets, action.(ktesting.GetAction).GetName())
+		return false, nil, nil
+	})
+	pc.kubeClient = kubeClient
 	pc.nodeConfig.Name = testNode
+	// The local Pod is served from the informer cache, without any API GET.
+	require.NoError(t, pc.podInformer.GetIndexer().Add(localPod))
 	activeInterface := interfacestore.NewContainerInterface(
 		"host-eth1", containerID, podName, testNamespace, "eth1", containerNetNS(containerID), nil, nil, 0)
 	pc.interfaceStore.AddInterface(activeInterface)
@@ -294,11 +310,62 @@ func TestCleanUpStaleIPAddressesByInterface(t *testing.T) {
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 
-	// The active interface and primary network allocation must be preserved. The
-	// stale eth2 allocation must be released even though eth1 uses the same
+	// The first pass only records stale candidates: the active interface and
+	// primary network allocation are preserved, and nothing is released yet.
+	pc.cleanUpStaleIPAddresses()
+
+	// The stale eth2 allocation must be released even though eth1 uses the same
 	// container ID, and a deleted Pod must not prevent cleanup.
 	mockIPAM.EXPECT().SecondaryNetworkRelease(staleOwner).Return(nil)
 	mockIPAM.EXPECT().SecondaryNetworkRelease(deletedPodOwner).Return(nil)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(deletedPodOwner2).Return(nil)
+	pc.cleanUpStaleIPAddresses()
+
+	// The local Pod is resolved from the informer cache, while the deleted Pod
+	// costs one GET per pass no matter how many allocations it owns.
+	assert.Equal(t, []string{"deleted-pod", "deleted-pod"}, podGets)
+}
+
+func TestCleanUpStaleIPAddressesProtectsInFlightAllocation(t *testing.T) {
+	inFlightOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: containerID, IFName: "eth2",
+	}
+	pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "secondary-network-pool"},
+		Status: crdv1beta1.IPPoolStatus{IPAddresses: []crdv1beta1.IPAddressState{
+			{IPAddress: "10.2.2.10", Phase: crdv1beta1.IPAddressPhaseAllocated, Owner: crdv1beta1.IPAddressOwner{Pod: inFlightOwner}},
+		}},
+	}
+
+	ctrl := gomock.NewController(t)
+	pc, _, _, _ := testPodController(ctrl)
+	localPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace},
+		Spec:       corev1.PodSpec{NodeName: testNode},
+	}
+	pc.kubeClient = fake.NewSimpleClientset(localPod)
+	pc.nodeConfig.Name = testNode
+
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	pc.ipPoolLister = informerFactory.Crd().V1beta1().IPPools().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+
+	// First pass: the interface is not in the store yet (configuration is in
+	// flight), so the allocation is recorded as a stale candidate, not released.
+	pc.cleanUpStaleIPAddresses()
+
+	// The interface configuration completes before the next pass.
+	inFlightInterface := interfacestore.NewContainerInterface(
+		"host-eth2", containerID, podName, testNamespace, "eth2", containerNetNS(containerID), nil, nil, 0)
+	pc.interfaceStore.AddInterface(inFlightInterface)
+
+	// The allocation must never be released (no SecondaryNetworkRelease call is
+	// expected), no matter how many passes run.
+	pc.cleanUpStaleIPAddresses()
 	pc.cleanUpStaleIPAddresses()
 }
 
@@ -335,6 +402,9 @@ func TestCleanUpStaleIPAddressesPreservesRemotePod(t *testing.T) {
 	informerFactory.WaitForCacheSync(stopCh)
 
 	mockIPAM.EXPECT().SecondaryNetworkRelease(remoteOwner).Times(0)
+	// No matter how many passes run, a live Pod on another Node must keep its
+	// allocation.
+	pc.cleanUpStaleIPAddresses()
 	pc.cleanUpStaleIPAddresses()
 }
 
@@ -414,6 +484,15 @@ func TestPodControllerRun(t *testing.T) {
 	crdInformerFactory.WaitForCacheSync(stopCh)
 
 	mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner).Return(nil)
+
+	// Run delays the first cleanup pass by a random interval in production.
+	// Disable the delay so that the cleanup below is deterministic.
+	podController.cleanupInitialDelay = 0
+
+	// An allocation is released only after looking stale in two consecutive
+	// passes. Record the stale candidate now so that the first pass started by
+	// Run below releases it.
+	podController.cleanUpStaleIPAddresses()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -1160,6 +1239,52 @@ func TestConfigurePodSecondaryNetworkPartialFailureRollback(t *testing.T) {
 
 	// Ensure interface store has no remaining interfaces for this Pod after rollback
 	assert.Empty(t, pc.interfaceStore.GetContainerInterfacesByPod(podName, testNamespace))
+}
+
+func TestConfigurePodSecondaryNetworkValidatesBeforeConfiguring(t *testing.T) {
+	ctx := context.Background()
+	element1 := netdefv1.NetworkSelectionElement{
+		Namespace: testNamespace, Name: "net1", InterfaceRequest: "eth1",
+	}
+	element2 := netdefv1.NetworkSelectionElement{
+		Namespace: testNamespace, Name: "net2", InterfaceRequest: "eth2",
+	}
+	pod, cniInfo := testPod(podName, containerID, podIP, element1, element2)
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
+
+	_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// net2 does not exist yet.
+	network1 := testNetworkExt("net1", "", "", vlanNetworkType, "", "", 1500, 101, false)
+	_, err = pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network1, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// No IPAM allocation or interface configuration call is expected:
+	// validation fails before anything is configured, so retries while net2 is
+	// missing cause no create/delete churn.
+	_, err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1, &element2}, cniInfo)
+	require.ErrorContains(t, err, `"net2" not found`)
+	assert.Empty(t, pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace))
+
+	// Once the missing NetworkAttachmentDefinition is created, both networks
+	// are configured.
+	network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", 1500, 102, false)
+	_, err = pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network2, metav1.CreateOptions{})
+	require.NoError(t, err)
+	for i, element := range []netdefv1.NetworkSelectionElement{element1, element2} {
+		result := testIPAMResult(fmt.Sprintf("148.14.24.%d/24", 101+i), 101+i)
+		mockIPAM.EXPECT().SecondaryNetworkAllocate(&crdv1beta1.PodOwner{
+			Name: pod.Name, Namespace: pod.Namespace, ContainerID: containerID, IFName: element.InterfaceRequest,
+		}, gomock.Any()).Return(result, nil)
+		interfaceConfigurator.EXPECT().ConfigureVLANSecondaryInterface(
+			podName, testNamespace, containerID, cniInfo.netNS, element.InterfaceRequest, 1500, result, nil,
+		)
+	}
+	status, err := pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1, &element2}, cniInfo)
+	require.NoError(t, err)
+	assert.Len(t, status, 2)
 }
 
 func TestConfigurePodSecondaryNetworkSriovPartialFailureRollback(t *testing.T) {
@@ -2112,6 +2237,8 @@ func testPodController(ctrl *gomock.Controller) (
 	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatewayIP)}
 	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
 
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
+
 	// PodController without event handlers.
 	return &PodController{
 		kubeClient:         client,
@@ -2129,6 +2256,8 @@ func testPodController(ctrl *gomock.Controller) (
 		ipamAllocator:         mockIPAM,
 		interfaceStore:        interfacestore.NewInterfaceStore(),
 		primaryInterfaceStore: interfacestore.NewInterfaceStore(),
+		eventBroadcaster:      eventBroadcaster,
+		recorder:              eventBroadcaster.NewRecorder(scheme.Scheme, controllerName),
 		nodeConfig:            nodeConfig,
 	}, mockIPAM, interfaceConfigurator, mockOVSBridgeClient
 }

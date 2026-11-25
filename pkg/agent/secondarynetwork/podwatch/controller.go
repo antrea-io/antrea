@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -36,8 +37,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -62,6 +65,9 @@ const (
 	numWorkers     = 4
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod = 0 * time.Minute
+	// cleanupInterval is the period between two stale IPAM allocation cleanup
+	// passes.
+	cleanupInterval = 5 * time.Minute
 )
 
 const (
@@ -96,6 +102,15 @@ type secondaryNetworkRollbackState struct {
 	containerID string
 }
 
+// staleAllocationKey identifies an IPPool address entry that was found stale in
+// a cleanup pass.
+type staleAllocationKey struct {
+	poolName    string
+	ip          string
+	containerID string
+	ifName      string
+}
+
 type PodController struct {
 	kubeClient          clientset.Interface
 	netAttachDefClient  netdefclient.K8sCniCncfIoV1Interface
@@ -120,8 +135,21 @@ type PodController struct {
 	vfDeviceIDUsageMap sync.Map
 	// Map from "namespace/pod" to secondaryNetworkRollbackState. Only failed
 	// rollbacks are retained; status annotations are not configuration state.
+	// Known limitation: this state is in-memory only. If the agent restarts
+	// while a Pod is partially configured (e.g. a crash between two interfaces,
+	// or after a failed rollback), the restored interfaces make the Pod look
+	// configured and the missing networks are never retried until the Pod is
+	// recreated.
 	pendingRollbacks sync.Map
-	nodeConfig       *config.NodeConfig
+	// staleIPAllocations records the IPPool allocations that looked stale in the
+	// previous cleanup pass. Only written and read by the cleanup goroutine.
+	staleIPAllocations map[staleAllocationKey]struct{}
+	// cleanupInitialDelay delays the first cleanup pass so that all agents do
+	// not hit the API server at the same time after a rollout.
+	cleanupInitialDelay time.Duration
+	eventBroadcaster    events.EventBroadcaster
+	recorder            events.EventRecorder
+	nodeConfig          *config.NodeConfig
 }
 
 func NewPodController(
@@ -139,6 +167,7 @@ func NewPodController(
 		return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
 	}
 	podLister := corelisters.NewPodLister(podInformer.GetIndexer())
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: kubeClient.EventsV1()})
 	pc := PodController{
 		kubeClient:         kubeClient,
 		netAttachDefClient: netAttachDefClient,
@@ -156,6 +185,9 @@ func NewPodController(
 		primaryInterfaceStore: primaryInterfaceStore,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
+		cleanupInitialDelay:   time.Duration(rand.Float64() * float64(cleanupInterval)),
+		eventBroadcaster:      eventBroadcaster,
+		recorder:              eventBroadcaster.NewRecorder(scheme.Scheme, controllerName),
 		nodeConfig:            nodeConfig,
 	}
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -528,7 +560,23 @@ func (pc *PodController) configureSecondaryInterface(
 	return &ipamResult.Result, ifConfigErr
 }
 
-func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) ([]netdefv1.NetworkStatus, error) {
+// validatedSecondaryNetwork holds the validated configuration of one requested
+// secondary network, ready for interface configuration.
+type validatedSecondaryNetwork struct {
+	network       *netdefv1.NetworkSelectionElement
+	networkConfig *SecondaryNetworkConfig
+	resourceName  string
+	mac           net.HardwareAddr
+}
+
+// validatePodSecondaryNetworks resolves and validates all requested networks
+// without allocating any resource. Networks with deterministic configuration
+// errors (invalid CNI config, unsupported network type, duplicate MAC, ...)
+// are skipped and never retried. A retryable error (a missing or incomplete
+// NetworkAttachmentDefinition which may be created or fixed later) fails the
+// whole validation, so that no interface is configured until every requested
+// network can be.
+func (pc *PodController) validatePodSecondaryNetworks(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement) ([]*validatedSecondaryNetwork, error) {
 	usedIFNames := sets.New[string]()
 	usedIFMAC := sets.New[string]()
 	for _, network := range networkList {
@@ -538,16 +586,16 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	}
 
 	var savedErr error
-	interfacesConfigured := 0
-	var netStatus []netdefv1.NetworkStatus
-
+	validated := make([]*validatedSecondaryNetwork, 0, len(networkList))
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
 		netAttachDef, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
 		if err != nil {
 			klog.ErrorS(err, "Failed to get NetworkAttachmentDefinition", "network", network, "Pod", klog.KObj(pod))
+			// Retry as the NetworkAttachmentDefinition may not have been created yet.
+			// Note that NetworkAttachmentDefinition events do not requeue the Pod.
 			savedErr = err
-			break
+			continue
 		}
 
 		cniConfig, err := netdefutils.GetCNIConfig(netAttachDef, "")
@@ -581,7 +629,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				// It is probably worth retrying as the NetworkAttachmentDefinition
 				// may eventually be updated with the missing annotation.
 				savedErr = err
-				break
+				continue
 			}
 			resourceName = v
 		}
@@ -629,8 +677,35 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			continue
 		}
 
+		validated = append(validated, &validatedSecondaryNetwork{
+			network:       network,
+			networkConfig: networkConfig,
+			resourceName:  resourceName,
+			mac:           mac,
+		})
+	}
+	return validated, savedErr
+}
+
+func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) ([]netdefv1.NetworkStatus, error) {
+	// Validate every requested network before configuring anything, so that
+	// configuration errors fail fast without create/delete churn and retries
+	// after a validation failure require no rollback.
+	validated, err := pc.validatePodSecondaryNetworks(pod, networkList)
+	if err != nil {
+		pc.recorder.Eventf(pod, nil, corev1.EventTypeWarning, "SecondaryNetworkNotReady", "SecondaryNetworkConfiguration",
+			"Secondary network validation failed, will retry: %v", err)
+		return nil, err
+	}
+
+	var savedErr error
+	interfacesConfigured := 0
+	var netStatus []netdefv1.NetworkStatus
+
+	for _, vn := range validated {
+		network, networkConfig := vn.network, vn.networkConfig
 		// Secondary network information retrieved from API server. Proceed to configure secondary interface now.
-		res, err := pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig, mac)
+		res, err := pc.configureSecondaryInterface(pod, network, vn.resourceName, podCNIInfo, networkConfig, vn.mac)
 		if err != nil {
 			klog.ErrorS(err, "Secondary interface configuration failed",
 				"Pod", klog.KObj(pod), "interface", network.InterfaceRequest,
@@ -672,6 +747,8 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			// on retry.
 			klog.InfoS("Rolling back partially configured secondary interfaces due to configuration failure",
 				"Pod", klog.KObj(pod), "interfacesConfigured", interfacesConfigured)
+			pc.recorder.Eventf(pod, nil, corev1.EventTypeWarning, "SecondaryNetworkNotReady", "SecondaryNetworkConfiguration",
+				"Rolling back %d partially configured secondary interfaces after a failure, will retry: %v", interfacesConfigured, savedErr)
 			var storedInterfaces []*interfacestore.InterfaceConfig
 			for _, iface := range pc.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace) {
 				if iface.ContainerID == podCNIInfo.containerID {
@@ -736,6 +813,9 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, pc.podInformer.HasSynced) {
 		return
 	}
+	pc.eventBroadcaster.StartStructuredLogging(0)
+	pc.eventBroadcaster.StartRecordingToSink(stopCh)
+	defer pc.eventBroadcaster.Shutdown()
 
 	// Failure of initializeSRIOVSecondaryInterfaceStore() won't stop agent from starting.
 	if err := pc.initializeSRIOVSecondaryInterfaceStore(); err != nil {
@@ -743,7 +823,18 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	go wait.NonSlidingUntil(pc.cleanUpStaleIPAddresses, 5*time.Minute, stopCh)
+	go func() {
+		if pc.cleanupInitialDelay > 0 {
+			timer := time.NewTimer(pc.cleanupInitialDelay)
+			defer timer.Stop()
+			select {
+			case <-stopCh:
+				return
+			case <-timer.C:
+			}
+		}
+		wait.NonSlidingUntil(pc.cleanUpStaleIPAddresses, cleanupInterval, stopCh)
+	}()
 
 	pc.reconcileSecondaryInterfaces()
 
@@ -776,8 +867,21 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 // Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
 // We run it periodically to cover the case where a Pod is recreated with
 // the same name on another Node and has any secondary IP as well.
+// An allocation is released only after it has looked stale in two consecutive
+// passes: a fresh allocation is visible in the IPPool status before the
+// interface being configured is added to the local interface store, and
+// releasing such an allocation could hand its IP to another Pod.
 func (pc *PodController) cleanUpStaleIPAddresses() {
 	pools, _ := pc.ipPoolLister.List(labels.Everything())
+	staleAllocations := make(map[staleAllocationKey]struct{})
+	// Cache live Pod GET results for the duration of this pass: a Pod with
+	// several secondary interfaces or pools would otherwise cost one GET per
+	// allocation.
+	type podLookup struct {
+		pod *corev1.Pod
+		err error
+	}
+	podCache := make(map[string]podLookup)
 	for _, ipPool := range pools {
 		for _, address := range ipPool.Status.IPAddresses {
 			stalePodOwner := address.Owner.Pod
@@ -793,17 +897,41 @@ func (pc *PodController) cleanUpStaleIPAddresses() {
 			if _, found := pc.interfaceStore.GetInterface(interfaceKey); found {
 				continue
 			}
-			// The IPPool cache is cluster-wide while interfaceStore only contains local interfaces.
-			// Use authoritative Pod state to preserve allocations for live Pods on other Nodes.
-			pod, err := pc.kubeClient.CoreV1().Pods(stalePodOwner.Namespace).Get(
-				context.TODO(), stalePodOwner.Name, metav1.GetOptions{})
-			if err == nil {
-				if pod.Spec.NodeName != pc.nodeConfig.Name {
+			// The IPPool cache is cluster-wide while interfaceStore only contains local
+			// interfaces. The Pod informer is filtered by Node name, so a Pod found in
+			// the local cache is local and needs no API GET; only Pods missing from the
+			// local cache (remote or deleted) fall back to a GET to preserve
+			// allocations for live Pods on other Nodes.
+			if _, err := pc.podLister.Pods(stalePodOwner.Namespace).Get(stalePodOwner.Name); err != nil {
+				podKey := podKeyGet(stalePodOwner.Name, stalePodOwner.Namespace)
+				lookup, cached := podCache[podKey]
+				if !cached {
+					pod, err := pc.kubeClient.CoreV1().Pods(stalePodOwner.Namespace).Get(
+						context.TODO(), stalePodOwner.Name, metav1.GetOptions{})
+					lookup = podLookup{pod, err}
+					podCache[podKey] = lookup
+				}
+				if lookup.err == nil {
+					if lookup.pod.Spec.NodeName != pc.nodeConfig.Name {
+						continue
+					}
+				} else if !apierrors.IsNotFound(lookup.err) {
+					klog.ErrorS(lookup.err, "Failed to get Pod before releasing stale IPAM allocation",
+						"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
 					continue
 				}
-			} else if !apierrors.IsNotFound(err) {
-				klog.ErrorS(err, "Failed to get Pod before releasing stale IPAM allocation",
-					"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
+			}
+			key := staleAllocationKey{
+				poolName:    ipPool.Name,
+				ip:          address.IPAddress,
+				containerID: stalePodOwner.ContainerID,
+				ifName:      stalePodOwner.IFName,
+			}
+			staleAllocations[key] = struct{}{}
+			if _, stale := pc.staleIPAllocations[key]; !stale {
+				// First time this allocation looks stale. It may belong to an
+				// interface which is still being configured; wait for the next
+				// pass to confirm.
 				continue
 			}
 			klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
@@ -813,6 +941,7 @@ func (pc *PodController) cleanUpStaleIPAddresses() {
 			}
 		}
 	}
+	pc.staleIPAllocations = staleAllocations
 }
 
 func (pc *PodController) initializeCNICache() {
