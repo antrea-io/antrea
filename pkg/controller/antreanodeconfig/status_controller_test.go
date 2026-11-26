@@ -353,9 +353,36 @@ func TestReportHeartbeatFiltering(t *testing.T) {
 	}
 	before.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
 	assert.True(t, reportNeedsSync(before, after, now), "Recovery from a stale report must refresh readiness promptly")
+	stillStale := before.DeepCopy()
+	stillStale.LocalPodNum = 5
+	assert.False(t, reportNeedsSync(before, stillStale, now), "Unrelated updates while still stale must not trigger sync")
+	fresh := statusInfo(node, report)
+	expired := fresh.DeepCopy()
+	expired.AgentConditions[0].LastHeartbeatTime = metav1.NewTime(now.Add(-4 * time.Minute))
+	assert.True(t, reportNeedsSync(fresh, expired, now), "Fresh-to-expired heartbeat transition must trigger sync")
+	missingHeartbeat := fresh.DeepCopy()
+	missingHeartbeat.AgentConditions = nil
+	assert.True(t, reportNeedsSync(fresh, missingHeartbeat, now), "Fresh-to-missing heartbeat transition must trigger sync")
 	assert.True(t, reportNeedsSync(before, nil, now))
 	assert.True(t, reportNeedsSync(nil, after, now))
 	assert.False(t, reportNeedsSync(nil, nil, now))
+}
+
+func TestClampConditionReason(t *testing.T) {
+	now := time.Now()
+	cfg, node, report := statusFixture(now)
+	report.Conditions[0].Status = metav1.ConditionFalse
+	report.Conditions[0].Reason = strings.Repeat("Reason", 40)
+	nodes := []*corev1.Node{node}
+	status := calculateStatus(cfg, nodeconfigutil.SelectConfigs(nodes, []*crdv1alpha1.AntreaNodeConfig{cfg}), nodes, map[string]*crdv1beta1.AntreaAgentInfo{node.Name: statusInfo(node, report)}, now)
+	ready := meta.FindStatusCondition(status.Conditions, readyConditionType)
+	require.NotNil(t, ready)
+	assert.LessOrEqual(t, len(ready.Reason), maxConditionReasonLength)
+
+	multiByte := strings.Repeat("é", 100)
+	clamped := clampConditionReason(multiByte)
+	assert.LessOrEqual(t, len(clamped), maxConditionReasonLength)
+	assert.Equal(t, strings.Repeat("é", 64), clamped)
 }
 
 func TestStatusControllerShutdownCancelsRequests(t *testing.T) {

@@ -240,6 +240,7 @@ function set_antrea_node_config_feature_gate {
 
   helm upgrade antrea "$ANTREA_CHART" --namespace kube-system --reuse-values \
     --set featureGates.AntreaNodeConfig="$enabled"
+  kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
   kubectl rollout status --timeout=5m daemonset.apps/antrea-agent -n kube-system
 }
 
@@ -357,6 +358,7 @@ function run_test_with_antreanodeconfigs {
   kubectl delete -f "$ANTREA_NODE_CONFIGS_NODEPOOL_YAML"
   helm upgrade antrea "$ANTREA_CHART" --namespace kube-system --reuse-values \
     --set featureGates.SecondaryNetwork=false
+  kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
   kubectl rollout status --timeout=5m daemonset.apps/antrea-agent -n kube-system
   go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network \
     -run='^TestAntreaNodeConfigDisabledStatus$' -provider=kind "${TEST_OPTIONS[@]}"

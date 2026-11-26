@@ -137,6 +137,9 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		}
+		if ctx.Err() != nil {
+			return
+		}
 		syncAndScheduleRetry()
 	}
 }
@@ -230,6 +233,27 @@ func (monitor *agentMonitor) updateAgentCRD(ctx context.Context, partial bool) (
 				report.Conditions = append(report.Conditions, *previousReady)
 			}
 			meta.SetStatusCondition(&report.Conditions, *fallback)
+		} else if ready := meta.FindStatusCondition(report.Conditions, readyCondition); ready != nil {
+			// Align Ready transition time with the previously published AgentInfo so
+			// status transitions (such as Unknown -> True while a new ANC generation
+			// reconciles) advance monotonically and Agent restarts preserve unchanged
+			// transition times.
+			updated := *ready
+			if previousReady != nil && previousReady.Status != updated.Status &&
+				!updated.LastTransitionTime.After(previousReady.LastTransitionTime.Time) {
+				updated.LastTransitionTime = metav1.Time{}
+			}
+			var conditions []metav1.Condition
+			if previousReady != nil {
+				conditions = append(conditions, *previousReady)
+			}
+			for _, cond := range report.Conditions {
+				if cond.Type != readyCondition {
+					conditions = append(conditions, cond)
+				}
+			}
+			meta.SetStatusCondition(&conditions, updated)
+			report.Conditions = conditions
 		}
 		monitor.agentCRD.SecondaryNetwork = report
 	}

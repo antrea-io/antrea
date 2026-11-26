@@ -119,6 +119,17 @@ func TestAntreaNodeConfigPublication(t *testing.T) {
 			p.snapshot.AntreaNodeConfig.UID = "new-uid"
 		}, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionUnknown},
 		{name: "missing feature", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) { p.report = nil }, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionUnknown},
+		{name: "idle pre-ANC result waits for new ANC", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
+			p.report.ConfigSource = ""
+			p.report.CurrentBridge = ""
+			p.report.Conditions[0].ObservedGeneration = 0
+		}, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionUnknown, featureReason: "ConfigurationUnavailable"},
+		{name: "non-ANC bridge drain preserved while new ANC pending", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
+			p.report.ConfigSource = ""
+			p.report.Conditions[0].Status = metav1.ConditionFalse
+			p.report.Conditions[0].Reason = "BridgeInUse"
+			p.report.Conditions[0].ObservedGeneration = 0
+		}, status: metav1.ConditionUnknown, reason: "WaitingForFeatureResults", featureStatus: metav1.ConditionFalse, featureReason: "BridgeInUse"},
 		{name: "static success", change: func(_ *testANCProvider, p *testSecondaryNetworkProvider, _ *corev1.Node) {
 			p.report.ConfigSource = v1beta1.SecondaryNetworkConfigSourceAgentConfig
 			p.report.Conditions[0].ObservedGeneration = 0

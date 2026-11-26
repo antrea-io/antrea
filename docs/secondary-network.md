@@ -371,10 +371,12 @@ with reason `ConfigurationUnavailable`. A missing `secondaryNetwork` object or m
 `Ready` Condition is also unavailable, not disabled.
 No separate `configurationEnabled` flag is needed.
 
-If static configuration creates `br-secondary` while the ANC requests `br1`, the feature
-reports `Ready=False` with reason `OverriddenByStaticConfig`. Its `currentBridge` and
-`desiredBridge` refer to the effective static `br-secondary` configuration. If that
-configuration fails to reconcile, the Condition message also includes the error.
+If static configuration creates `br-secondary` while the ANC requests `br1`, the
+`secondaryNetwork` feature still reports the static configuration's own readiness with
+`configSource: AgentConfig`, and its `currentBridge` and `desiredBridge` refer to the
+effective static `br-secondary` configuration (including any reconciliation error in the
+feature Condition message). Meanwhile, `antreaNodeConfig` and the aggregate ANC status
+report `Ready=False` with reason `OverriddenByStaticConfig`.
 
 Suppose `spec.secondaryNetwork` is removed, `node-b` has completed cleanup, and a Pod on
 `node-a` still uses `br1`. The retained ANC's aggregate output could be:

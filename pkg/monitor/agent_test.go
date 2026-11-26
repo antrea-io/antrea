@@ -406,11 +406,88 @@ func TestPublishCurrentSecondaryNetworkReport(t *testing.T) {
 	monitor.syncAgentCRD(context.Background())
 	current, err = client.CrdV1beta1().AntreaAgentInfos().Get(context.Background(), info.Name, metav1.GetOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, static, current.SecondaryNetwork, "Static feature status must be published without an ANC identity")
+	require.NotNil(t, current.SecondaryNetwork)
+	require.Len(t, current.SecondaryNetwork.Conditions, 1)
+	assert.False(t, current.SecondaryNetwork.Conditions[0].LastTransitionTime.IsZero(), "Transition from Unknown to True must stamp LastTransitionTime")
+	expectedStatic := static.DeepCopy()
+	expectedStatic.Conditions[0].LastTransitionTime = current.SecondaryNetwork.Conditions[0].LastTransitionTime
+	assert.Equal(t, expectedStatic, current.SecondaryNetwork, "Static feature status must be published without an ANC identity")
 
 	for _, action := range client.Actions() {
 		assert.Equal(t, "antreaagentinfos", action.GetResource().Resource, "Publishing must only access AgentInfo")
 	}
+}
+
+func TestSecondaryNetworkTransitionTimeMonotonicAndPreservedOnRestart(t *testing.T) {
+	ctx := context.Background()
+	t0 := metav1.NewTime(time.Now().Add(-5 * time.Minute))
+	info := &v1beta1.AntreaAgentInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "testAgentCRD"},
+		SecondaryNetwork: &v1beta1.SecondaryNetworkStatus{
+			ConfigSource:  v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig,
+			CurrentBridge: "br-current",
+			Conditions: []metav1.Condition{{
+				Type:               string(v1beta1.SecondaryNetworkConditionReady),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+				Reason:             "Reconciled",
+				LastTransitionTime: t0,
+			}},
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(info)
+	monitor := newAgentMonitor(client, t)
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	require.NoError(t, indexer.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: info.Name, UID: "node-uid"}}))
+	monitor.querier = &testSecondaryNetworkQuerier{AgentQuerier: monitor.querier, nodeLister: corelisters.NewNodeLister(indexer)}
+
+	// Simulate Agent restart: provider starts with a fresh Ready=True timestamp,
+	// while the persisted AgentInfo already has Ready=True from t0.
+	snap1 := currentANCSnapshot()
+	snap1.AntreaNodeConfig.Generation = 1
+	target := &testANCProvider{snapshot: snap1}
+	report1 := readySecondaryNetworkReport()
+	report1.Conditions[0].ObservedGeneration = 1
+	report1.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * time.Minute))
+	feature := &testSecondaryNetworkProvider{report: report1}
+	monitor.SetAntreaNodeConfigSnapshotProvider(target)
+	monitor.SetSecondaryNetworkStatusProvider(feature)
+
+	monitor.syncAgentCRD(ctx)
+	published, err := client.CrdV1beta1().AntreaAgentInfos().Get(ctx, info.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	ready := meta.FindStatusCondition(published.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.Equal(t, t0, ready.LastTransitionTime, "Agent restart with unchanged Ready=True must preserve LastTransitionTime")
+
+	// Advance ANC to generation 2 before feature reconciliation finishes -> Unknown at t1.
+	snap2 := currentANCSnapshot()
+	snap2.AntreaNodeConfig.Generation = 2
+	target.snapshot = snap2
+	monitor.syncAgentCRD(ctx)
+	published, err = client.CrdV1beta1().AntreaAgentInfos().Get(ctx, info.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	unknownReady := meta.FindStatusCondition(published.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
+	require.NotNil(t, unknownReady)
+	require.Equal(t, metav1.ConditionUnknown, unknownReady.Status)
+	require.True(t, unknownReady.LastTransitionTime.After(t0.Time))
+
+	// Feature reconciles generation 2 while keeping its internal cached t0 timestamp
+	// (because the controller itself never transitioned through Unknown).
+	report2 := readySecondaryNetworkReport()
+	report2.Conditions[0].ObservedGeneration = 2
+	report2.Conditions[0].LastTransitionTime = t0
+	feature.report = report2
+	monitor.syncAgentCRD(ctx)
+	published, err = client.CrdV1beta1().AntreaAgentInfos().Get(ctx, info.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	recoveredReady := meta.FindStatusCondition(published.SecondaryNetwork.Conditions, string(v1beta1.SecondaryNetworkConditionReady))
+	require.NotNil(t, recoveredReady)
+	assert.Equal(t, metav1.ConditionTrue, recoveredReady.Status)
+	assert.Equal(t, int64(2), recoveredReady.ObservedGeneration)
+	assert.False(t, recoveredReady.LastTransitionTime.Before(&unknownReady.LastTransitionTime),
+		"Unknown -> True transition must not move LastTransitionTime backwards")
 }
 
 func TestSecondaryNetworkReportWithoutNodeIdentity(t *testing.T) {

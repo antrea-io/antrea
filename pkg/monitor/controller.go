@@ -251,6 +251,9 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 	for _, name := range sets.List(staleSet) {
 		if err := monitor.deleteAgentCRD(name); err != nil {
 			klog.ErrorS(err, "Failed to delete stale agent monitoring CRD", "name", name)
+			if !monitor.externalNodeEnabled {
+				monitor.nodeQueue.AddRateLimited(name)
+			}
 		}
 	}
 }

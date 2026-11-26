@@ -42,9 +42,16 @@ func (monitor *agentMonitor) assembleAntreaNodeConfigStatus(snapshot *antreanode
 
 	// A public feature result with ANC source belongs to the common target. Its
 	// internal UID must match too: generations restart when an ANC is recreated.
-	if report != nil && report.ConfigSource == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
+	// An idle pre-ANC Ready=True result (no configSource) also becomes Unknown
+	// while a newly selected ANC waits for its first reconciliation; non-ANC
+	// failures such as BridgeInUse, FeatureDisabled, or UnsupportedNode remain
+	// visible until replaced.
+	staleANCResult := report != nil && report.ConfigSource == v1beta1.SecondaryNetworkConfigSourceAntreaNodeConfig &&
 		(target == nil || result == nil || result.ConfigUID != target.UID || ready == nil ||
-			ready.ObservedGeneration != generation) {
+			ready.ObservedGeneration != generation)
+	staleIdleResult := target != nil && report != nil && report.ConfigSource == "" &&
+		ready != nil && ready.Status == metav1.ConditionTrue
+	if staleANCResult || staleIdleResult {
 		condition := metav1.Condition{Type: "Ready", Status: metav1.ConditionUnknown,
 			Reason: "ConfigurationUnavailable", Message: "Waiting for reconciliation of the selected AntreaNodeConfig"}
 		if !available {

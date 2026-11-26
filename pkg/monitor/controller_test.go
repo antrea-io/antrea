@@ -464,6 +464,19 @@ func TestDeleteAgentCRDPreservesConcurrentStatusPublication(t *testing.T) {
 	}
 }
 
+func TestDeleteStaleAgentCRDsRequeuesOnError(t *testing.T) {
+	report := &v1beta1.AntreaAgentInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "stale-node", UID: "report1", ResourceVersion: "10"},
+	}
+	controller := newControllerMonitor(fakeclientset.NewSimpleClientset(report))
+	controller.controllerMonitor.externalNodeEnabled = false
+	controller.crdClient.PrependReactor("delete", "antreaagentinfos", func(cgtesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("temporary conflict")
+	})
+	controller.controllerMonitor.deleteStaleAgentCRDs()
+	assert.Equal(t, 1, controller.controllerMonitor.nodeQueue.NumRequeues(report.Name))
+}
+
 func TestCreateAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	testAgentCRD := &v1beta1.AntreaAgentInfo{

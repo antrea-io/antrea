@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,8 +45,9 @@ import (
 )
 
 const (
-	agentReportTimeout   = 3 * time.Minute
-	statusResyncInterval = 30 * time.Second
+	agentReportTimeout       = 3 * time.Minute
+	statusResyncInterval     = 30 * time.Second
+	maxConditionReasonLength = 128
 )
 
 // StatusController aggregates Agent reports into AntreaNodeConfig status.
@@ -124,12 +126,19 @@ func reportNeedsSync(before, after *crdv1beta1.AntreaAgentInfo, now time.Time) b
 	if before == nil || after == nil {
 		return before != after
 	}
-	// Stable heartbeats do not change realization. Recovery from an expired
-	// heartbeat must refresh readiness without waiting for the periodic resync.
+	// Stable heartbeats do not change realization. Heartbeat freshness transitions
+	// must refresh readiness without waiting for the periodic resync.
 	return before.NodeRef.UID != after.NodeRef.UID ||
 		!reflect.DeepEqual(before.AntreaNodeConfig, after.AntreaNodeConfig) ||
-		now.Sub(agentHeartbeat(before).Time) > agentReportTimeout ||
-		agentHeartbeat(before).After(now.Add(time.Minute))
+		heartbeatFresh(before, now) != heartbeatFresh(after, now)
+}
+
+func heartbeatFresh(info *crdv1beta1.AntreaAgentInfo, now time.Time) bool {
+	if info == nil {
+		return false
+	}
+	heartbeat := agentHeartbeat(info)
+	return !heartbeat.IsZero() && now.Sub(heartbeat.Time) <= agentReportTimeout && !heartbeat.After(now.Add(time.Minute))
 }
 
 func agentHeartbeat(info *crdv1beta1.AntreaAgentInfo) metav1.Time {
@@ -238,10 +247,6 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	configs, err := c.ancLister.List(labels.Everything())
-	if err != nil {
-		return err
-	}
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
 		return err
@@ -255,6 +260,10 @@ func (c *StatusController) syncStatus(ctx context.Context, name string) error {
 		agentInfos[info.Name] = info
 	}
 	if c.selected == nil || c.cachedVersion != version {
+		configs, err := c.ancLister.List(labels.Everything())
+		if err != nil {
+			return err
+		}
 		c.selected, c.cachedVersion = nodeconfigutil.SelectConfigs(nodes, configs), version
 	}
 	status := calculateStatus(cfg, c.selected, nodes, agentInfos, time.Now())
@@ -271,11 +280,7 @@ func freshReport(node *corev1.Node, info *crdv1beta1.AntreaAgentInfo, now time.T
 	if info == nil || info.AntreaNodeConfig == nil || info.NodeRef.UID != node.UID {
 		return false
 	}
-	heartbeat := agentHeartbeat(info)
-	if heartbeat.IsZero() || now.Sub(heartbeat.Time) > agentReportTimeout || heartbeat.After(now.Add(time.Minute)) {
-		return false
-	}
-	return nodeReadiness(node) == corev1.ConditionTrue
+	return heartbeatFresh(info, now) && nodeReadiness(node) == corev1.ConditionTrue
 }
 
 func calculateStatus(cfg *crdv1alpha1.AntreaNodeConfig, selectedConfigs map[types.UID]*crdv1alpha1.AntreaNodeConfig,
@@ -348,6 +353,17 @@ func selectedNodeCondition(cfg *crdv1alpha1.AntreaNodeConfig, node *corev1.Node,
 		condition.Status, condition.Reason = metav1.ConditionFalse, "GenerationNotObserved"
 		return condition
 	}
-	condition.Status, condition.Reason = ready.Status, ready.Reason
+	condition.Status, condition.Reason = ready.Status, clampConditionReason(ready.Reason)
 	return condition
+}
+
+func clampConditionReason(reason string) string {
+	if len(reason) <= maxConditionReasonLength {
+		return reason
+	}
+	end := maxConditionReasonLength
+	for end > 0 && !utf8.RuneStart(reason[end]) {
+		end--
+	}
+	return reason[:end]
 }
