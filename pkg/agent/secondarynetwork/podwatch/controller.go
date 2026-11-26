@@ -185,10 +185,11 @@ func NewPodController(
 		primaryInterfaceStore: primaryInterfaceStore,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
-		cleanupInitialDelay:   time.Duration(rand.Float64() * float64(cleanupInterval)),
-		eventBroadcaster:      eventBroadcaster,
-		recorder:              eventBroadcaster.NewRecorder(scheme.Scheme, controllerName),
-		nodeConfig:            nodeConfig,
+		// #nosec G404: randomness only staggers cleanup requests to the API server; it is not used for security.
+		cleanupInitialDelay: time.Duration(rand.Float64() * float64(cleanupInterval)),
+		eventBroadcaster:    eventBroadcaster,
+		recorder:            eventBroadcaster.NewRecorder(scheme.Scheme, controllerName),
+		nodeConfig:          nodeConfig,
 	}
 	podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
