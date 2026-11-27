@@ -163,6 +163,208 @@ func TestAllocateNext(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
 }
 
+func TestAllocateNextAfterReleaseWithStaleLister(t *testing.T) {
+	ctx := context.Background()
+	client := fakepoolclient.NewIPPoolClient()
+	owner := *fakePodOwner.DeepCopy()
+	owner.Pod.IFName = "net1"
+	pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "release-stale-pool"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+			SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+		},
+		Status: crdv1b1.IPPoolStatus{IPAddresses: []crdv1b1.IPAddressState{{
+			IPAddress: "10.2.2.10", Phase: crdv1b1.IPAddressPhaseAllocated, Owner: owner,
+		}}},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Keep the released allocation in the lister to reproduce an informer which has
+	// not observed the successful release yet.
+	cachedPool := pool.DeepCopy()
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	require.NoError(t, indexer.Add(cachedPool.DeepCopy()))
+	lister := crdlisters.NewIPPoolLister(indexer)
+	allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+	require.NoError(t, err)
+
+	require.NoError(t, allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName))
+	released, err := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Empty(t, released.Status.IPAddresses)
+
+	ip, subnetInfo, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
+	require.NoError(t, err)
+	assert.Equal(t, "10.2.2.10", ip.String())
+	assert.Equal(t, &pool.Spec.SubnetInfo, subnetInfo)
+
+	updated, err := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Len(t, updated.Status.IPAddresses, 1)
+	assert.Equal(t, "10.2.2.10", updated.Status.IPAddresses[0].IPAddress)
+	assert.Equal(t, owner, updated.Status.IPAddresses[0].Owner)
+	assert.NotEqual(t, released.ResourceVersion, updated.ResourceVersion,
+		"reallocation must reserve the address with a new API status update")
+
+	cached, err := lister.Get(pool.Name)
+	require.NoError(t, err)
+	assert.Equal(t, cachedPool, cached, "the test lister must remain stale")
+}
+
+func TestAllocateReservedOrNextAfterReleaseWithStaleLister(t *testing.T) {
+	ctx := context.Background()
+	client := fakepoolclient.NewIPPoolClient()
+	owner := crdv1b1.IPAddressOwner{
+		StatefulSet: &crdv1b1.StatefulSetOwner{Name: "web", Namespace: testNamespace, Index: 0},
+		Pod: &crdv1b1.PodOwner{
+			Name: "web-0", Namespace: testNamespace, ContainerID: "container-0",
+		},
+	}
+	pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "reserved-release-stale-pool"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+			SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+		},
+		Status: crdv1b1.IPPoolStatus{IPAddresses: []crdv1b1.IPAddressState{{
+			IPAddress: "10.2.2.10", Phase: crdv1b1.IPAddressPhaseAllocated, Owner: owner,
+		}}},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	cachedPool := pool.DeepCopy()
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	require.NoError(t, indexer.Add(cachedPool.DeepCopy()))
+	lister := crdlisters.NewIPPoolLister(indexer)
+	allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+	require.NoError(t, err)
+
+	// Releasing a StatefulSet Pod allocation retains the reservation without a Pod
+	// owner. Keep the old allocation in the lister to simulate an informer lag.
+	require.NoError(t, allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName))
+	released, err := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Len(t, released.Status.IPAddresses, 1)
+	assert.Equal(t, crdv1b1.IPAddressPhaseReserved, released.Status.IPAddresses[0].Phase)
+	assert.Nil(t, released.Status.IPAddresses[0].Owner.Pod)
+
+	ip, subnetInfo, err := allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
+	require.NoError(t, err)
+	assert.Equal(t, "10.2.2.10", ip.String())
+	assert.Equal(t, &pool.Spec.SubnetInfo, subnetInfo)
+
+	updated, err := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Len(t, updated.Status.IPAddresses, 1)
+	assert.Equal(t, owner, updated.Status.IPAddresses[0].Owner)
+	assert.Equal(t, crdv1b1.IPAddressPhaseAllocated, updated.Status.IPAddresses[0].Phase)
+	assert.NotEqual(t, released.ResourceVersion, updated.ResourceVersion,
+		"a stale cached allocation must not be returned without updating the live reservation")
+}
+
+func TestAllocateReservedOrNextDoesNotOverwriteDifferentOwner(t *testing.T) {
+	ctx := context.Background()
+	client := fakepoolclient.NewIPPoolClient()
+	statefulSetOwner := &crdv1b1.StatefulSetOwner{Name: "web", Namespace: testNamespace, Index: 0}
+	owner := crdv1b1.IPAddressOwner{
+		StatefulSet: statefulSetOwner,
+		Pod: &crdv1b1.PodOwner{
+			Name: "web-0", Namespace: testNamespace, ContainerID: "container-0",
+		},
+	}
+	otherOwner := crdv1b1.IPAddressOwner{Pod: &crdv1b1.PodOwner{
+		Name: "other-pod", Namespace: testNamespace, ContainerID: "other-container",
+	}}
+	pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "reserved-owner-conflict-pool"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+			SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+		},
+		Status: crdv1b1.IPPoolStatus{IPAddresses: []crdv1b1.IPAddressState{{
+			IPAddress: "10.2.2.10",
+			Phase:     crdv1b1.IPAddressPhaseReserved,
+			Owner:     crdv1b1.IPAddressOwner{StatefulSet: statefulSetOwner},
+		}}},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	cachedPool := pool.DeepCopy()
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	require.NoError(t, indexer.Add(cachedPool.DeepCopy()))
+	lister := crdlisters.NewIPPoolLister(indexer)
+	allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+	require.NoError(t, err)
+
+	// Replace the reservation in the API server without updating the lister. The
+	// first stale update will conflict, and the retry must not take over the new
+	// owner's allocation.
+	livePool := pool.DeepCopy()
+	livePool.Status.IPAddresses[0].Phase = crdv1b1.IPAddressPhaseAllocated
+	livePool.Status.IPAddresses[0].Owner = otherOwner
+	_, err = client.CrdV1beta1().IPPools().UpdateStatus(ctx, livePool, metav1.UpdateOptions{})
+	require.NoError(t, err)
+
+	_, _, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
+	require.ErrorContains(t, err, "not reserved")
+	updated, getErr := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+	require.NoError(t, getErr)
+	require.Len(t, updated.Status.IPAddresses, 1)
+	assert.Equal(t, otherOwner, updated.Status.IPAddresses[0].Owner)
+}
+
+func TestReleaseWithStaleListerMissingAllocation(t *testing.T) {
+	for _, operation := range []string{"release IP", "release container"} {
+		t.Run(operation, func(t *testing.T) {
+			ctx := context.Background()
+			client := fakepoolclient.NewIPPoolClient()
+			owner := *fakePodOwner.DeepCopy()
+			owner.Pod.IFName = "net1"
+			pool, err := client.CrdV1beta1().IPPools().Create(ctx, &crdv1b1.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "missing-allocation-stale-pool"},
+				Spec: crdv1b1.IPPoolSpec{
+					IPRanges:   []crdv1b1.IPRange{{Start: "10.2.2.10", End: "10.2.2.20"}},
+					SubnetInfo: crdv1b1.SubnetInfo{Gateway: "10.2.2.1", PrefixLength: 24},
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			// The lister has an empty status, while the API server already contains
+			// the allocation which needs to be released.
+			cachedPool := pool.DeepCopy()
+			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+			require.NoError(t, indexer.Add(cachedPool.DeepCopy()))
+			lister := crdlisters.NewIPPoolLister(indexer)
+			allocator, err := NewIPPoolAllocator(pool.Name, client, lister)
+			require.NoError(t, err)
+
+			livePool := pool.DeepCopy()
+			livePool.Status.IPAddresses = []crdv1b1.IPAddressState{{
+				IPAddress: "10.2.2.10", Phase: crdv1b1.IPAddressPhaseAllocated, Owner: owner,
+			}}
+			livePool, err = client.CrdV1beta1().IPPools().UpdateStatus(ctx, livePool, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			if operation == "release IP" {
+				err = allocator.Release(net.ParseIP("10.2.2.10"))
+			} else {
+				err = allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName)
+			}
+			require.NoError(t, err)
+
+			updated, err := client.CrdV1beta1().IPPools().Get(ctx, pool.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Empty(t, updated.Status.IPAddresses)
+			assert.NotEqual(t, livePool.ResourceVersion, updated.ResourceVersion,
+				"release must update the live allocation which is absent from the cache")
+			cached, err := lister.Get(pool.Name)
+			require.NoError(t, err)
+			assert.Equal(t, cachedPool, cached, "the test lister must remain stale")
+		})
+	}
+}
+
 func TestAllocateNextConflictWithStaleLister(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
