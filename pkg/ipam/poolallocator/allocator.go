@@ -116,6 +116,25 @@ func (a *IPPoolAllocator) retryPoolStatusUpdate(update func(*v1beta1.IPPool) err
 	})
 }
 
+// reservedIPsForIPRange returns addresses in the range that must not be allocated,
+// e.g. the subnet gateway when it falls within [start, end] (see docs for IPPool).
+func reservedIPsForIPRange(ipRange *v1beta1.IPRange, subnetInfo *v1beta1.SubnetInfo) []net.IP {
+	if subnetInfo == nil || len(subnetInfo.Gateway) == 0 {
+		return nil
+	}
+	gateway := net.ParseIP(subnetInfo.Gateway)
+	start := net.ParseIP(ipRange.Start)
+	end := net.ParseIP(ipRange.End)
+	if gateway == nil || start == nil || end == nil {
+		return nil
+	}
+	if utilnet.BigForIP(gateway).Cmp(utilnet.BigForIP(start)) < 0 ||
+		utilnet.BigForIP(gateway).Cmp(utilnet.BigForIP(end)) > 0 {
+		return nil
+	}
+	return []net.IP{gateway}
+}
+
 // initAllocatorList reads IP Pool status and initializes a list of allocators based on
 // IP Pool spec and state of allocation recorded in the status
 func (a *IPPoolAllocator) initIPAllocators(ipPool *v1beta1.IPPool) (ipallocator.MultiIPAllocator, error) {
@@ -145,7 +164,8 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1beta1.IPPool) (ipallocator.
 			}
 			allocators = append(allocators, allocator)
 		} else {
-			allocator, err := ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
+			reservedIPs := reservedIPsForIPRange(&ipRange, &ipPool.Spec.SubnetInfo)
+			allocator, err := ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End), reservedIPs)
 			if err != nil {
 				return allocators, err
 			}

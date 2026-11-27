@@ -199,7 +199,7 @@ func (c *EgressController) externalIPPoolHasIP(poolName string, ip net.IP) (bool
 			if start == nil || end == nil {
 				return nil, fmt.Errorf("invalid IP range %s-%s", ipRange.Start, ipRange.End)
 			}
-			return ipallocator.NewIPRangeAllocator(start, end)
+			return ipallocator.NewIPRangeAllocator(start, end, nil)
 		}()
 		if err != nil {
 			return false, err
