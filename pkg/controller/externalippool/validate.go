@@ -82,6 +82,11 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		} else {
 			allowed, msg = validateV1beta1ExternalIPPoolRequest(review.Request.Operation, &oldObj, &newObj, externalIPPools)
 		}
+		if allowed && review.Request.Operation == admv1.Update {
+			if err := validateExternalIPPoolSubnetInfoUpdate(oldObj.Spec.SubnetInfo, newObj.Spec.SubnetInfo); err != nil {
+				allowed, msg = false, err.Error()
+			}
+		}
 	case crdv1beta2.SchemeGroupVersion.Version:
 		var newObj, oldObj crdv1beta2.ExternalIPPool
 		if err := decodeExternalIPPoolAdmissionObjects(review, &newObj, &oldObj); err != nil {
@@ -92,8 +97,8 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 			return newAdmissionResponseForErr(err)
 		}
 		allowed, msg = validateV1beta2ExternalIPPoolRequest(review.Request.Operation, &oldObj, &newObj, externalIPPools)
-		// Only native v1beta2 requests enforce subnet membership, gateway, and prefixLength immutability.
-		// The shared validator also handles v1beta1 projections.
+		// Use the subnet list validator only for native v1beta2 requests. The shared range validator
+		// also handles v1beta1 projections, whose visible subnetInfo is validated separately.
 		if allowed && review.Request.Operation == admv1.Update {
 			if err := validateExternalIPPoolSubnetUpdate(oldObj.Spec.Subnets, newObj.Spec.Subnets); err != nil {
 				allowed, msg = false, err.Error()
@@ -220,6 +225,23 @@ func validateV1beta2ExternalIPPoolRequest(operation admv1.Operation, oldPool, ne
 		return false, fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
 	}
 	return true, ""
+}
+
+func validateExternalIPPoolSubnetInfoUpdate(oldSubnet, newSubnet *crdv1beta1.SubnetInfo) error {
+	// Reservations are fixed when a range allocator is created. Adding or removing subnetInfo
+	// would require updating reservations in existing allocators.
+	if (oldSubnet == nil) != (newSubnet == nil) {
+		return fmt.Errorf("subnetInfo cannot be added or removed")
+	}
+	if oldSubnet != nil {
+		if oldSubnet.Gateway != newSubnet.Gateway {
+			return fmt.Errorf("gateway is immutable")
+		}
+		if oldSubnet.PrefixLength != newSubnet.PrefixLength {
+			return fmt.Errorf("prefixLength is immutable")
+		}
+	}
+	return nil
 }
 
 func validateExternalIPPoolSubnetUpdate(oldSubnets, newSubnets []crdv1beta2.SubnetInfo) error {

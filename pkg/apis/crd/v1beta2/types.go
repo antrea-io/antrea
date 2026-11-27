@@ -149,7 +149,9 @@ type ExternalIPPoolSpec struct {
 	IPRanges []IPRange `json:"ipRanges"`
 	// Subnets specifies the subnet attributes for each IP family. At most one entry per family is allowed. When
 	// omitted, the allocated IPs are assumed to be on the same subnet as the hosting Node, and no separate subnet gateway
-	// or VLAN is configured.
+	// or VLAN is configured. Each gateway is reserved when it is included in an IP range and cannot be allocated
+	// to either an Egress or a Service. Subnets cannot be added or removed after creation, and their Gateway and
+	// PrefixLength fields are immutable. VLAN updates and reordering of existing entries are allowed.
 	// +optional
 	// +listType=atomic
 	Subnets []SubnetInfo `json:"subnets,omitempty"`

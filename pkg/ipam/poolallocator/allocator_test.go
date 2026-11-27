@@ -137,6 +137,49 @@ func TestAllocateIP(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAllocateIPv6BeyondSupportedRange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+
+		subnetInfo := crdv1b1.SubnetInfo{Gateway: "fd00:0:0:1::1", PrefixLength: 48}
+		pool := &crdv1b1.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: "ipv6-gateway-pool"},
+			Spec: crdv1b1.IPPoolSpec{
+				IPRanges:   []crdv1b1.IPRange{{CIDR: "fd00::/48"}},
+				SubnetInfo: subnetInfo,
+			},
+		}
+		allocator := newTestIPPoolAllocator(pool, stopCh)
+		require.NotNil(t, allocator)
+		// This non-gateway address aliases fd00::5 if its offset is truncated to 64 bits.
+		_, err := allocator.AllocateIP(net.ParseIP("fd00:0:0:1::5"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+		require.Error(t, err, "an IP beyond the supported range must not be allocated to a Pod")
+		validateAllocationSequence(t, allocator, subnetInfo, []string{"fd00::1"})
+	})
+}
+
+func TestAllocateCIDRWithGatewayOutsideRange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		subnetInfo := crdv1b1.SubnetInfo{Gateway: "10.0.0.1", PrefixLength: 24}
+		pool := &crdv1b1.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: "cidr-pool"},
+			Spec: crdv1b1.IPPoolSpec{
+				IPRanges:   []crdv1b1.IPRange{{CIDR: "10.0.0.128/30"}},
+				SubnetInfo: subnetInfo,
+			},
+		}
+		allocator := newTestIPPoolAllocator(pool, stopCh)
+		require.NotNil(t, allocator)
+		assert.Equal(t, 3, allocator.Total())
+		validateAllocationSequence(t, allocator, subnetInfo, []string{"10.0.0.129", "10.0.0.130", "10.0.0.131"})
+		_, _, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+		require.Error(t, err)
+	})
+}
+
 func TestAllocateNext(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

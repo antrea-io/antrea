@@ -686,6 +686,57 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
 
+func TestSyncEgressIPReservedGateway(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		cidr         string
+		gateway      string
+		prefixLength int32
+	}{
+		{name: "IPv4", cidr: "192.0.2.0/29", gateway: "192.0.2.1", prefixLength: 29},
+		{name: "IPv6", cidr: "2001:db8::/125", gateway: "2001:db8::1", prefixLength: 125},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				pool := newExternalIPPool("pool", tt.cidr, "", "")
+				pool.Spec.Subnets = []v1beta2.SubnetInfo{{Gateway: tt.gateway, PrefixLength: tt.prefixLength}}
+				egress := newEgress("egress", tt.gateway, pool.Name, nil, nil, nil)
+				controller := newController(nil, []runtime.Object{pool, egress})
+				defer func() {
+					close(stopCh)
+					controller.queue.ShutDown()
+					controller.egressGroupStore.Stop()
+					controller.crdInformerFactory.Shutdown()
+					controller.informerFactory.Shutdown()
+				}()
+				controller.crdInformerFactory.Start(stopCh)
+				controller.crdInformerFactory.WaitForCacheSync(stopCh)
+				go controller.externalIPAllocator.Run(stopCh)
+				require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+				controller.restoreIPAllocations(nil)
+
+				expectedError := fmt.Sprintf("error when allocating IP %s for Egress %s from ExternalIPPool %s: IP %s is reserved as the subnet gateway in ExternalIPPool %s", tt.gateway, egress.Name, pool.Name, tt.gateway, pool.Name)
+				ip, updated, err := controller.syncEgressIP(egress)
+				require.EqualError(t, err, expectedError)
+				assert.Nil(t, ip)
+				assert.Equal(t, []string{tt.gateway}, updated.Spec.EgressIPs)
+				require.Error(t, controller.syncEgress(egress.Name))
+				actual, err := controller.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, []string{tt.gateway}, actual.Spec.EgressIPs, "a reserved static IP must not be replaced")
+				_, _, exists := controller.getIPAllocation(egress.Name)
+				assert.False(t, exists)
+				condition := meta.FindStatusCondition(actual.Status.Conditions, v1beta2.IPAllocated)
+				require.NotNil(t, condition)
+				assert.Equal(t, metav1.ConditionFalse, condition.Status)
+				assert.Equal(t, "AllocationError", condition.Reason)
+				assert.Equal(t, "Cannot allocate EgressIP from ExternalIPPool: "+expectedError, condition.Message)
+			})
+		})
+	}
+}
+
 func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string

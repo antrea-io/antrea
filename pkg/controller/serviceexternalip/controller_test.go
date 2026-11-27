@@ -18,6 +18,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -219,6 +221,36 @@ func TestAddService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServiceIPv6GatewayBeyondSupportedRange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+
+		gateway := "fd00:0:0:1::1"
+		pool := newExternalIPPool("wide-ipv6-pool", "fd00::/48", "", "")
+		pool.Spec.Subnets = []antreacrds.SubnetInfo{{Gateway: gateway, PrefixLength: 48}}
+		svc := newService("gateway-svc", "test", corev1.ServiceTypeLoadBalancer, gateway, pool.Name)
+		controller := newController([]runtime.Object{svc}, []runtime.Object{pool})
+		defer func() {
+			close(stopCh)
+			controller.queue.ShutDown()
+			controller.crdInformerFactory.Shutdown()
+			controller.informerFactory.Shutdown()
+		}()
+		controller.informerFactory.Start(stopCh)
+		controller.crdInformerFactory.Start(stopCh)
+		controller.informerFactory.WaitForCacheSync(stopCh)
+		controller.crdInformerFactory.WaitForCacheSync(stopCh)
+		go controller.externalIPAllocator.Run(stopCh)
+		require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+
+		err := controller.syncService(apimachinerytypes.NamespacedName{Namespace: svc.Namespace, Name: svc.Name})
+		require.NoError(t, err)
+		updated, err := controller.client.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Empty(t, updated.Status.LoadBalancer.Ingress, "the subnet gateway must not become a Service external IP")
+	})
 }
 
 func TestRestart(t *testing.T) {
