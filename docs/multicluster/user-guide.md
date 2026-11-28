@@ -383,6 +383,10 @@ there are several possibilities:
 the configuration option `gatewayIPPrecedence` to value: `external`, when
 deploying the member Multi-cluster Controller. The configuration option is
 defined in ConfigMap `antrea-mc-controller-config` in `antrea-multicluster-member.yml`.
+* Gateways can only be created or updated by the `antrea-mc-controller`
+ServiceAccount in the member Multi-cluster Controller's Namespace, or by the
+`antrea-agent` ServiceAccount in the Namespace of the Antrea Agent running on
+the Gateway Node, which is discovered from the Node's `AntreaAgentInfo`.
 * When the Gateway Node has a separate IP for external communication or is
 associated with a public IP (e.g. an Elastic IP on AWS), but the IP is not added
 to the K8s Node, you can still choose to use the IP as `gatewayIP`, by adding an
