@@ -27,7 +27,7 @@ import (
 
 var (
 	// SyncInterval is exported so that sync interval can be configured for running integration test with
-	// smaller values. It is meant to be used internally by Run.
+	// smaller values. NewClient also reads it, as the cap on the sync retry delay.
 	SyncInterval = 60 * time.Second
 )
 
@@ -57,9 +57,12 @@ type Interface interface {
 	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
 
 	// AddSNATRule should add rule to SNAT outgoing traffic with the mark, using the provided SNAT IP.
+	// On Linux it only caches the SNAT IP. Returning nil says the rule will be programmed, not that it
+	// already is.
 	AddSNATRule(snatIP net.IP, mark uint32) error
 
-	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
+	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark. It is asynchronous in the
+	// same way as AddSNATRule.
 	DeleteSNATRule(mark uint32) error
 
 	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egresses to the cache.
