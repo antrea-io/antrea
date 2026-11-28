@@ -1121,6 +1121,78 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 	}
 }
 
+func TestSecondaryNetworkAllocateAtMostOneIPv4(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	k8sClient, crdClient := initTestClients()
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+	}
+	localPodInformer := coreinformers.NewFilteredPodInformer(
+		k8sClient,
+		metav1.NamespaceAll,
+		0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		listOptions,
+	)
+
+	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+		informerFactory.Core().V1().Namespaces(),
+		crdInformerFactory.Crd().V1beta1().IPPools(),
+		localPodInformer,
+		true,
+	)
+	require.NoError(t, err)
+	createIPPools(crdClient)
+
+	go antreaIPAMController.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+
+	d := &AntreaIPAM{
+		controller:      antreaIPAMController,
+		controllerMutex: sync.RWMutex{},
+	}
+
+	podOwner := &crdv1b1.PodOwner{
+		Name:        "sec-multiv4",
+		Namespace:   testPear,
+		ContainerID: "sec-multiv4-container",
+		IFName:      "eth1",
+	}
+	networkConfig := &argtypes.NetworkConfig{
+		CNIVersion: testCNIVersion,
+		IPAM: &argtypes.IPAMConfig{
+			IPPools: []string{"multiv4-pool-a", "multiv4-pool-b"},
+		},
+	}
+
+	result, err := d.SecondaryNetworkAllocate(podOwner, networkConfig)
+	require.NoError(t, err)
+
+	ipv4Count := 0
+	for _, ip := range result.IPs {
+		if ip.Address.IP.To4() != nil {
+			ipv4Count++
+		}
+	}
+	require.Equal(t, 1, ipv4Count, "expected at most one IPv4 from multiple same-family pools")
+
+	err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
+		ipPool, _ := antreaIPAMController.ipPoolLister.Get("multiv4-pool-b")
+		for _, ipAddress := range ipPool.Status.IPAddresses {
+			if ipAddress.Owner.Pod != nil && ipAddress.Owner.Pod.ContainerID == podOwner.ContainerID {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	require.NoError(t, err, "multiv4-pool-b should not have any allocation for secondary multiv4 pod")
+}
+
 func TestGetIPPoolsByPod_SkipEmptyIPTokens(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

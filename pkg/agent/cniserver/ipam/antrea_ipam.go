@@ -378,8 +378,14 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 
 			if allocator.IPVersion == utilnet.IPv4 {
+				if allocatedIPv4 {
+					continue
+				}
 				hasIPv4Pool = true
 			} else {
+				if allocatedIPv6 {
+					continue
+				}
 				hasIPv6Pool = true
 			}
 
@@ -415,6 +421,9 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 				result.VLANID = vlanID
 			} else if vlanID != 0 && result.VLANID != vlanID {
 				return nil, fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
+			}
+			if allocatedIPv4 && allocatedIPv6 {
+				break
 			}
 		}
 		var allocErrs []error
