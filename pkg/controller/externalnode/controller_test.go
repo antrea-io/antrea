@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -479,31 +480,32 @@ func TestDeleteExternalNode(t *testing.T) {
 			ExternalNode: "vm1",
 		},
 	}
-	controller := newExternalNodeController([]runtime.Object{externalNode, expectedEntity})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
-	go controller.Run(stopCh)
-	controller.syncedExternalNode.Add(externalNode)
-	err := controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(context.TODO(), externalNode.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
-	key, _ := keyFunc(externalNode)
-	err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-		entities, listErr := controller.crdClient.CrdV1alpha2().ExternalEntities(externalNode.Namespace).List(context.TODO(), metav1.ListOptions{})
-		if listErr != nil {
-			return false, listErr
-		}
-		if len(entities.Items) > 0 {
-			return false, nil
-		}
+	synctest.Test(t, func(t *testing.T) {
+		controller := newExternalNodeController([]runtime.Object{externalNode, expectedEntity})
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		informerFactory.Start(stopCh)
+		// Required: otherwise Run sleeps in its 100ms cache-sync poll and Wait() returns too early.
+		informerFactory.WaitForCacheSync(stopCh)
+		go controller.Run(stopCh)
+		synctest.Wait()
+		// All goroutines are idle: initial reconciliation is done, and both reflectors
+		// have established their watches, so the Delete below cannot be missed.
+		key, err := keyFunc(externalNode)
+		require.NoError(t, err)
 		_, exists, _ := controller.syncedExternalNode.GetByKey(key)
-		if exists {
-			return false, nil
-		}
-		return true, nil
+		require.True(t, exists)
+
+		err = controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(
+			t.Context(), externalNode.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		_, err = controller.crdClient.CrdV1alpha2().ExternalEntities(expectedEntity.Namespace).Get(
+			t.Context(), expectedEntity.Name, metav1.GetOptions{})
+		assert.True(t, errors.IsNotFound(err))
+		_, exists, _ = controller.syncedExternalNode.GetByKey(key)
+		assert.False(t, exists)
 	})
-	assert.NoError(t, err)
 }
 
 func TestReconcileExternalNodes(t *testing.T) {
