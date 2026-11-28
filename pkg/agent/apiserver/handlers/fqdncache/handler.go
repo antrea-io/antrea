@@ -57,7 +57,11 @@ func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	if domain == "" {
 		return nil, nil
 	}
-	pattern := strings.TrimSpace(domain)
+	// DNS names compare case-insensitively only for ASCII letters (RFC 4343),
+	// and the cache stores lowercase names, so fold ASCII A-Z to lowercase as
+	// fqdnToSelectorItem does. A regexp (?i) flag would also apply Unicode
+	// folding and match e.g. "ſ" against "s".
+	pattern := asciiLowerOutsideEscapes(strings.TrimSpace(domain))
 	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
 	pattern = strings.ReplaceAll(pattern, ".", "[.]")
 	// Replace "*" with ".*".
@@ -70,4 +74,38 @@ func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 		return nil, err
 	}
 	return &querier.FQDNCacheFilter{DomainRegex: regex}, nil
+}
+
+// asciiLowerOutsideEscapes lowercases ASCII A-Z, leaving regexp escapes such
+// as \S, \W or \pL / \p{Greek} untouched so they keep their meaning.
+func asciiLowerOutsideEscapes(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) {
+			b.WriteByte(c)
+			i++
+			b.WriteByte(s[i])
+			if (s[i] == 'p' || s[i] == 'P') && i+1 < len(s) {
+				// The class name: one letter (\pL) or a braced name (\p{Greek}).
+				end := i + 1
+				if s[end] == '{' {
+					if close := strings.IndexByte(s[end:], '}'); close >= 0 {
+						end += close
+					} else {
+						end = len(s) - 1
+					}
+				}
+				b.WriteString(s[i+1 : end+1])
+				i = end
+			}
+			continue
+		}
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
