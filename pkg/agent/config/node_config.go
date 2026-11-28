@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"net"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
@@ -153,6 +155,8 @@ type EgressConfig struct {
 
 // Local Node configurations retrieved from K8s API or host networking state.
 type NodeConfig struct {
+	// UID identifies the Kubernetes Node incarnation used to initialize this Agent.
+	UID types.UID
 	// The Node's name used in Kubernetes.
 	Name string
 	// The type to identify it is a Kubernetes Node or an external Node.

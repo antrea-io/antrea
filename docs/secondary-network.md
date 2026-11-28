@@ -211,6 +211,206 @@ effective bridge configuration changes, existing Pods are not automatically
 migrated to the new bridge. Recreate the affected Pods so their secondary
 network interfaces can connect to the new bridge.
 
+Antrea Controller watches AgentInfo reports and writes their aggregate realization
+into the `AntreaNodeConfig.status` subresource.
+Use `kubectl get anc` to see readiness and Node counts. For each Node's actual result,
+inspect `AntreaAgentInfo.antreaNodeConfig` and `AntreaAgentInfo.secondaryNetwork`.
+The ANC status contains only aggregate counts and Conditions, so its size does not grow
+with the number of selected Nodes.
+`status.observedGeneration` identifies the spec version processed by the Controller;
+check `Ready=True` for that same generation to determine whether it has been realized.
+
+The Agent reports secondary network realization directly in `AntreaAgentInfo.secondaryNetwork`,
+including when the bridge is configured statically without AntreaNodeConfig enabled.
+`configSource` identifies the configuration used for reconciliation: `AgentConfig` for a static
+Agent bridge, or `AntreaNodeConfig` for an ANC. It is omitted when no configuration source
+is available. The selected ANC name and UID are reported separately in
+`AntreaAgentInfo.antreaNodeConfig`. Its `Ready` Condition describes realization of the
+whole configuration on this Node. The common Condition message is always empty;
+inspect the feature Conditions for detailed diagnostics.
+
+The common `Ready.observedGeneration` identifies the ANC generation evaluated by the
+Agent, including evaluations that produce `False` or `Unknown`. Each ANC-backed feature's
+`Ready.observedGeneration` identifies the generation that feature reconciled. It is zero
+for static configuration. The Agent accepts a feature result only for the selected ANC
+UID and generation; a late result from another incarnation or an older generation cannot
+realize the current target. While a feature has no current result, the common Condition
+is `Unknown` with reason `WaitingForFeatureResults`, even if an earlier version was ready.
+A current feature failure produces common `Ready=False` with reason `FeaturesNotReady`.
+The Agent updates the target and its feature results together in one AgentInfo report.
+No matching ANC means the common `antreaNodeConfig` field is omitted, while feature
+status can still report static configuration or bridge cleanup.
+
+The reporting Node incarnation is identified by `nodeRef.uid`. The Controller checks the
+existing `AgentHealthy` Condition's `lastHeartbeatTime` to determine report freshness;
+there is no separate secondary network heartbeat. Missing or expired reports and
+unavailable Nodes produce ANC `Ready=Unknown`. A successful ANC report must match the
+current Node UID, ANC UID, and generation. Nodes without a report still count toward
+`desiredNodes`; they do not count toward `realizedNodes`.
+
+Static bridge readiness and ANC readiness are independent. A successfully reconciled
+static bridge reports secondary network `Ready=True` with `configSource: AgentConfig`. If a
+matching ANC is overridden by that static configuration, the Controller reports ANC
+`Ready=False` with reason `OverriddenByStaticConfig` instead of counting the Node as realized.
+ANC `Ready` covers the Nodes for which this ANC takes precedence. Overlapping node selectors
+are valid and resolved by precedence. Matching Nodes which select an older ANC are excluded
+from `desiredNodes` and do not affect `Ready`. An ANC with no selected Nodes reports
+`Ready=False` with reason `NoMatchingNodes`, or `ConfigurationNotSelected` if all matching
+Nodes select an older ANC.
+
+To observe secondary network removal, retain the ANC and remove only `spec.secondaryNetwork`.
+The same ANC UID and its new generation remain observable while bridge cleanup runs.
+While Pod secondary interfaces remain, the Agent rejects new VLAN secondary interfaces
+and reports feature `Ready=False` with reason `BridgeInUse`. Existing interfaces remain available
+until removed through the normal Pod or network annotation deletion path. Once the
+interfaces are released, host networking is restored, and bridge cleanup succeeds, the
+Agent reports feature `Ready=True`. Operational errors produce feature `Ready=False` with
+reason `ReconcileFailed`; the feature Condition message contains the error. Both pending
+cleanup and operational failures produce common and aggregate ANC `Ready=False` with reason
+`FeaturesNotReady`.
+Keep the AntreaNodeConfig and SecondaryNetwork features enabled until cleanup completes.
+
+The common ANC Condition in each Agent report always leaves `message` empty. The aggregate
+ANC Condition shows a success message when all selected Nodes are ready, and points to the
+selected Nodes' `AntreaAgentInfo` feature Conditions when a feature is not ready. Those
+feature Conditions contain the reconciliation details.
+
+ANC status describes current selected Nodes. It does not retain historical Node ownership
+or prevent ANC deletion with a finalizer. Deleting the whole ANC, or removing a nodepool entry
+which causes a package manager to delete it, removes the status object before asynchronous
+cleanup is necessarily complete. An absent ANC does not prove that its former Nodes have
+cleaned up. Selector migration similarly does not wait for formerly selected Nodes.
+A package manager which needs removal progress should retain the empty ANC and consume its
+current-generation status. Mapping this result into an AddonConfig or nodepool Condition
+requires integration in the package or status controller; applying the manifests alone does
+not establish network realization. These Conditions also do not test end-to-end connectivity.
+
+**Status examples.** Inspect the aggregate status and an individual Agent's report with:
+
+```bash
+kubectl get anc secondary-network-all-linux -o yaml
+kubectl get antreaagentinfo node-a -o yaml
+```
+
+The following excerpts omit unrelated fields. Assume the ANC selects two Linux Nodes,
+`node-a` and `node-b`, and both have realized generation 1. The aggregate status is:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-all-linux
+  uid: 11111111-1111-4111-8111-111111111111
+  generation: 1
+status:
+  observedGeneration: 1
+  desiredNodes: 2
+  realizedNodes: 2
+  conditions:
+  - type: Ready
+    status: "True"
+    observedGeneration: 1
+    lastTransitionTime: "2026-10-29T09:00:00Z"
+    reason: Reconciled
+    message: Configuration has been realized on all selected Nodes
+```
+
+The corresponding Agent report on `node-a` could be:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: AntreaAgentInfo
+metadata:
+  name: node-a
+nodeRef:
+  uid: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+agentConditions:
+- type: AgentHealthy
+  status: "True"
+  lastHeartbeatTime: "2026-10-29T09:01:00Z"
+antreaNodeConfig:
+  name: secondary-network-all-linux
+  uid: 11111111-1111-4111-8111-111111111111
+  conditions:
+  - type: Ready
+    status: "True"
+    observedGeneration: 1
+    lastTransitionTime: "2026-10-29T09:00:00Z"
+    reason: Reconciled
+    message: ""
+secondaryNetwork:
+  configSource: AntreaNodeConfig
+  currentBridge: br1
+  desiredBridge: br1
+  conditions:
+  - type: Ready
+    status: "True"
+    observedGeneration: 1
+    lastTransitionTime: "2026-10-29T09:00:00Z"
+    reason: Reconciled
+    message: Secondary network configuration has been realized
+```
+
+`antreaNodeConfig` and `secondaryNetwork` are top-level AgentInfo fields, not fields under `status`.
+The Agent publishes reconciliation results on changes and refreshes its `AgentHealthy`
+heartbeat every minute. A heartbeat older than three minutes makes the Agent's result
+unavailable even if the last reconciliation succeeded. Condition transition times are not
+heartbeat or reconciliation expiry clocks.
+Successful bridge reconciliation does not schedule another reconciliation. Configuration
+changes trigger reconciliation, and incomplete cleanup or failed operations are retried.
+`Ready` reports the latest reconciliation result; Agent heartbeats are not continuous OVS
+health checks and do not detect changes made directly to a reconciled bridge.
+After restart, the Agent publishes its new reconciliation result rather than refreshing
+the previous Agent's readiness.
+
+Feature readiness is explicit. Windows Agents report `Ready=False` with reason
+`UnsupportedNode`. AntreaNodeConfig and SecondaryNetwork are unsupported on Windows, and
+enabling either feature causes Agent startup to fail. On Linux, disabled SecondaryNetwork reports
+`Ready=False` with reason `FeatureDisabled`. An initializing feature reports `Ready=Unknown`
+with reason `ConfigurationUnavailable`. A missing `secondaryNetwork` object or missing
+`Ready` Condition is also unavailable, not disabled.
+No separate `configurationEnabled` flag is needed.
+
+If static configuration creates `br-secondary` while the ANC requests `br1`, the
+`secondaryNetwork` feature still reports the static configuration's own readiness with
+`configSource: AgentConfig`, and its `currentBridge` and `desiredBridge` refer to the
+effective static `br-secondary` configuration (including any reconciliation error in the
+feature Condition message). Meanwhile, `antreaNodeConfig` and the aggregate ANC status
+report `Ready=False` with reason `OverriddenByStaticConfig`.
+
+Suppose `spec.secondaryNetwork` is removed, `node-b` has completed cleanup, and a Pod on
+`node-a` still uses `br1`. The retained ANC's aggregate output could be:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-all-linux
+  uid: 11111111-1111-4111-8111-111111111111
+  generation: 2
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: linux
+status:
+  observedGeneration: 2
+  desiredNodes: 2
+  realizedNodes: 1
+  conditions:
+  - type: Ready
+    status: "False"
+    observedGeneration: 2
+    lastTransitionTime: "2026-10-29T09:05:05Z"
+    reason: FeaturesNotReady
+    message: Some features are not ready; check feature conditions in the selected Nodes' AntreaAgentInfo resources
+```
+
+The AgentInfo for `node-a` identifies the same configuration UID. Its `secondaryNetwork`
+object has `currentBridge: br1`, no desired bridge, and `Ready=False` with reason
+`BridgeInUse` and `observedGeneration: 2`.
+After the Pod interface is removed and cleanup succeeds, `realizedNodes` becomes 2 and
+`Ready=True`. The empty ANC remains available for the package manager to inspect.
+
 The AntreaNodeConfig CRD spec includes the following fields:
 
 - `nodeSelector` - standard Kubernetes `LabelSelector` that selects the Nodes to

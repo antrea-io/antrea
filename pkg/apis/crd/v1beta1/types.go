@@ -17,6 +17,7 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -52,6 +53,57 @@ type AntreaAgentInfo struct {
 	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
 	// Network information
 	NetworkInfo NetworkInfo `json:"networkInfo,omitempty"`
+	// SecondaryNetwork reports secondary network realization status for either static Agent
+	// configuration or AntreaNodeConfig.
+	// +optional
+	SecondaryNetwork *SecondaryNetworkStatus `json:"secondaryNetwork,omitempty"`
+	// AntreaNodeConfig reports the realization status of the AntreaNodeConfig applied to this Node.
+	// +optional
+	AntreaNodeConfig *AntreaNodeConfigStatus `json:"antreaNodeConfig,omitempty"`
+}
+
+// AntreaNodeConfigStatus describes the realization status of an AntreaNodeConfig applied to a Node.
+type AntreaNodeConfigStatus struct {
+	// Name is the name of the selected AntreaNodeConfig.
+	Name string `json:"name"`
+	// UID identifies the selected AntreaNodeConfig incarnation.
+	UID types.UID `json:"uid"`
+	// Conditions includes Ready for the generation evaluated by the Agent.
+	// Condition messages are empty; feature Conditions provide detailed diagnostics.
+	Conditions []metav1.Condition `json:"conditions"`
+}
+
+// SecondaryNetworkConfigSource identifies the source of secondary network configuration.
+type SecondaryNetworkConfigSource string
+
+const (
+	// SecondaryNetworkConfigSourceAgentConfig identifies static Agent configuration.
+	SecondaryNetworkConfigSourceAgentConfig SecondaryNetworkConfigSource = "AgentConfig"
+	// SecondaryNetworkConfigSourceAntreaNodeConfig identifies an AntreaNodeConfig.
+	SecondaryNetworkConfigSourceAntreaNodeConfig SecondaryNetworkConfigSource = "AntreaNodeConfig"
+)
+
+// SecondaryNetworkConditionType is the type of a SecondaryNetworkStatus condition.
+type SecondaryNetworkConditionType string
+
+const (
+	// SecondaryNetworkConditionReady indicates whether the desired secondary network
+	// configuration has been realized on the Node.
+	SecondaryNetworkConditionReady SecondaryNetworkConditionType = "Ready"
+)
+
+// SecondaryNetworkStatus describes secondary network configuration realization on a Node.
+type SecondaryNetworkStatus struct {
+	// ConfigSource identifies the configuration used for this reconciliation, if any.
+	// +optional
+	ConfigSource SecondaryNetworkConfigSource `json:"configSource,omitempty"`
+	// CurrentBridge is the last known secondary OVS bridge managed by the Agent, if any.
+	CurrentBridge string `json:"currentBridge,omitempty"`
+	// DesiredBridge is the desired secondary OVS bridge, if any.
+	DesiredBridge string `json:"desiredBridge,omitempty"`
+	// Conditions includes SecondaryNetworkConditionReady. Its observedGeneration is
+	// the AntreaNodeConfig generation when ConfigSource is AntreaNodeConfig, or zero otherwise.
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type OVSInfo struct {

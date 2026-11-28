@@ -1140,6 +1140,16 @@ func run(o *Options) error {
 	// agentQuerier. The apiServer already depends on the agentQuerier to implement some API
 	// handlers. The certificate data is only available after initializing the apiServer.
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier, agentAPICertData)
+	if antreaNodeConfigController != nil {
+		agentMonitor.SetAntreaNodeConfigSnapshotProvider(antreaNodeConfigController)
+	}
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		if secondaryNetworkController == nil {
+			agentMonitor.SetSecondaryNetworkStatusProvider(nil)
+		} else {
+			agentMonitor.SetSecondaryNetworkStatusProvider(secondaryNetworkController)
+		}
+	}
 	go agentMonitor.Run(stopCh)
 
 	// Start PacketIn and OVS meter stats collection for Prometheus

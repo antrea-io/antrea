@@ -31,6 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -41,6 +44,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
@@ -451,9 +455,10 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 			mockNewOVSBridge(t, bridgeClient)
 			mockStartupSecondaryBridge(t, tt.startupBridgeName)
 
+			bridgeClient.EXPECT().GetBridgeName().Return(brNew).AnyTimes()
 			bridgeClient.EXPECT().Create().Return(nil)
 			if tt.startupBridgeName != "" {
-				bridgeClient.EXPECT().GetBridgeName().Return(brNew)
+				bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
 				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return(nil, nil)
 			} else {
@@ -480,6 +485,13 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 			assert.Equal(t, []ovsconfig.OVSBridgeClient{bridgeClient}, podController.setBridgeCalls)
 			assert.Equal(t, bridgeClient, c.ovsBridgeClient)
 			assert.Equal(t, desired, c.effectiveBridgeCfg)
+			report := c.GetSecondaryNetworkStatus()
+			require.NotNil(t, report)
+			assert.Equal(t, crdv1beta1.SecondaryNetworkConfigSourceAgentConfig, report.ConfigSource)
+			assert.Empty(t, report.ConfigUID)
+			assert.Equal(t, brNew, report.CurrentBridge)
+			assert.Equal(t, brNew, report.DesiredBridge)
+			assert.True(t, meta.IsStatusConditionTrue(report.Conditions, "Ready"))
 		})
 	}
 }
@@ -972,6 +984,9 @@ func TestReconcileBridge(t *testing.T) {
 			}
 			t.Cleanup(func() { prepareHostInterfaceConnectionFn = origPrepare })
 
+			if tc.prevCfg != nil && tc.desiredCfg != nil && tc.prevCfg.BridgeName == tc.desiredCfg.BridgeName {
+				oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
+			}
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(oldMock, newMock)
 			}
@@ -1054,6 +1069,7 @@ func TestReconcileBridgeUpdatesMcastSnooping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := mock.NewController(t)
 			bridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
 			bridgeClient.EXPECT().GetBridgeName().Return(brOld)
 			bridgeClient.EXPECT().SetMcastSnooping(tt.desiredEnabled).Return(tt.updateErr)
 			if tt.updateErr == nil {
@@ -1123,6 +1139,37 @@ func TestReconcileBridgeClearsStateBeforeCreatingReplacement(t *testing.T) {
 	assert.Nil(t, c.ovsBridgeClient, "ovsBridgeClient should remain nil after failed create")
 }
 
+func TestReconcileBridgeCleansUpPartialCreation(t *testing.T) {
+	for _, stage := range []string{"multicast snooping", "physical interfaces"} {
+		t.Run(stage, func(t *testing.T) {
+			bridge := ovsconfigtest.NewMockOVSBridgeClient(mock.NewController(t))
+			mockNewOVSBridge(t, bridge)
+			configurationErr := errors.New("configuration failed")
+			bridge.EXPECT().Create().Return(nil)
+			if stage == "multicast snooping" {
+				bridge.EXPECT().SetMcastSnooping(false).Return(configurationErr)
+			} else {
+				bridge.EXPECT().SetMcastSnooping(false).Return(nil)
+				bridge.EXPECT().GetPortList().Return(nil, configurationErr)
+			}
+			podController := &fakePodController{}
+			desired := bridgeConfig(brNew)
+			c := newTestSecondaryNetworkController(nil, desired, podController)
+			require.ErrorIs(t, c.reconcileBridge(desired), configurationErr)
+			assert.Same(t, bridge, c.ovsBridgeClient)
+			assert.Nil(t, c.effectiveBridgeCfg)
+			assert.Empty(t, podController.setBridgeCalls)
+
+			bridge.EXPECT().GetBridgeName().Return(brNew).Times(2)
+			bridge.EXPECT().GetPortList().Return(nil, nil)
+			bridge.EXPECT().Delete().Return(nil)
+			require.NoError(t, c.reconcileBridge(nil))
+			assert.Nil(t, c.ovsBridgeClient)
+			assert.Equal(t, 1, podController.drainCalls)
+		})
+	}
+}
+
 func TestSyncBridgeRetriesStartupBridgeInitialization(t *testing.T) {
 	ctrl := mock.NewController(t)
 	bridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
@@ -1138,7 +1185,8 @@ func TestSyncBridgeRetriesStartupBridgeInitialization(t *testing.T) {
 
 	mockNewOVSBridge(t, bridgeClient)
 	bridgeClient.EXPECT().Create().Return(nil).Times(2)
-	bridgeClient.EXPECT().GetBridgeName().Return(brOld)
+	bridgeClient.EXPECT().GetExternalIDs().Return(nil, nil)
+	bridgeClient.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 	bridgeClient.EXPECT().GetPortList().Return(nil, nil)
 
@@ -1177,6 +1225,7 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
 	mockNewOVSBridge(t, bridgeClient)
+	bridgeClient.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	mock.InOrder(
 		bridgeClient.EXPECT().Create().Return(createErr),
 		bridgeClient.EXPECT().Create().Return(nil),
@@ -1237,7 +1286,7 @@ func TestSyncBridgeWaitsForDiscoveredBridgeToDrain(t *testing.T) {
 	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{brOld: oldMock})
 	mockStartupSecondaryBridge(t, brOld)
 	oldMock.EXPECT().Create().Return(nil)
-	oldMock.EXPECT().GetBridgeName().Return(brOld)
+	oldMock.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 
 	fakePc := &fakePodController{
 		drainPending: true,
@@ -1265,7 +1314,8 @@ func TestSyncBridgeCancelsDrainWhenDiscoveredBridgeBecomesDesired(t *testing.T) 
 	// The bridge is discovered and attached once. A desired-state rollback
 	// reuses the cached client and cancels the in-progress drain.
 	oldMock.EXPECT().Create().Return(nil)
-	oldMock.EXPECT().GetBridgeName().Return(brOld).Times(2)
+	oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
+	oldMock.EXPECT().GetBridgeName().Return(brOld).Times(4)
 	oldMock.EXPECT().SetMcastSnooping(false).Return(nil)
 	oldMock.EXPECT().GetPortList().Return(nil, nil)
 
@@ -1309,7 +1359,8 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 
 	desired := bridgeConfig(brOld, eth1, eth2)
 	oldMock.EXPECT().Create().Return(nil)
-	oldMock.EXPECT().GetBridgeName().Return(brOld)
+	oldMock.EXPECT().GetExternalIDs().Return(nil, nil)
+	oldMock.EXPECT().GetBridgeName().Return(brOld).AnyTimes()
 	oldMock.EXPECT().SetMcastSnooping(false).Return(nil)
 	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
 		{UUID: "uuid-eth1", IFName: eth1},
@@ -1351,6 +1402,10 @@ func TestSyncBridgeSkipsReconciliationOnANCListErrorWithoutStaticConfig(t *testi
 
 	require.NoError(t, c.syncBridge())
 	assert.Zero(t, findCalls)
+	report := c.GetSecondaryNetworkStatus()
+	require.NotNil(t, report)
+	assert.Equal(t, "ConfigurationUnavailable", report.Conditions[0].Reason)
+	assert.Equal(t, metav1.ConditionUnknown, report.Conditions[0].Status)
 	assert.False(t, c.bridgeStateInitDone)
 	assert.Nil(t, c.effectiveBridgeCfg)
 	assert.Nil(t, c.ovsBridgeClient)
@@ -1370,6 +1425,7 @@ func TestSyncBridgeReconcilesStaticBridgeOnANCListError(t *testing.T) {
 
 	mockNewOVSBridge(t, bridgeClient)
 	bridgeClient.EXPECT().Create().Return(nil)
+	bridgeClient.EXPECT().GetBridgeName().Return(brOld)
 	bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 	bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
 
@@ -1416,6 +1472,7 @@ func bridgeConfig(bridgeName string, ifNames ...string) *agenttypes.OVSBridgeCon
 
 func snapshotWithBridge(bridgeName string) *antreanodeconfig.Snapshot {
 	return antreanodeconfig.NewSnapshot(&crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: bridgeName, UID: types.UID(bridgeName), Generation: 1},
 		Spec: crdv1alpha1.AntreaNodeConfigSpec{
 			SecondaryNetwork: &crdv1alpha1.SecondaryNetworkConfig{
 				OVSBridges: []crdv1alpha1.OVSBridgeConfig{{BridgeName: bridgeName}},

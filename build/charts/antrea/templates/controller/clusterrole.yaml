@@ -159,6 +159,8 @@ rules:
     resources:
       - antreaagentinfos
     verbs:
+      - get
+      - watch
       - list
       - create
       - delete
@@ -304,3 +306,17 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreanodeconfigs
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreanodeconfigs/status
+    verbs:
+      - update

@@ -15,6 +15,8 @@
 package antreanodeconfig
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
@@ -39,6 +41,14 @@ func NewSnapshot(antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, listErr error) 
 	}
 	if antreaNodeConfig != nil {
 		s.AntreaNodeConfig = antreaNodeConfig.DeepCopy()
+		// Status and metadata-only updates must not trigger data-plane reconciliation.
+		s.AntreaNodeConfig.ObjectMeta = metav1.ObjectMeta{
+			Name:              antreaNodeConfig.Name,
+			UID:               antreaNodeConfig.UID,
+			Generation:        antreaNodeConfig.Generation,
+			CreationTimestamp: antreaNodeConfig.CreationTimestamp,
+		}
+		s.AntreaNodeConfig.Status = crdv1alpha1.AntreaNodeConfigStatus{}
 	}
 	return s
 }

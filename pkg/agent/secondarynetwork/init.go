@@ -15,6 +15,7 @@
 package secondarynetwork
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +27,8 @@ import (
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
+
+var errStaleBridgeInUse = errors.New("secondary OVS bridge is in use")
 
 // podControllerInterface is the subset of podwatch.PodController used by Controller.
 // Defined as an interface to allow test injection.
@@ -39,10 +42,13 @@ type podControllerInterface interface {
 
 // Controller manages secondary network resources for a Node.
 type Controller struct {
-	ovsBridgeClient ovsconfig.OVSBridgeClient           //nolint:unused // Used by Linux-only secondary bridge reconciliation.
-	secNetConfig    *agentconfig.SecondaryNetworkConfig //nolint:unused // Used by Linux-only secondary bridge reconciliation.
-	podController   podControllerInterface
-	nodeName        string //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	statusMutex            sync.RWMutex
+	secondaryNetworkStatus *agenttypes.SecondaryNetworkStatus
+	statusUpdates          chan struct{}
+	ovsBridgeClient        ovsconfig.OVSBridgeClient           //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	secNetConfig           *agentconfig.SecondaryNetworkConfig //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	podController          podControllerInterface
+	nodeName               string //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 	// primaryOVSBridgeName is the integration bridge used by the Antrea Agent. A
 	// secondary bridge must never use this name, as the secondary bridge controller
 	// owns the lifecycle of its bridge and may delete it during reconciliation.

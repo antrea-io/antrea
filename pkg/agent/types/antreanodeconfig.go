@@ -14,6 +14,27 @@
 
 package types
 
+import (
+	"k8s.io/apimachinery/pkg/types"
+
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+)
+
+// SecondaryNetworkStatus associates one reconciliation result with its actual ANC target.
+// ConfigUID is internal so an older result cannot be attributed to a newer public target.
+type SecondaryNetworkStatus struct {
+	*crdv1beta1.SecondaryNetworkStatus
+	ConfigUID types.UID
+}
+
+// DeepCopy returns an independent copy of the result and its configuration identity.
+func (s *SecondaryNetworkStatus) DeepCopy() *SecondaryNetworkStatus {
+	if s == nil {
+		return nil
+	}
+	return &SecondaryNetworkStatus{SecondaryNetworkStatus: s.SecondaryNetworkStatus.DeepCopy(), ConfigUID: s.ConfigUID}
+}
+
 // OVSBridgeConfig describes a single OVS bridge and its uplink interfaces.
 type OVSBridgeConfig struct {
 	// BridgeName is the name of the OVS bridge.
