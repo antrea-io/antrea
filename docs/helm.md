@@ -116,6 +116,11 @@ helm install flow-aggregator antrea/flow-aggregator --namespace flow-aggregator 
 This will install the latest available version of the Flow Aggregator. You can
 also install a specific version (>= v1.8.0) with `--version <TAG>`.
 
+If Antrea was installed in a namespace other than `kube-system`, set the Flow
+Aggregator chart's `antreaNamespace` value to that namespace. For example, add
+`--set antreaNamespace=antrea-system` to the install command. The Flow Aggregator
+uses this namespace to read the cluster identity ConfigMap.
+
 #### Upgrade
 
 To upgrade the Flow Aggregator Helm chart, use the following command:
