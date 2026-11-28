@@ -993,6 +993,12 @@ rules:
 - apiGroups:
   - crd.antrea.io
   resources:
+  - antreaagentinfos
+  verbs:
+  - get
+- apiGroups:
+  - crd.antrea.io
+  resources:
   - clusternetworkpolicies
   verbs:
   - create
