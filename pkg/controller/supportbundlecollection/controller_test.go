@@ -1522,7 +1522,8 @@ func TestUpdateStatus(t *testing.T) {
 		}
 		return nodes
 	}
-	prepareController := func(collectionName string, desiredNodes int) {
+	notExpired := time.Now().Add(time.Hour)
+	prepareController := func(collectionName string, desiredNodes int, expiredAt time.Time) {
 		testClient := newTestClient(nil, []runtime.Object{
 			&v1alpha1.SupportBundleCollection{
 				ObjectMeta: metav1.ObjectMeta{Name: collectionName},
@@ -1548,6 +1549,7 @@ func TestUpdateStatus(t *testing.T) {
 			SpanMeta: types.SpanMeta{
 				NodeNames: sets.New[string](getSpan(desiredNodes)...),
 			},
+			ExpiredAt: metav1.NewTime(expiredAt),
 		})
 		stopCh := make(chan struct{})
 		testClient.start(stopCh)
@@ -1628,7 +1630,7 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("all-agent-succeeded", func(t *testing.T) {
 		collectionName := "b1"
 		desiredNodes := 5
-		prepareController(collectionName, desiredNodes)
+		prepareController(collectionName, desiredNodes, notExpired)
 		agentReportStatus(desiredNodes, 0, collectionName)
 		syncSupportBundleCollection()
 		bundleCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
@@ -1640,7 +1642,7 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("agent-failure", func(t *testing.T) {
 		collectionName := "b2"
 		desiredNodes := 6
-		prepareController(collectionName, desiredNodes)
+		prepareController(collectionName, desiredNodes, notExpired)
 		reportedNodes := 5
 		agentReportStatus(reportedNodes, 2, collectionName)
 		syncSupportBundleCollection()
@@ -1673,10 +1675,46 @@ func TestUpdateStatus(t *testing.T) {
 		checkCompletedStatus(bundleCollection)
 	})
 
+	t.Run("expired-collection-with-missing-agent-reports", func(t *testing.T) {
+		collectionName := "b4"
+		desiredNodes := 4
+		prepareController(collectionName, desiredNodes, time.Now().Add(-time.Minute))
+		reportedNodes := 2
+		agentReportStatus(reportedNodes, 0, collectionName)
+		syncSupportBundleCollection()
+		bundleCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, int32(reportedNodes), bundleCollection.Status.CollectedNodes)
+		// The Agents that have not reported by the expiration time are failed, so that the collection completes
+		// and stops blocking other collections.
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+			Type:    v1alpha1.CollectionFailure,
+			Status:  metav1.ConditionTrue,
+			Reason:  string(metav1.StatusReasonExpired),
+			Message: fmt.Sprintf(`Failed Agent count: 2, "%s":[n3, ns1/n2]`, unreportedNodeReason),
+		}))
+		checkCompletedStatus(bundleCollection)
+	})
+
+	t.Run("collection-with-missing-agent-reports-before-expiration", func(t *testing.T) {
+		collectionName := "b5"
+		desiredNodes := 4
+		prepareController(collectionName, desiredNodes, notExpired)
+		agentReportStatus(2, 0, collectionName)
+		syncSupportBundleCollection()
+		bundleCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.False(t, isCollectionCompleted(bundleCollection))
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+			Type:   v1alpha1.CollectionFailure,
+			Status: metav1.ConditionFalse,
+		}))
+	})
+
 	t.Run("unknown-agent-report", func(t *testing.T) {
 		collectionName := "b3"
 		desiredNodes := 3
-		prepareController(collectionName, desiredNodes)
+		prepareController(collectionName, desiredNodes, notExpired)
 		reportedNodes := 1
 		agentReportStatus(reportedNodes, 0, collectionName)
 		statusPerNode := controller.statuses[collectionName]
@@ -1707,6 +1745,48 @@ func TestUpdateStatus(t *testing.T) {
 		_, exists := controller.statuses[nonExistCollectionName]
 		assert.False(t, exists)
 	})
+}
+
+// TestSyncExpiredConflictedSupportBundleCollection verifies that a collection which is blocked by a processing
+// collection is expired, instead of being retried indefinitely, once its expiration time has passed.
+func TestSyncExpiredConflictedSupportBundleCollection(t *testing.T) {
+	coreObjects, crdObjects := prepareTopology()
+	expiredCreateTime := time.Now().Add(-70 * time.Minute)
+	for _, bundleConfig := range []bundleConfig{
+		{name: "processing"},
+		{name: "blocked", createTime: &expiredCreateTime},
+	} {
+		bundleConfig.externalNodes = &bundleExternalNodes{namespace: "ns1", names: []string{"en1"}}
+		bundleConfig.authType = v1alpha1.APIKey
+		bundleConfig.secretName = secretWithAPIKey
+		bundleConfig.secretNamespace = secretNamespace
+		crdObjects = append(crdObjects, generateSupportBundleResource(bundleConfig))
+	}
+
+	testClient := newTestClient(coreObjects, crdObjects)
+	controller := newController(testClient)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	testClient.start(stopCh)
+	testClient.waitForSync(stopCh)
+
+	require.NoError(t, controller.syncSupportBundleCollection("processing"))
+	_, exists, err := controller.supportBundleCollectionStore.Get("processing")
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	require.NoError(t, controller.syncSupportBundleCollection("blocked"))
+	blocked, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), "blocked", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.True(t, isCollectionCompleted(blocked))
+	assert.True(t, conditionExistsIgnoreLastTransitionTime(blocked.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+		Type:   v1alpha1.CollectionFailure,
+		Status: metav1.ConditionTrue,
+		Reason: string(metav1.StatusReasonExpired),
+	}))
+	_, exists, err = controller.supportBundleCollectionStore.Get("blocked")
+	require.NoError(t, err)
+	assert.False(t, exists)
 }
 
 func newController(tc *testClient) *Controller {
