@@ -59,6 +59,7 @@ var (
 
 	// Funcs which will be overridden with mock funcs in tests.
 	interfaceByNameFn = net.InterfaceByName
+	renameInterfaceFn = util.RenameInterface
 	// func(bridge, ifName, ifOFPort, externalIDs, mtu) (bridgedName, alreadyExists, error)
 	prepareHostInterfaceConnectionFn = util.PrepareHostInterfaceConnection
 	restoreHostInterfaceConfigFn     = util.RestoreHostInterfaceConfiguration // func(brName, ifName string) error
