@@ -16,6 +16,7 @@ package traceflow
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -294,7 +295,7 @@ func TestParsePacketIn(t *testing.T) {
 			GatewayConfig: &config.GatewayConfig{OFPort: gwPort},
 		}
 	}
-	egressConfig := types.EgressConfig{Name: egressName, EgressIP: egressIP, EgressNode: egressNode}
+	egressConfig := types.EgressConfig{Name: egressName, EgressIPs: []string{egressIP}, EgressNode: egressNode}
 
 	type trafficMode struct {
 		name          string
@@ -588,7 +589,7 @@ func TestParsePacketIn(t *testing.T) {
 				Data:    util.NewBuffer(pktBytesPodToIP),
 			}},
 			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
-				eq.EXPECT().GetEgressIPByMark(uint32(1)).Return(egressIP, nil)
+				eq.EXPECT().GetEgressIPByMark(uint32(1), false).Return(egressIP, nil)
 			},
 			expectedTf: makePodToIPv4TF(),
 			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
@@ -685,6 +686,82 @@ func TestParsePacketIn(t *testing.T) {
 			assert.Equal(t, tt.expectedNodeResult.Observations, nodeResult.Observations)
 			assert.Equal(t, tt.expectedTf, tf)
 		})
+	}
+}
+
+func TestParsePacketInIPv6Egress(t *testing.T) {
+	prepareMockTables()
+	const egressIPv6, podIPv6 = "2001:db8::100", "fd00::10"
+	for _, mode := range []config.TrafficEncapModeType{config.TrafficEncapModeEncap, config.TrafficEncapModeNoEncap, config.TrafficEncapModeHybrid} {
+		for _, dualStack := range []bool{false, true} {
+			for _, location := range []string{"local source", "remote source", "egress node"} {
+				t.Run(fmt.Sprintf("%s/dualStack=%t/%s", mode, dualStack, location), func(t *testing.T) {
+					isSource := location != "egress node"
+					remoteSource := location == "remote source"
+					tf := &crdv1beta1.Traceflow{
+						ObjectMeta: metav1.ObjectMeta{Name: "ipv6-egress"},
+						Spec: crdv1beta1.TraceflowSpec{
+							Source:      crdv1beta1.Source{Namespace: pod1.Namespace, Pod: pod1.Name},
+							Destination: crdv1beta1.Destination{IP: "2001:db8::1"},
+						},
+						Status: crdv1beta1.TraceflowStatus{Phase: crdv1beta1.Running, DataplaneTag: 1},
+					}
+					tfc := newFakeTraceflowController(t, []runtime.Object{tf}, &config.NetworkConfig{TrafficEncapMode: mode},
+						&config.NodeConfig{TunnelOFPort: 1, GatewayConfig: &config.GatewayConfig{OFPort: 2}})
+					stopCh := make(chan struct{})
+					defer close(stopCh)
+					tfc.crdInformerFactory.Start(stopCh)
+					tfc.crdInformerFactory.WaitForCacheSync(stopCh)
+					tfc.runningTraceflows[1] = &traceflowState{name: tf.Name, tag: 1, isSender: isSource}
+					if isSource {
+						ips := []string{egressIPv6}
+						if dualStack {
+							ips = []string{egressIP, egressIPv6}
+						}
+						tfc.egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(types.EgressConfig{
+							Name: egressName, EgressIPs: ips, EgressNode: egressNode,
+						}, nil)
+					} else {
+						tfc.egressQuerier.EXPECT().GetEgressIPByMark(uint32(1), true).Return(egressIPv6, nil)
+					}
+					xreg0 := make([]byte, 8)
+					outPort := uint32(2)
+					if remoteSource {
+						outPort = 1
+						binary.BigEndian.PutUint32(xreg0[:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset())
+					}
+					binary.BigEndian.PutUint32(xreg0[4:], outPort)
+					matches := []openflow15.MatchField{{Class: openflow15.OXM_CLASS_PACKET_REGS, Field: openflow15.NXM_NX_REG0, Value: &openflow15.ByteArrayField{Data: xreg0}}}
+					if !remoteSource {
+						matches = append(matches, openflow15.MatchField{Class: openflow15.OXM_CLASS_NXM_1, Field: openflow15.NXM_NX_PKT_MARK, Value: &openflow15.Uint32Message{Data: 1}})
+					}
+					if location != "local source" {
+						matches = append(matches, *openflow15.NewTunnelIpv6DstField(net.ParseIP(egressIPv6), nil))
+					}
+					ethernet := protocol.NewEthernet()
+					ethernet.Ethertype = protocol.IPv6_MSG
+					ethernet.Data = &protocol.IPv6{
+						Version: 6, TrafficClass: 4, NextHeader: protocol.Type_IPv6ICMP, HopLimit: 64,
+						NWSrc: net.ParseIP(podIPv6), NWDst: net.ParseIP("2001:db8::1"),
+						Data: &protocol.ICMP{Type: 128, Data: []byte{0, 1, 0, 1}},
+					}
+					data, err := ethernet.MarshalBinary()
+					require.NoError(t, err)
+					_, result, _, err := tfc.parsePacketIn(&ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+						TableId: openflow.OutputTable.GetID(), Match: openflow15.Match{Fields: matches}, Data: util.NewBuffer(data),
+					}})
+					require.NoError(t, err)
+					expected := crdv1beta1.Observation{Component: crdv1beta1.ComponentEgress, Action: crdv1beta1.ActionMarkedForSNAT, EgressIP: egressIPv6}
+					if isSource {
+						expected.Egress, expected.EgressNode = egressName, egressNode
+					}
+					if remoteSource {
+						expected.Action = crdv1beta1.ActionForwardedToEgressNode
+					}
+					assert.Contains(t, result.Observations, expected)
+				})
+			}
+		}
 	}
 }
 

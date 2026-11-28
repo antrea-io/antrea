@@ -509,11 +509,11 @@ func (c *Client) initFwRules() error {
 	return nil
 }
 
-func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
+func (c *Client) AddSNATRules(snatIPs []net.IP, mark uint32) error {
 	return nil
 }
 
-func (c *Client) DeleteSNATRule(mark uint32) error {
+func (c *Client) DeleteSNATRules(mark uint32) error {
 	return nil
 }
 

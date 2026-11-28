@@ -185,18 +185,18 @@ func (mr *MockInterfaceMockRecorder) AddRoutes(podCIDR, peerNodeName, peerNodeIP
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoutes", reflect.TypeOf((*MockInterface)(nil).AddRoutes), podCIDR, peerNodeName, peerNodeIP, peerGwIP)
 }
 
-// AddSNATRule mocks base method.
-func (m *MockInterface) AddSNATRule(snatIP net.IP, mark uint32) error {
+// AddSNATRules mocks base method.
+func (m *MockInterface) AddSNATRules(snatIPs []net.IP, mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddSNATRule", snatIP, mark)
+	ret := m.ctrl.Call(m, "AddSNATRules", snatIPs, mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddSNATRule indicates an expected call of AddSNATRule.
-func (mr *MockInterfaceMockRecorder) AddSNATRule(snatIP, mark any) *gomock.Call {
+// AddSNATRules indicates an expected call of AddSNATRules.
+func (mr *MockInterfaceMockRecorder) AddSNATRules(snatIPs, mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), snatIP, mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRules", reflect.TypeOf((*MockInterface)(nil).AddSNATRules), snatIPs, mark)
 }
 
 // ClearConntrackEntryForService mocks base method.
@@ -339,18 +339,18 @@ func (mr *MockInterfaceMockRecorder) DeleteRoutes(podCIDR any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteRoutes), podCIDR)
 }
 
-// DeleteSNATRule mocks base method.
-func (m *MockInterface) DeleteSNATRule(mark uint32) error {
+// DeleteSNATRules mocks base method.
+func (m *MockInterface) DeleteSNATRules(mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSNATRule", mark)
+	ret := m.ctrl.Call(m, "DeleteSNATRules", mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteSNATRule indicates an expected call of DeleteSNATRule.
-func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark any) *gomock.Call {
+// DeleteSNATRules indicates an expected call of DeleteSNATRules.
+func (mr *MockInterfaceMockRecorder) DeleteSNATRules(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRules", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRules), mark)
 }
 
 // Initialize mocks base method.

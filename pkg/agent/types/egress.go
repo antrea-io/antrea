@@ -15,12 +15,24 @@
 package types
 
 import (
+	"net"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
 type EgressConfig struct {
 	Name       string
 	UID        types.UID
-	EgressIP   string
+	EgressIPs  []string
 	EgressNode string
+}
+
+// EgressIPByFamily returns the effective Egress IP for the requested IP family.
+func (e EgressConfig) EgressIPByFamily(isIPv6 bool) string {
+	for _, ipString := range e.EgressIPs {
+		if ip := net.ParseIP(ipString); ip != nil && (ip.To4() == nil) == isIPv6 {
+			return ipString
+		}
+	}
+	return ""
 }

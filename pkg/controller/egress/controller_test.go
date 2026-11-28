@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -172,9 +173,12 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 			json.Unmarshal(pa.GetPatch(), &patch)
 			name := pa.GetName()
 			generation[name] += 1
-			patch["metadata"] = map[string]interface{}{
-				"generation": generation[name],
+			metadata, ok := patch["metadata"].(map[string]interface{})
+			if !ok {
+				metadata = map[string]interface{}{}
+				patch["metadata"] = metadata
 			}
+			metadata["generation"] = generation[name]
 			pa.Patch, _ = json.Marshal(patch)
 			// Because action is an object and not a pointer, we cannot mutate it
 			// directly. So we need the following to apply our updated patch.
@@ -604,7 +608,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the IPPool in use. The EgressIP should be released.
 	controller.crdClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		if exists {
 			return false
 		}
@@ -615,7 +619,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
 	controller.crdClient.CrdV1beta2().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return exists
 	}, time.Second, 50*time.Millisecond, "IP was not allocated after the ExternalIPPool was created")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
@@ -623,7 +627,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the Egress. The EgressIP should be released.
 	controller.crdClient.CrdV1beta2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return !exists
 	}, time.Second, 50*time.Millisecond, "IP allocation was not deleted after the Egress was deleted")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
@@ -665,7 +669,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	getEgressIP, egress, err := controller.syncEgressIP(egress)
 	require.NoError(t, err)
-	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
+	assert.Equal(t, []net.IP{net.ParseIP("1.1.1.1")}, getEgressIP)
 
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
@@ -683,7 +687,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 
 	getEgressIP, _, err = controller.syncEgressIP(egress)
 	require.NoError(t, err)
-	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
+	assert.Equal(t, []net.IP{net.ParseIP("1.1.2.1")}, getEgressIP)
 }
 
 func TestSyncEgressIP(t *testing.T) {
@@ -909,13 +913,17 @@ func TestSyncEgressIP(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
+			var expectedIPs []net.IP
+			if tt.expectedEgressIP != "" {
+				expectedIPs = []net.IP{net.ParseIP(tt.expectedEgressIP)}
+			}
+			assert.Equal(t, expectedIPs, getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}
 }
 
-func TestRequiresDualStackRuntime(t *testing.T) {
+func TestRequiresDualStackEgress(t *testing.T) {
 	tests := []struct {
 		name     string
 		egress   *v1beta2.Egress
@@ -983,48 +991,6 @@ func TestRequiresDualStackRuntime(t *testing.T) {
 			assert.Equal(t, tt.required, requiresDualStackEgress(tt.egress))
 		})
 	}
-}
-
-func TestSyncEgressReportsUnsupportedDualStackRuntime(t *testing.T) {
-	dualStackPool := newDualStackExternalIPPool("dual-stack")
-	egress := &v1beta2.Egress{
-		ObjectMeta: metav1.ObjectMeta{Name: "egress-dual-stack"},
-		Spec: v1beta2.EgressSpec{
-			ExternalIPPool: dualStackPool.Name,
-			IPFamilies:     []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
-		},
-		Status: v1beta2.EgressStatus{
-			Conditions: []metav1.Condition{{
-				Type:    v1beta2.IPAllocated,
-				Status:  metav1.ConditionTrue,
-				Reason:  "Allocated",
-				Message: "EgressIP is successfully allocated",
-			}},
-		},
-	}
-	controller := newController(nil, []runtime.Object{dualStackPool, egress})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	controller.crdInformerFactory.Start(stopCh)
-	controller.crdInformerFactory.WaitForCacheSync(stopCh)
-	go controller.externalIPAllocator.Run(stopCh)
-	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
-	previousIP := net.ParseIP("10.10.10.10")
-	require.NoError(t, controller.externalIPAllocator.UpdateIPAllocation(dualStackPool.Name, previousIP))
-	controller.setIPAllocation(egress.Name, previousIP, dualStackPool.Name)
-
-	require.NoError(t, controller.syncEgress(egress.Name))
-	_, _, allocated := controller.getIPAllocation(egress.Name)
-	assert.False(t, allocated)
-	gotEgress, err := controller.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-	require.NoError(t, err)
-	assert.Empty(t, gotEgress.Spec.EgressIPs)
-	condition := meta.FindStatusCondition(gotEgress.Status.Conditions, v1beta2.IPAllocated)
-	require.NotNil(t, condition)
-	assert.Equal(t, metav1.ConditionFalse, condition.Status)
-	assert.Equal(t, "AllocationError", condition.Reason)
-	assert.Contains(t, condition.Message, "dual-stack Egress runtime is not supported yet")
-	checkExternalIPPoolUsed(t, controller, dualStackPool.Name, 0)
 }
 
 func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolName string, used int) {
@@ -1104,7 +1070,7 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 				},
 				Status: v1beta2.EgressStatus{
 					Conditions: []metav1.Condition{
-						{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: no available IP"},
+						{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIPs from ExternalIPPool: no available IP"},
 					},
 				},
 			},
@@ -1124,14 +1090,14 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 				},
 				Status: v1beta2.EgressStatus{
 					Conditions: []metav1.Condition{
-						{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully allocated"},
-						{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+						{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIPs are successfully allocated"},
+						{Type: v1beta2.IPAllocated, Status: metav1.ConditionFalse, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
 					},
 				},
 			},
 			expectedStatus: v1beta2.EgressStatus{
 				Conditions: []metav1.Condition{ // It should only delete IPAllocated condition.
-					{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully allocated"},
+					{Type: v1beta2.IPAssigned, Status: metav1.ConditionTrue, Reason: "Assigned", Message: "EgressIPs are successfully allocated"},
 				},
 			},
 		},
@@ -1164,4 +1130,353 @@ func TestDeleteEgress_Tombstone(t *testing.T) {
 		Key: egress.Name,
 		Obj: egress,
 	})
+}
+
+func singleEgressIPFromSpec(spec *v1beta2.EgressSpec) string {
+	if len(spec.EgressIPs) != 1 {
+		return ""
+	}
+	return spec.EgressIPs[0]
+}
+
+func TestSyncEgressIPs(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		ips        []string
+		families   []v1.IPFamily
+		manual     bool
+		singlePool bool
+		conflict   bool
+		patchError bool
+		want       []string
+		wantUsed   int
+		wantErr    string
+	}{
+		{
+			name: "allocate IPv4 first", families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+			want: []string{"10.10.10.1", "2001:db8:10::1"}, wantUsed: 2,
+		},
+		{
+			name: "allocate IPv6 first", families: []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+			want: []string{"2001:db8:10::1", "10.10.10.1"}, wantUsed: 2,
+		},
+		{
+			name: "reserve explicit IPs", ips: []string{"2001:db8:10::2", "10.10.10.2"},
+			want: []string{"2001:db8:10::2", "10.10.10.2"}, wantUsed: 2,
+		},
+		{
+			name: "manually assigned IPs", manual: true, ips: []string{"2001:db8:10::2", "10.10.10.2"},
+			want: []string{"2001:db8:10::2", "10.10.10.2"},
+		},
+		{
+			name: "rollback when second family unavailable", singlePool: true,
+			families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, wantErr: "error allocating IP for Egress",
+		},
+		{
+			name: "rollback when second requested IP occupied", conflict: true,
+			ips: []string{"10.10.10.2", "2001:db8:10::2"}, wantErr: "error allocating IP 2001:db8:10::2", wantUsed: 1,
+		},
+		{
+			name: "rollback when patch fails", patchError: true,
+			families: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, wantErr: "patch failed",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := newDualStackExternalIPPool("pool")
+			if tc.singlePool {
+				pool = newExternalIPPool("pool", "10.10.10.0/24", "", "")
+			}
+			egress := newDualStackEgress("egress", pool.Name, tc.ips)
+			egress.Spec.IPFamilies = tc.families
+			if tc.manual {
+				egress.Spec.ExternalIPPool = ""
+			}
+			controller := startEgressIPController(t, pool, egress)
+			var existing []*v1beta2.Egress
+			if tc.conflict {
+				existing = append(existing, newEgress("other", "2001:db8:10::2", pool.Name, nil, nil, nil))
+			}
+			controller.restoreIPAllocations(existing)
+			if tc.patchError {
+				client := controller.crdClient.(*fakeversioned.Clientset)
+				client.Lock()
+				client.PrependReactor("patch", "egresses", func(k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("patch failed")
+				})
+				client.Unlock()
+			}
+			ips, updated, err := controller.syncEgressIP(egress)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				_, exists := controller.getIPAllocation(egress.Name)
+				assert.False(t, exists, "an incomplete allocation must not be recorded")
+			} else {
+				require.NoError(t, err)
+				var values []string
+				for _, ip := range ips {
+					values = append(values, ip.String())
+				}
+				assert.Equal(t, tc.want, values)
+				assert.Equal(t, tc.want, updated.Spec.EgressIPs)
+				// Reconciliation must retain both addresses without attempting duplicate reservations.
+				again, _, err := controller.syncEgressIP(updated)
+				require.NoError(t, err)
+				assert.Equal(t, ips, again)
+			}
+			checkExternalIPPoolUsed(t, controller, pool.Name, tc.wantUsed)
+		})
+	}
+}
+
+func TestSyncEgressIPsConcurrentFamilyChange(t *testing.T) {
+	pool := newDualStackExternalIPPool("pool")
+	observed := newDualStackEgress("egress", pool.Name, nil)
+	observed.ResourceVersion = "1"
+	observed.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+	controller := startEgressIPController(t, pool, observed)
+	controller.restoreIPAllocations(nil)
+	client := controller.crdClient.(*fakeversioned.Clientset)
+
+	// The user changes the requested families after the controller observes the Egress.
+	current := observed.DeepCopy()
+	current.ResourceVersion = "2"
+	current.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+	_, err := client.CrdV1beta2().Egresses().Update(context.Background(), current, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	// The fake tracker does not enforce resource versions. Model the API server's conflict check
+	// when a merge patch supplies an observed resource version.
+	client.Lock()
+	client.PrependReactor("patch", "egresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		patchAction := action.(k8stesting.PatchAction)
+		var patch struct {
+			Metadata metav1.ObjectMeta `json:"metadata"`
+		}
+		if err := json.Unmarshal(patchAction.GetPatch(), &patch); err != nil {
+			return true, nil, err
+		}
+		obj, err := client.Tracker().Get(v1beta2.SchemeGroupVersion.WithResource("egresses"), "", patchAction.GetName())
+		if err != nil {
+			return true, nil, err
+		}
+		latest := obj.(*v1beta2.Egress)
+		if patch.Metadata.ResourceVersion != "" && patch.Metadata.ResourceVersion != latest.ResourceVersion {
+			return true, nil, errors.NewConflict(v1beta2.Resource("egresses"), latest.Name, fmt.Errorf("resource version changed"))
+		}
+		return false, nil, nil
+	})
+
+	client.Unlock()
+	_, _, err = controller.syncEgressIP(observed)
+	require.True(t, errors.IsConflict(err), "stale allocation should conflict: %v", err)
+	_, exists := controller.getIPAllocation(observed.Name)
+	assert.False(t, exists, "stale allocation must not be recorded")
+	checkExternalIPPoolUsed(t, controller, pool.Name, 0)
+	current, err = client.CrdV1beta2().Egresses().Get(context.Background(), observed.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []v1.IPFamily{v1.IPv6Protocol}, current.Spec.IPFamilies)
+	assert.Empty(t, current.Spec.EgressIPs)
+
+	// Retrying the current request allocates only the requested IPv6 address.
+	ips, updated, err := controller.syncEgressIP(current)
+	require.NoError(t, err)
+	assert.Equal(t, []net.IP{net.ParseIP("2001:db8:10::1")}, ips)
+	assert.Equal(t, []string{"2001:db8:10::1"}, updated.Spec.EgressIPs)
+	assert.Equal(t, []v1.IPFamily{v1.IPv6Protocol}, updated.Spec.IPFamilies)
+	checkExternalIPPoolUsed(t, controller, pool.Name, 1)
+}
+
+func TestRestoreEgressIPs(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		t.Run(fmt.Sprintf("partial=%t", partial), func(t *testing.T) {
+			pool := newDualStackExternalIPPool("pool")
+			egress := newDualStackEgress("egress", pool.Name, []string{"2001:db8:10::2", "10.10.10.2"})
+			controller := startEgressIPController(t, pool, egress)
+			existing := []*v1beta2.Egress{egress}
+			if partial {
+				existing = append([]*v1beta2.Egress{newEgress("other", "10.10.10.2", pool.Name, nil, nil, nil)}, existing...)
+			}
+			controller.restoreIPAllocations(existing)
+			allocation, exists := controller.getIPAllocation(egress.Name)
+			if partial {
+				require.True(t, exists)
+				assert.Empty(t, allocation.ips)
+				// Only the other Egress's reservation survives a failed restoration.
+				checkExternalIPPoolUsed(t, controller, pool.Name, 1)
+				_, _, err := controller.syncEgressIP(egress)
+				require.Error(t, err)
+				checkExternalIPPoolUsed(t, controller, pool.Name, 1)
+				return
+			}
+			require.True(t, exists)
+			assert.Equal(t, pool.Name, allocation.ipPool)
+			assert.Equal(t, []net.IP{net.ParseIP(egress.Spec.EgressIPs[0]), net.ParseIP(egress.Spec.EgressIPs[1])}, allocation.ips)
+			_, _, err := controller.syncEgressIP(egress)
+			require.NoError(t, err)
+			checkExternalIPPoolUsed(t, controller, pool.Name, 2)
+			// Deleting the Egress releases both addresses.
+			require.NoError(t, controller.crdClient.CrdV1beta2().Egresses().Delete(context.Background(), egress.Name, metav1.DeleteOptions{}))
+			require.Eventually(t, func() bool {
+				_, err := controller.egressLister.Get(egress.Name)
+				return err != nil
+			}, time.Second, 10*time.Millisecond)
+			require.NoError(t, controller.syncEgress(egress.Name))
+			checkExternalIPPoolUsed(t, controller, pool.Name, 0)
+		})
+	}
+}
+
+func startEgressIPController(t *testing.T, objects ...runtime.Object) *egressController {
+	t.Helper()
+	controller := newController(nil, objects)
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	return controller
+}
+
+func TestSyncEgressIPsRecreatedPool(t *testing.T) {
+	pool := newDualStackExternalIPPool("pool")
+	egress := newDualStackEgress("egress", pool.Name, []string{"2001:db8:10::2", "10.10.10.2"})
+	controller := startEgressIPController(t, pool, egress)
+	controller.restoreIPAllocations([]*v1beta2.Egress{egress})
+	require.NoError(t, controller.crdClient.CrdV1beta2().ExternalIPPools().Delete(context.Background(), pool.Name, metav1.DeleteOptions{}))
+	require.Eventually(t, func() bool {
+		return !controller.externalIPAllocator.IPPoolExists(pool.Name)
+	}, time.Second, 10*time.Millisecond)
+	pool.Spec.IPRanges = []v1beta2.IPRange{{CIDR: "192.0.2.0/24"}, {CIDR: "2001:db8:20::/120"}}
+	_, err := controller.crdClient.CrdV1beta2().ExternalIPPools().Create(context.Background(), pool, metav1.CreateOptions{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return controller.externalIPAllocator.IPPoolExists(pool.Name)
+	}, time.Second, 10*time.Millisecond)
+	_, updated, err := controller.syncEgressIP(egress)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2001:db8:20::1", "192.0.2.1"}, updated.Spec.EgressIPs)
+	assert.Equal(t, []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}, updated.Spec.IPFamilies)
+	checkExternalIPPoolUsed(t, controller, pool.Name, 2)
+}
+
+func TestSyncEgressAllocatesDualStack(t *testing.T) {
+	pool := newDualStackExternalIPPool("pool")
+	egress := newEgress("egress", "", pool.Name, nil, nil, nil)
+	egress.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}
+	controller := startEgressIPController(t, pool, egress)
+	controller.restoreIPAllocations(nil)
+	require.NoError(t, controller.syncEgress(egress.Name))
+	stored, err := controller.crdClient.CrdV1beta2().Egresses().Get(context.Background(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2001:db8:10::1", "10.10.10.1"}, stored.Spec.EgressIPs)
+	condition := meta.FindStatusCondition(stored.Status.Conditions, v1beta2.IPAllocated)
+	require.NotNil(t, condition)
+	assert.Equal(t, metav1.ConditionTrue, condition.Status)
+	assert.Equal(t, "Allocated", condition.Reason)
+	checkExternalIPPoolUsed(t, controller, pool.Name, 2)
+}
+
+func TestRestoreEgressIPsAfterPoolChange(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		ipv6CIDR   string
+		newRequest bool
+	}{
+		{name: "all previous IPs are stale", ipv6CIDR: "2001:db8:20::/120"},
+		{name: "one previous IP is stale", ipv6CIDR: "2001:db8:10::/120"},
+		{name: "do not overwrite a new explicit request", ipv6CIDR: "2001:db8:20::/120", newRequest: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := newExternalIPPool("pool", "192.0.2.0/24", "", "")
+			pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1beta2.IPRange{CIDR: tc.ipv6CIDR})
+			egress := newDualStackEgress("egress", pool.Name, []string{"2001:db8:10::2", "10.10.10.2"})
+			controller := startEgressIPController(t, pool, egress)
+			controller.restoreIPAllocations([]*v1beta2.Egress{egress})
+			checkExternalIPPoolUsed(t, controller, pool.Name, 0)
+			if tc.newRequest {
+				egress = egress.DeepCopy()
+				egress.Spec.EgressIPs = []string{"2001:db8:30::1000", "192.0.2.3"}
+				_, updated, err := controller.syncEgressIP(egress)
+				require.Error(t, err)
+				assert.Equal(t, egress.Spec.EgressIPs, updated.Spec.EgressIPs)
+				checkExternalIPPoolUsed(t, controller, pool.Name, 0)
+				return
+			}
+			_, updated, err := controller.syncEgressIP(egress)
+			require.NoError(t, err)
+			ipv6 := "2001:db8:20::1"
+			if tc.ipv6CIDR == "2001:db8:10::/120" {
+				ipv6 = "2001:db8:10::1"
+			}
+			assert.Equal(t, []string{ipv6, "192.0.2.1"}, updated.Spec.EgressIPs)
+			assert.Equal(t, []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}, updated.Spec.IPFamilies)
+			checkExternalIPPoolUsed(t, controller, pool.Name, 2)
+		})
+	}
+}
+
+func TestRestoreEgressIPsAfterPoolDeletion(t *testing.T) {
+	egress := newDualStackEgress("egress", "pool", []string{"2001:db8:10::2", "10.10.10.2"})
+	controller := startEgressIPController(t, egress)
+	controller.restoreIPAllocations([]*v1beta2.Egress{egress})
+	_, cleared, err := controller.syncEgressIP(egress)
+	require.EqualError(t, err, "ExternalIPPool pool does not exist")
+	assert.Empty(t, cleared.Spec.EgressIPs)
+	assert.Equal(t, []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}, cleared.Spec.IPFamilies)
+
+	// A second restart after cleanup must still allocate two addresses in the original order.
+	restarted := startEgressIPController(t, newDualStackExternalIPPool("pool"), cleared)
+	restarted.restoreIPAllocations([]*v1beta2.Egress{cleared})
+	_, updated, err := restarted.syncEgressIP(cleared)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2001:db8:10::1", "10.10.10.1"}, updated.Spec.EgressIPs)
+	checkExternalIPPoolUsed(t, restarted, "pool", 2)
+}
+
+func TestRecreateSingleStackPoolWithDifferentFamily(t *testing.T) {
+	for _, tt := range []struct {
+		name, oldIP, newCIDR, newIP string
+	}{
+		{name: "IPv4 to IPv6", oldIP: "192.0.2.1", newCIDR: "2001:db8::/120", newIP: "2001:db8::1"},
+		{name: "IPv6 to IPv4", oldIP: "2001:db8::1", newCIDR: "192.0.2.0/24", newIP: "192.0.2.1"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			egress := newEgress("egress", tt.oldIP, "pool", nil, nil, nil)
+			controller := startEgressIPController(t, egress)
+			controller.restoreIPAllocations([]*v1beta2.Egress{egress})
+			_, cleared, err := controller.syncEgressIP(egress)
+			require.Error(t, err)
+			assert.Empty(t, cleared.Spec.EgressIPs)
+			assert.Empty(t, cleared.Spec.IPFamilies)
+
+			// Recreating the pool after cleanup or a restart must retain default single-stack allocation.
+			restarted := startEgressIPController(t, newExternalIPPool("pool", tt.newCIDR, "", ""), cleared)
+			restarted.restoreIPAllocations([]*v1beta2.Egress{cleared})
+			_, updated, err := restarted.syncEgressIP(cleared)
+			require.NoError(t, err)
+			assert.Equal(t, []string{tt.newIP}, updated.Spec.EgressIPs)
+			assert.Empty(t, updated.Spec.IPFamilies)
+			checkExternalIPPoolUsed(t, restarted, "pool", 1)
+		})
+	}
+}
+
+func TestSyncEgressConflictPreservesAllocatedCondition(t *testing.T) {
+	pool := newDualStackExternalIPPool("pool")
+	egress := newDualStackEgress("egress", pool.Name, nil)
+	egress.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+	egress.Status.Conditions = []metav1.Condition{{Type: v1beta2.IPAllocated, Status: metav1.ConditionTrue, Reason: "Allocated"}}
+	controller := startEgressIPController(t, pool, egress)
+	controller.restoreIPAllocations(nil)
+	client := controller.crdClient.(*fakeversioned.Clientset)
+	client.Lock()
+	client.PrependReactor("patch", "egresses", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.NewConflict(v1beta2.Resource("egresses"), egress.Name, fmt.Errorf("concurrent spec update"))
+	})
+	client.Unlock()
+	require.True(t, errors.IsConflict(controller.syncEgress(egress.Name)))
+	stored, err := client.CrdV1beta2().Egresses().Get(context.Background(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, egress.Status.Conditions, stored.Status.Conditions)
+	checkExternalIPPoolUsed(t, controller, pool.Name, 0)
 }

@@ -156,25 +156,23 @@ type Client interface {
 	// Calling the method with new CIDRs will override the flows installed for previous CIDRs.
 	InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error
 
-	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
-	// single flow is added to mark the packets tunnelled from remote Nodes
-	// that should be SNAT'd with the SNAT IP.
-	InstallSNATMarkFlows(snatIP net.IP, mark uint32) error
+	// InstallSNATMarkFlows installs flows for local SNAT IPs in one transaction. On Linux, a
+	// flow is added for each family to mark packets tunnelled from remote Nodes.
+	InstallSNATMarkFlows(snatIPs []net.IP, mark uint32) error
 
 	// UninstallSNATMarkFlows removes the flows installed to set the packet
 	// mark for a SNAT IP.
 	UninstallSNATMarkFlows(mark uint32) error
 
-	// InstallPodSNATFlows installs the SNAT flows for a local Pod. If the
+	// InstallPodSNATFlows installs the SNAT flows for all provided IP families for a local Pod in one transaction. If the
 	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
 	// be allocated for the SNAT IP, and the installed flow sets the SNAT IP
 	// mark on the egress packets from the ofPort; if the SNAT IP is on a
 	// remote Node, snatMark should be set to 0, and the installed flow
 	// tunnels egress packets to the remote Node using the SNAT IP as the
 	// tunnel destination, and the packets should be SNAT'd on the remote
-	// Node. As of now, a Pod can be configured to use only a single SNAT
-	// IP in a single address family (IPv4 or IPv6).
-	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
+	// Node. A Pod can use at most one SNAT IP per address family.
+	InstallPodSNATFlows(ofPort uint32, snatIPs []net.IP, snatMark uint32) error
 
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
@@ -1118,12 +1116,15 @@ func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error 
 	return c.modifyFlows(c.featureEgress.cachedFlows, "svc-cidrs", flows)
 }
 
-func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
-	flow := c.featureEgress.snatIPFromTunnelFlow(snatIP, mark)
+func (c *client) InstallSNATMarkFlows(snatIPs []net.IP, mark uint32) error {
+	flows := make([]binding.Flow, 0, len(snatIPs))
+	for _, snatIP := range snatIPs {
+		flows = append(flows, c.featureEgress.snatIPFromTunnelFlow(snatIP, mark))
+	}
 	cacheKey := fmt.Sprintf("s%x", mark)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, []binding.Flow{flow})
+	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallSNATMarkFlows(mark uint32) error {
@@ -1133,8 +1134,11 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
 }
 
-func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
-	flows := []binding.Flow{c.featureEgress.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
+func (c *client) InstallPodSNATFlows(ofPort uint32, snatIPs []net.IP, snatMark uint32) error {
+	flows := make([]binding.Flow, 0, len(snatIPs))
+	for _, snatIP := range snatIPs {
+		flows = append(flows, c.featureEgress.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC))
+	}
 	cacheKey := fmt.Sprintf("p%x", ofPort)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

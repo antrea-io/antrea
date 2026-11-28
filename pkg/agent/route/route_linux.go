@@ -36,7 +36,6 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
@@ -248,8 +247,15 @@ type Client struct {
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
 	nodeNeighbors sync.Map
-	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
-	markToSNATIP sync.Map
+	// markToSNATIPs stores each group's desired addresses as one immutable snapshot.
+	markToSNATIPs sync.Map
+	// iptablesSyncCh coalesces desired-state changes to be processed by Run.
+	iptablesSyncCh chan struct{}
+	// iptablesSyncMutex protects completion registration and collection, never iptables I/O.
+	iptablesSyncMutex sync.Mutex
+	iptablesWaiters   []chan error
+	// iptablesStopped releases synchronous callers when the sync worker stops.
+	iptablesStopped chan struct{}
 	// iptablesInitialized is used to notify when iptables initialization is done. It is closed instead
 	// of being written to, so that every goroutine waiting on it is released, and waiting on it more
 	// than once is fine.
@@ -358,6 +364,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceCIDRProvider:         serviceCIDRProvider,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		hostNetworkPortRules:        ports,
+		iptablesSyncCh:              make(chan struct{}, 1),
+		iptablesStopped:             make(chan struct{}),
 	}
 	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
 	// assigning a nil pointer to an interface would produce a non-nil interface, defeating the nil
@@ -537,9 +545,87 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 // Run waits for iptables initialization, then periodically syncs ipsets, iptables/nftables, routes, neighbors, and
 // policy rules. It will not return until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {
-	<-c.iptablesInitialized
+	if c.iptablesStopped != nil {
+		defer close(c.iptablesStopped)
+	}
+	select {
+	case <-c.iptablesInitialized:
+	case <-ctx.Done():
+		return
+	}
 	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
-	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
+	c.syncNetworkConfig(ctx)
+	ticker := time.NewTicker(SyncInterval)
+	defer ticker.Stop()
+	retryTimer := time.NewTimer(time.Hour)
+	retryTimer.Stop()
+	defer retryTimer.Stop()
+	var retryCh <-chan time.Time
+	retryDelay := time.Second
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.syncNetworkConfig(ctx)
+			continue
+		case <-c.iptablesSyncCh:
+		case <-retryCh:
+		}
+		// Coalesce queued changes into one restore. SNAT callers wait for this restore,
+		// while Endpoint changes can enqueue a notification without waiting.
+		c.iptablesSyncMutex.Lock()
+		completions := c.iptablesWaiters
+		c.iptablesWaiters = nil
+	drain:
+		for {
+			select {
+			case <-c.iptablesSyncCh:
+			default:
+				break drain
+			}
+		}
+		c.iptablesSyncMutex.Unlock()
+		err := c.syncIPTables(false)
+		for _, done := range completions {
+			done <- err
+		}
+		if err != nil {
+			klog.ErrorS(err, "Failed to sync iptables after a desired-state update", "retryDelay", retryDelay)
+			retryTimer.Reset(retryDelay)
+			retryCh = retryTimer.C
+			retryDelay = min(2*retryDelay, SyncInterval)
+		} else {
+			retryTimer.Stop()
+			retryCh = nil
+			retryDelay = time.Second
+		}
+	}
+}
+
+// triggerIPTablesSync schedules reconciliation after a desired-state update. Changes which arrive while
+// iptables-restore is running queue another sync, so an older snapshot cannot permanently overwrite them.
+func (c *Client) triggerIPTablesSync() {
+	select {
+	case c.iptablesSyncCh <- struct{}{}:
+	default:
+	}
+}
+
+// waitForIPTablesSync returns only after the desired rules have been applied, or the
+// restore failed. A failed mutation remains in the desired cache for repair and cleanup.
+func (c *Client) waitForIPTablesSync() error {
+	done := make(chan error, 1)
+	c.iptablesSyncMutex.Lock()
+	c.iptablesWaiters = append(c.iptablesWaiters, done)
+	c.triggerIPTablesSync()
+	c.iptablesSyncMutex.Unlock()
+	select {
+	case err := <-done:
+		return err
+	case <-c.iptablesStopped:
+		return context.Canceled
+	}
 }
 
 // syncNetworkConfig is idempotent and can be safely called on every sync operation.
@@ -1136,13 +1222,13 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 
 	snatMarkToIPv4 := map[uint32]net.IP{}
 	snatMarkToIPv6 := map[uint32]net.IP{}
-	c.markToSNATIP.Range(func(key, value interface{}) bool {
-		snatMark := key.(uint32)
-		snatIP := value.(net.IP)
-		if snatIP.To4() != nil {
-			snatMarkToIPv4[snatMark] = snatIP
-		} else {
-			snatMarkToIPv6[snatMark] = snatIP
+	c.markToSNATIPs.Range(func(key, value interface{}) bool {
+		for _, snatIP := range value.([]net.IP) {
+			if snatIP.To4() != nil {
+				snatMarkToIPv4[key.(uint32)] = snatIP
+			} else {
+				snatMarkToIPv6[key.(uint32)] = snatIP
+			}
 		}
 		return true
 	})
@@ -1507,10 +1593,10 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	}
 	// Egress rules must be inserted before the default masquerade rule.
 	for snatMark, snatIP := range snatMarkToIP {
-		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
 		rule := []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
+			// Local output packets destined for Pods can carry mark 0x1 and must not be SNAT'd.
 			"!", "-o", c.nodeConfig.GatewayConfig.Name,
 			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
@@ -1866,23 +1952,9 @@ func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
 		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
 	}
 
-	// The rules are only cached above, they must be programmed now: the initial sync always runs before
-	// the Antrea Service Endpoint is resolved, so it flushes the Antrea chains without them, and the next
-	// periodic sync is up to SyncInterval later. Waiting for it would leave the Agent unable to open a
-	// connection to the Controller for that long whenever the default host network policy is to drop.
-	//
-	// This runs on the EndpointResolver's only worker, so it must not block: doing so would stop the
-	// queue from being drained, and no Endpoint change would be resolved for any listener.
-	select {
-	case <-c.iptablesInitialized:
-		if err := c.syncIPTables(false); err != nil {
-			klog.ErrorS(err, "Failed to sync iptables rules after the Antrea Service Endpoint changed")
-		}
-	default:
-		// The initial sync may already have read the cache, so it does not necessarily program these
-		// rules. What does is the first syncNetworkConfig, which Run performs as soon as it unblocks on
-		// iptablesInitialized, and which reads the cache again.
-	}
+	// Queue an immediate sync without blocking the EndpointResolver's worker. Run also reads the cache
+	// after initialization, so updates received during the initial sync are reconciled as well.
+	c.triggerIPTablesSync()
 }
 
 func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
@@ -2578,43 +2650,14 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return nil
 }
 
-func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
-	rule := []string{
-		"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-		// The condition is needed to prevent the rule from being applied to local out packets destined for Pods, which
-		// have "0x1/0x1" mark.
-		"!", "-o", c.nodeConfig.GatewayConfig.Name,
-		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
-		"-j", iptables.SNATTarget, "--to", snatIP.String(),
-	}
-	if c.egressSNATRandomFully {
-		rule = append(rule, "--random-fully")
-	}
-	return rule
+func (c *Client) AddSNATRules(snatIPs []net.IP, mark uint32) error {
+	c.markToSNATIPs.Store(mark, snatIPs)
+	return c.waitForIPTablesSync()
 }
 
-func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
-	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
-}
-
-func (c *Client) DeleteSNATRule(mark uint32) error {
-	value, ok := c.markToSNATIP.Load(mark)
-	if !ok {
-		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
-		return nil
-	}
-	c.markToSNATIP.Delete(mark)
-	snatIP := value.(net.IP)
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
-	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+func (c *Client) DeleteSNATRules(mark uint32) error {
+	c.markToSNATIPs.Delete(mark)
+	return c.waitForIPTablesSync()
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
@@ -2648,13 +2691,14 @@ func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefix
 		Gw:        gateway,
 		Table:     int(tableID),
 	}
+	// Keep both desired routes until cleanup succeeds, including when only the subnet route was installed.
+	c.egressRoutes.Store(tableID, []*netlink.Route{localRoute, defaultRoute})
 	if err := c.netlink.RouteReplace(localRoute); err != nil {
 		return err
 	}
 	if err := c.netlink.RouteReplace(defaultRoute); err != nil {
 		return err
 	}
-	c.egressRoutes.Store(tableID, []*netlink.Route{localRoute, defaultRoute})
 	return nil
 }
 

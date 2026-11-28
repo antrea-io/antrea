@@ -524,16 +524,19 @@ func TestIpTablesSync(t *testing.T) {
 		routeClientOptions{})
 	require.NoError(t, err)
 
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
 	inited := make(chan struct{})
 	err = routeClient.Initialize(nodeConfig, func() {
 		close(inited)
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
-
-	snatIP := net.ParseIP("1.1.1.1")
-	mark := uint32(1)
-	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	route.SyncInterval = 2 * time.Second
+	go routeClient.Run(ctx)
+	require.NoError(t, routeClient.AddSNATRules([]net.IP{snatIP}, mark))
 
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
@@ -550,7 +553,7 @@ func TestIpTablesSync(t *testing.T) {
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent APIServer reply packets\" -m tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT"},
 		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
-	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
+	// Delete rules and wait for the running sync loop to restore them.
 	for _, tc := range tcs {
 		delCmd := fmt.Sprintf("iptables -t %s -D %s  %s", tc.Table, tc.Chain, tc.RuleSpec)
 		// #nosec G204: ignore in test code
@@ -558,10 +561,6 @@ func TestIpTablesSync(t *testing.T) {
 		assert.NoError(t, err, "error executing iptables cmd: %s", delCmd)
 		assert.Equal(t, "", string(actualData), "failed to remove iptables rule for %v", tc)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	route.SyncInterval = 2 * time.Second
-	go routeClient.Run(ctx)
 	time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
 	for _, tc := range tcs {
 		saveCmd := fmt.Sprintf("iptables-save -t %s | grep -e '%s %s'", tc.Table, tc.Cmd, tc.Chain)
@@ -647,22 +646,27 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go routeClient.Run(ctx)
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
 	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
 
-	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	require.NoError(t, routeClient.AddSNATRules([]net.IP{snatIP}, mark))
 	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
+	// The rule must exist when AddSNATRules returns so mark flows can safely be installed.
 	// #nosec G204: ignore in test code
 	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
+	require.NoError(t, err)
 	assert.Contains(t, string(actualData), expectedRule)
 
-	assert.NoError(t, routeClient.DeleteSNATRule(mark))
+	require.NoError(t, routeClient.DeleteSNATRules(mark))
+	// The rule must be gone when DeleteSNATRules returns so the mark can safely be reused.
 	// #nosec G204: ignore in test code
 	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
+	require.NoError(t, err)
 	assert.NotContains(t, string(actualData), expectedRule)
 }
 

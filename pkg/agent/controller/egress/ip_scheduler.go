@@ -15,6 +15,7 @@
 package egress
 
 import (
+	"net"
 	"slices"
 	"sort"
 	"strconv"
@@ -44,9 +45,9 @@ const (
 // scheduleEventHandler is a callback when an Egress is rescheduled.
 type scheduleEventHandler func(egress string)
 
-// scheduleResult is the schedule result of an Egress, including the effective Egress IP and Node.
+// scheduleResult is the schedule result of an Egress, including the effective Egress IPs and Node.
 type scheduleResult struct {
-	ip   string
+	ips  []string
 	node string
 	err  error
 }
@@ -252,18 +253,18 @@ func (s *egressIPScheduler) AddEventHandler(handler scheduleEventHandler) {
 	s.eventHandlers = append(s.eventHandlers, handler)
 }
 
-func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, error, bool) {
+func (s *egressIPScheduler) GetEgressIPsAndNode(egress string) ([]string, string, error, bool) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
 	result, exists := s.scheduleResults[egress]
 	if !exists {
-		return "", "", nil, false
+		return nil, "", nil, false
 	}
 	if result.err != nil {
-		return "", "", result.err, false
+		return nil, "", result.err, false
 	}
-	return result.ip, result.node, nil, true
+	return slices.Clone(result.ips), result.node, nil, true
 }
 
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
@@ -346,18 +347,26 @@ func (s *egressIPScheduler) schedule() {
 			continue
 		}
 
-		egressIP := singleEgressIPFromSpec(&egress.Spec)
+		egressIPs := egress.Spec.EgressIPs
+		// Equivalent IPv6 spellings must share the same assignment and capacity.
+		canonicalIPs := make([]string, len(egressIPs))
+		for i, ip := range egressIPs {
+			canonicalIPs[i] = net.ParseIP(ip).String()
+		}
 		maxEgressIPsFilter := func(node string) bool {
 			// Count the Egress IPs that are already assigned to this Node.
 			ipsOnNode := nodeToIPs[node]
 			numIPs := ipsOnNode.Len()
-			// Check if this Node can accommodate the new Egress IP.
-			if !ipsOnNode.Has(egressIP) {
-				numIPs += 1
+			// Egresses sharing IPs only consume capacity once.
+			for _, ip := range canonicalIPs {
+				if !ipsOnNode.Has(ip) {
+					numIPs++
+				}
 			}
 			return numIPs <= s.getMaxEgressIPsByNode(node)
 		}
-		node, err := s.cluster.SelectNodeForIP(egressIP, egress.Spec.ExternalIPPool, maxEgressIPsFilter)
+		// Use the same key regardless of the IP order so Egresses sharing a dual-stack pair select the same Node.
+		node, err := s.cluster.SelectNodeForIP(slices.Min(canonicalIPs), egress.Spec.ExternalIPPool, maxEgressIPsFilter)
 		if err != nil {
 			if err == memberlist.ErrNoNodeAvailable {
 				klog.InfoS("No Node is eligible for Egress", "egress", klog.KObj(egress))
@@ -369,7 +378,7 @@ func (s *egressIPScheduler) schedule() {
 			continue
 		}
 		result := &scheduleResult{
-			ip:   egressIP,
+			ips:  egressIPs,
 			node: node,
 		}
 		newResults[egress.Name] = result
@@ -379,7 +388,7 @@ func (s *egressIPScheduler) schedule() {
 			ips = sets.New[string]()
 			nodeToIPs[node] = ips
 		}
-		ips.Insert(egressIP)
+		ips.Insert(canonicalIPs...)
 	}
 
 	func() {
@@ -390,7 +399,7 @@ func (s *egressIPScheduler) schedule() {
 		prevResults := s.scheduleResults
 		for egress, result := range newResults {
 			prevResult, exists := prevResults[egress]
-			if !exists || prevResult.ip != result.ip || prevResult.node != result.node || prevResult.err != result.err {
+			if !exists || !slices.Equal(prevResult.ips, result.ips) || prevResult.node != result.node || prevResult.err != result.err {
 				egressesToUpdate = append(egressesToUpdate, egress)
 			}
 			delete(prevResults, egress)

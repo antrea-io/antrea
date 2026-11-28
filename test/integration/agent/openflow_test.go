@@ -1933,12 +1933,12 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 	expectedFlows := append(prepareEgressMarkFlows(snatIP, snatMark, podOFPort, podOFPortRemote, vMAC, gwMAC, trafficShaping),
 		prepareEgressMarkFlows(snatIPV6, snatMarkV6, podOFPortV6, podOFPortRemoteV6, vMAC, gwMAC, trafficShaping)...)
 
-	c.InstallSNATMarkFlows(snatIP, snatMark)
-	c.InstallSNATMarkFlows(snatIPV6, snatMarkV6)
-	c.InstallPodSNATFlows(podOFPort, snatIP, snatMark)
-	c.InstallPodSNATFlows(podOFPortRemote, snatIP, 0)
-	c.InstallPodSNATFlows(podOFPortV6, snatIPV6, snatMarkV6)
-	c.InstallPodSNATFlows(podOFPortRemoteV6, snatIPV6, 0)
+	c.InstallSNATMarkFlows([]net.IP{snatIP}, snatMark)
+	c.InstallSNATMarkFlows([]net.IP{snatIPV6}, snatMarkV6)
+	c.InstallPodSNATFlows(podOFPort, []net.IP{snatIP}, snatMark)
+	c.InstallPodSNATFlows(podOFPortRemote, []net.IP{snatIP}, 0)
+	c.InstallPodSNATFlows(podOFPortV6, []net.IP{snatIPV6}, snatMarkV6)
+	c.InstallPodSNATFlows(podOFPortRemoteV6, []net.IP{snatIPV6}, 0)
 	for _, tableFlow := range expectedFlows {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
