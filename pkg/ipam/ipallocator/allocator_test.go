@@ -34,7 +34,7 @@ func newCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
 }
 
 func newIPRangeAllocator(start, end string) *SingleIPAllocator {
-	allocator, _ := NewIPRangeAllocator(net.ParseIP(start), net.ParseIP(end))
+	allocator, _ := NewIPRangeAllocator(net.ParseIP(start), net.ParseIP(end), nil)
 	return allocator
 }
 

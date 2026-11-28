@@ -85,8 +85,8 @@ func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator
 }
 
 // NewIPRangeAllocator creates an IPAllocator based on the provided start IP and end IP.
-// The start IP and end IP are inclusive.
-func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
+// The start IP and end IP are inclusive. reservedIPs are skipped by AllocateNext and AllocateIP.
+func NewIPRangeAllocator(startIP, endIP net.IP, reservedIPs []net.IP) (*SingleIPAllocator, error) {
 	ipRangeStr := fmt.Sprintf("%s-%s", startIP.String(), endIP.String())
 	base := utilnet.BigForIP(startIP)
 	offset := big.NewInt(0).Sub(utilnet.BigForIP(endIP), base).Int64()
@@ -100,12 +100,13 @@ func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
 	}
 
 	allocator := &SingleIPAllocator{
-		ipRangeStr: ipRangeStr,
-		ipFamily:   utilnet.IPFamilyOf(startIP),
-		base:       base,
-		max:        int(max),
-		allocated:  big.NewInt(0),
-		count:      0,
+		ipRangeStr:  ipRangeStr,
+		ipFamily:    utilnet.IPFamilyOf(startIP),
+		base:        base,
+		max:         int(max),
+		allocated:   big.NewInt(0),
+		count:       0,
+		reservedIPs: reservedIPs,
 	}
 	return allocator, nil
 }
